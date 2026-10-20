@@ -64,6 +64,35 @@ hidden Electron update UI check/download/ready/install-refusal passes with an
 observed exit code. Public build45 and legacy bridge results follow after their
 actual network verification. No Android crash fix is claimed by this migration.
 
+## Published Update Acceptance (0.0.9 / build45)
+
+- The public stable GitHub Release contains the new Windows installer, APK,
+  both manifests and checksum files. All six downloads match exact local sizes
+  and SHA-256 values. Their redirects use the allowed CDN repository path.
+- Both stable raw-GitHub manifest endpoints match committed bytes. The actual
+  Electron updater recognizes current/upgrade states, downloads the installer,
+  verifies it and rechecks immediately before installation. No installer is run
+  by this test. The actual Android UpdateTransport opt-in JVM test downloads and
+  hashes the public APK successfully; this is not physical-device installation.
+- The old source offers one compatible migration release with the identical
+  GitHub package bytes. The original desktop updater validates its manifest,
+  fully downloads it and passes pre-install recheck. Legacy Android manifest
+  fields and complete APK bytes match the new repository package and original
+  signing identity. After upgrading, clients use only the repository feeds.
+- Build44 is explicitly marked superseded/prerelease; its files are retained
+  unchanged. Build45 is the current stable release; no immutable file is replaced.
+- Installed local resources match build45; health reports 0.0.9 and official
+  desktop IPC connects. Configuration, authorizations, preferences, shortcuts
+  and startup registration remain unchanged. The desktop window owns the gateway.
+- The Web public entry matches current source. Unaffected historical public
+  assets and all captured server configuration hashes remain unchanged; no
+  server/firewall/TLS/proxy configuration change or service installation occurs.
+
+Raw device/account/deployment evidence remains in ignored local storage.
+GitHub availability depends on the client's network. This update-source
+migration does not establish resolution of the separately reported Android
+startup crash or OEM background-notification acceptance.
+
 ## Known Issues And Acceptance Gaps
 
 - An Android startup crash has been reported and reproduced by the user.
