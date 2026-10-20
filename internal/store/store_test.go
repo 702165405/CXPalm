@@ -2,8 +2,61 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 )
+
+func TestMissingReceiptPermanentlyFencesDelayedDispatch(t *testing.T) {
+	root := t.TempDir()
+	s, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.ResolveReceipt("phone", "never-enqueued")
+	if err != nil || r.Status != "not_sent" {
+		t.Fatal(r, err)
+	}
+	if _, err = s.ResolveReceipt("phone", ""); err == nil {
+		t.Fatal("empty operation ID accepted")
+	}
+	s.Close()
+	s, err = Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for _, fingerprint := range []string{"original", "changed"} {
+		r, fresh, err := s.Begin("phone", "never-enqueued", fingerprint)
+		if err != nil || fresh || r.Status != "not_sent" {
+			t.Fatal("late dispatch escaped fence", r, fresh, err)
+		}
+	}
+	// Existing clients may explicitly acknowledge this receipt after inspection.
+	if _, err = s.Acknowledge("phone", "never-enqueued"); err != nil {
+		t.Fatal(err)
+	}
+	if _, fresh, err := s.Begin("other-phone", "never-enqueued", "original"); err != nil || !fresh {
+		t.Fatal("fence leaked across devices", err)
+	}
+	for i := 0; i < 50; i++ {
+		id := fmt.Sprint("race-", i)
+		dispatched := make(chan bool, 1)
+		go func() { _, fresh, err := s.Begin("phone", id, "fingerprint"); dispatched <- err == nil && fresh }()
+		if _, err := s.ResolveReceipt("phone", id); err != nil {
+			t.Fatal(err)
+		}
+		claimed := <-dispatched
+		r, err := s.Receipt("phone", id)
+		if err != nil || claimed && r.Status != "dispatched" || !claimed && r.Status != "not_sent" {
+			t.Fatal("unsafe resolution race", claimed, r, err)
+		}
+	}
+	s.Begin("phone", "uncertain", "fp")
+	s.Finish("phone", "uncertain", "unknown", nil)
+	if r, err := s.ResolveReceipt("phone", "uncertain"); err != nil || r.Status != "unknown" {
+		t.Fatal("uncertain result cleared", r, err)
+	}
+}
 
 func loginFixture(t *testing.T, s *Store, name, ip string) (Device, string, error) {
 	t.Helper()

@@ -26,6 +26,21 @@ function fixture(existingStorage) {
   return {bridge,data,sockets,reply,hello};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+test('fenced not-sent receipt releases a stranded pending send without losing draft or attachments', async () => {
+  const {bridge,sockets,reply}=fixture();
+  const key=bridge.draftKey('thread'),files='cxpalm:attachments:device:thread';
+  bridge.storage.setItem(key,'retained draft');bridge.storage.setItem(files,JSON.stringify([{id:'file'}]));
+  const operation=bridge.mutate('chat.send',{thread:'thread',text:'retained draft',attachments:['file']},{key,text:'retained draft'});
+  await tick();const id=bridge.pending.id;
+  sockets[0].onclose();await assert.rejects(operation,/中断/);
+  bridge.connect({id:'device'});sockets.at(-1).onmessage({data:JSON.stringify({type:'hello',data:{device:'device'}})});
+  const check=bridge.checkPending();await tick();
+  assert.equal(sockets.at(-1).sent.at(-1).method,'operation.get');
+  reply('result',{id,status:'not_sent'});await check;
+  assert.equal(bridge.pending,null);assert.equal(bridge.storage.getItem(key),'retained draft');
+  assert.deepEqual(JSON.parse(bridge.storage.getItem(files)),[{id:'file'}]);
+  assert.equal(sockets.at(-1).sent.filter(q=>q.method==='chat.send').length,0);
+});
 test('attachment-only messages clear only confirmed attachment IDs, never newer files', async () => {
   const {bridge,sockets,reply}=fixture();
   const key='cxpalm:attachments:device:thread';

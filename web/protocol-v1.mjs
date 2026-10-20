@@ -175,7 +175,7 @@ export class Bridge {
     const pending = this.pending;
     if (!pending || receipt.id !== pending.id) throw new Error('操作回执不匹配。');
     this.receipt = receipt;
-    if (['confirmed', 'acknowledged'].includes(receipt.status)) {
+    if (['confirmed', 'acknowledged', 'not_sent'].includes(receipt.status)) {
       if(receipt.status==='confirmed'&&pending.attachmentKey&&pending.attachmentIDs){
         const files=JSON.parse(this.storage.getItem(pending.attachmentKey)||'[]');
         this.storage.setItem(pending.attachmentKey,JSON.stringify(files.filter(file=>!pending.attachmentIDs.includes(file.id))));

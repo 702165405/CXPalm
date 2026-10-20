@@ -455,7 +455,7 @@ func (s *Server) execute(ctx context.Context, device string, q Command) (any, er
 		}
 		return s.Bridge.Catalog(session.CWD)
 	case "operation.get":
-		return s.Store.Receipt(device, q.RequestID)
+		return s.Store.ResolveReceipt(device, q.RequestID)
 	case "operation.acknowledge":
 		if q.Text != "inspected" {
 			return nil, errors.New("explicit inspection confirmation is required")

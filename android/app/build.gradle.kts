@@ -10,8 +10,8 @@ android {
         applicationId = "io.github.u702165405.cxpalm"
         minSdk = 26
         targetSdk = 35
-        versionCode = 45
-        versionName = "0.0.9"
+        versionCode = 46
+        versionName = "0.0.10"
     }
     sourceSets.getByName("main").assets.srcDir(rootProject.file("../locales"))
     buildFeatures { compose = true; buildConfig = true }

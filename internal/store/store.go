@@ -154,7 +154,7 @@ func (s *Store) Begin(device, id, fingerprint string) (Receipt, bool, error) {
 	var result []byte
 	e = s.db.QueryRow("SELECT id,status,result,fingerprint FROM operations WHERE device=? AND id=?", device, id).Scan(&receipt.ID, &receipt.Status, &result, &fp)
 	receipt.Result = result
-	if e == nil && fp != fingerprint {
+	if e == nil && receipt.Status != "not_sent" && fp != fingerprint {
 		e = ErrConflict
 	}
 	return receipt, n == 1, e
@@ -174,8 +174,21 @@ func (s *Store) Receipt(device, id string) (Receipt, error) {
 	r.Result = b
 	return r, e
 }
+
+// Reserve absent IDs before reporting not_sent: a delayed command on another
+// connection must never execute after a client has released its pending lock.
+func (s *Store) ResolveReceipt(device, id string) (Receipt, error) {
+	if id == "" || len(id) > 128 {
+		return Receipt{}, errors.New("valid operation id required")
+	}
+	_, err := s.db.Exec("INSERT OR IGNORE INTO operations(device,id,fingerprint,status,created) VALUES(?,?,'','not_sent',?)", device, id, time.Now().Unix())
+	if err != nil {
+		return Receipt{}, err
+	}
+	return s.Receipt(device, id)
+}
 func (s *Store) Acknowledge(device, id string) (Receipt, error) {
-	r, e := s.db.Exec("UPDATE operations SET status='acknowledged' WHERE device=? AND id=? AND status='unknown'", device, id)
+	r, e := s.db.Exec("UPDATE operations SET status='acknowledged' WHERE device=? AND id=? AND status IN ('unknown','not_sent')", device, id)
 	if e != nil {
 		return Receipt{}, e
 	}

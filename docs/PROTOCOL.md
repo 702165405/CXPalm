@@ -38,6 +38,12 @@ same ID fails. `confirmed` means the invoked operation returned, not that a mode
 task finished. `unknown` never replays. `operation.acknowledge` requires explicit
 `text: inspected`; it dismisses a warning without making the original ID executable.
 
+If lookup finds no operation, the gateway atomically reserves that ID with a
+`not_sent` receipt. Clients may release only the matching pending lock, retaining
+the draft and attachments. The reserved ID cannot execute even if a delayed
+request arrives later. Existing `dispatched` or `unknown` receipts are never
+converted to `not_sent`; no pending mutation is automatically replayed.
+
 Chat identity is checked against official history and bound to its original
 owner. No main thread is independently resumed. Native execution snapshots are
 separate from phone projections, lazy history and versioned delta streams.

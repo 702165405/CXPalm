@@ -10,6 +10,14 @@ Versions describe implemented changes, not physical-device acceptance.
 - Android startup crash reported by a user; root cause and fix unconfirmed.
 - Project license and public repository publication remain pending.
 
+## 0.0.10
+
+- Release the Android pending lock when the socket definitively rejects enqueue,
+  retaining the draft and attachments rather than leaving sending disabled.
+- Resolve absent receipts with durable device-scoped `not_sent` fences. Delayed
+  requests cannot execute after recovery; uncertain operations never auto-replay.
+- Ignore Android receipts that do not match the current pending operation.
+
 ## 0.0.9
 
 - Use credential-free native HEAD probes to validate GitHub download redirects

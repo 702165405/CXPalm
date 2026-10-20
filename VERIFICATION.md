@@ -4,10 +4,26 @@ This public record intentionally excludes real conversation titles, IDs,
 content, device identifiers, account counts, private paths and deployment logs.
 Private test evidence is not part of the source repository.
 
+## Pending Send Recovery (0.0.10 / build46)
+
+- Fresh Go tests and vet pass; Windows amd64 and macOS amd64/arm64 builds pass.
+- All 60 Node tests pass. Isolated Chromium and Electron UI fixtures pass.
+- Android: 75 unit tests, 74 passed and one opt-in public download check skipped;
+  Lint and APK assembly pass. Package ID and existing signer are retained.
+- Regression checks cover missing-receipt recovery, permanent delayed-request
+  fences, device isolation, dispatch/lookup races, draft/attachment preservation,
+  mismatched receipts and continued blocking of uncertain operations.
+- The local gateway and original-owner snapshots were available during
+  diagnosis. A stranded client pending lock is reproducible from the code path;
+  this is not proof of the reporting phone's persisted state.
+- No USB phone was available. Android installation, startup and real-message
+  sending on the reporting device remain unverified; no real message was sent
+  by the tests. No server/firewall or IP-policy changes are part of this fix.
+
 ## Source Baseline
 
-- Source version: 0.0.9.
-- Android: versionCode 45; desktop package: releaseBuild 45.
+- Source version: 0.0.10.
+- Android: versionCode 46; desktop package: releaseBuild 46.
 - Previous local records report passing Go tests/vet, Windows amd64 and macOS
   amd64/arm64 cross-builds, Web and desktop tests, Android unit tests, Lint and
   APK assembly for this baseline. These are historical reports, not a fresh

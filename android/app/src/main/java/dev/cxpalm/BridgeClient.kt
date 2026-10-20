@@ -238,11 +238,12 @@ class BridgeClient(context: Context) {
             }
         } catch (_: Exception) { update { it.copy(error = "服务端响应不受支持，请更新或重新连接") } }
     }
-    private fun command(method: String, fields: JSONObject = JSONObject(), id: String = UUID.randomUUID().toString(), result: (JSONObject) -> Unit = {}) {
-        if (!mutable.value.connected) { update { it.copy(error = "请先连接一台电脑") }; return }
+    private fun command(method: String, fields: JSONObject = JSONObject(), id: String = UUID.randomUUID().toString(), result: (JSONObject) -> Unit = {}): Boolean {
+        if (!mutable.value.connected) { update { it.copy(error = "请先连接一台电脑") }; return false }
         fields.put("id", id).put("method", method); calls[id] = result
         if(method=="chat.subscribe")stream.reset(fields.optString("thread"),id)
-        if (socket?.send(fields.toString()) != true) { calls.remove(id); update { it.copy(error = "未发送，请先检查待确认操作再重试") } }
+        if (socket?.send(fields.toString()) != true) { calls.remove(id); update { it.copy(error = "未发送，请先检查待确认操作再重试") }; return false }
+        return true
     }
     private fun sessionPage(page: JSONObject) {
         val rows=objects(page.optJSONArray("items"))
@@ -453,10 +454,19 @@ class BridgeClient(context: Context) {
             historyCall=UUID.randomUUID().toString()
             update { it.copy(pending=id,historyPage=null,historyLoading=false,historyTarget="sent:$id",sendScrollRevision=it.sendScrollRevision+1,sendUserBefore=latestUserKey(it.snapshot)) }
         } else update { it.copy(pending = id) }
-        command(method, fields, id) { receipt(it); if (it.optJSONObject("data")?.optString("status") == "confirmed") after(it.optJSONObject("data")?.optJSONObject("result") ?: JSONObject()) }
+        val queued=command(method, fields, id) {
+            val data=it.optJSONObject("data")
+            if(mutable.value.pending==id && data?.optString("id")==id) {
+                receipt(it)
+                if(data.optString("status")=="confirmed") after(data.optJSONObject("result") ?: JSONObject())
+            }
+        }
+        // OkHttp false means this message was not enqueued, not an uncertain send.
+        if(!queued) receipt(JSONObject().put("data",JSONObject().put("id",id).put("status","not_sent")))
     }
     private fun receipt(event: JSONObject) {
         val data = event.optJSONObject("data") ?: return
+        if(data.optString("id")!=mutable.value.pending) return
         if(data.optString("status")=="confirmed") {
             val c=mutable.value.current
             val pending=store.get("pending-files:${c?.id}")?.let(::JSONObject)
@@ -466,7 +476,10 @@ class BridgeClient(context: Context) {
                 store.put(key,JSONArray(keep).toString());store.put("pending-files:${c?.id}",null);update {it.copy(draftRevision=it.draftRevision+1)}
             }
         }
-        if (data.optString("status") in listOf("confirmed", "acknowledged")) { mutable.value.current?.let { store.put("pending:${it.id}", null) }; update { it.copy(pending = null) } }
+        if (settlesPending(mutable.value.pending,data)) {
+            mutable.value.current?.let { store.put("pending:${it.id}", null);store.put("pending-files:${it.id}",null) }
+            update { it.copy(pending = null,error=if(data.optString("status")=="not_sent") "消息未发送，草稿已保留。连接恢复后可手动发送。" else null) }
+        }
         else update { it.copy(error = "操作结果为 ${data.optString("status")}，不会自动重发。${data.optJSONObject("result")?.optString("error").orEmpty()}") }
     }
     fun checkPending() { mutable.value.pending?.let { command("operation.get", JSONObject().put("requestId", it)) { event -> receipt(event) } } }

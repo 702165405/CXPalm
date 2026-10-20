@@ -5,6 +5,19 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 class ProtocolTest {
+    @Test fun onlyMatchingTerminalReceiptsReleasePendingSend() {
+        val receipt=org.json.JSONObject().put("id","original")
+        for(status in listOf("confirmed","acknowledged","not_sent")) {
+            receipt.put("status",status)
+            org.junit.Assert.assertTrue(settlesPending("original",receipt))
+            org.junit.Assert.assertFalse(settlesPending("newer",receipt))
+            org.junit.Assert.assertFalse(settlesPending(null,receipt))
+        }
+        for(status in listOf("dispatched","unknown","","unsupported")) {
+            receipt.put("status",status)
+            org.junit.Assert.assertFalse(settlesPending("original",receipt))
+        }
+    }
     @Test fun syncNoticeAppearsOnlyForAnActualConnectedError() {
         val healthy=org.json.JSONObject("""{"total":19,"checked":19,"live":13,"scanning":false}""")
         org.junit.Assert.assertNull(sessionSyncIssue(healthy,true))

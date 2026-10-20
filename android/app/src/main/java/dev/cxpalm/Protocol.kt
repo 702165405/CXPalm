@@ -90,3 +90,6 @@ fun readReceiptEligible(state: ViewState, foreground: Boolean, latestReplyVisibl
 
 fun sessionSyncIssue(sync: JSONObject?, connected: Boolean): String? =
     if(connected) sync?.optString("error")?.trim()?.takeIf { it.isNotBlank() } else null
+
+fun settlesPending(pending: String?, receipt: JSONObject): Boolean =
+    pending != null && pending == receipt.optString("id") && receipt.optString("status") in listOf("confirmed", "acknowledged", "not_sent")

@@ -33,6 +33,18 @@ func fixture(t *testing.T) (*Server, *httptest.Server, string) {
 	}
 	return s, ts, token
 }
+
+func TestMissingOperationRecoveryCannotDispatchDelayedSend(t *testing.T) {
+	s, _, _ := fixture(t)
+	result, err := s.execute(context.Background(), "phone", Command{ID: "check", Method: "operation.get", RequestID: "lost"})
+	if err != nil || result.(store.Receipt).Status != "not_sent" {
+		t.Fatal(result, err)
+	}
+	result, err = s.execute(context.Background(), "phone", Command{ID: "lost", Method: "chat.send", Thread: "not-a-real-chat", Text: "must not execute"})
+	if err != nil || result.(store.Receipt).Status != "not_sent" {
+		t.Fatal("late send entered desktop control", result, err)
+	}
+}
 func loginFixture(t *testing.T, db *store.Store, name string) (store.Device, string, error) {
 	t.Helper()
 	status, err := db.LoginSettings()
