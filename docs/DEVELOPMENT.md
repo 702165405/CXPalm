@@ -57,8 +57,8 @@ tests are opt-in and must not send real model requests without authorization.
   overlays are not execution state.
 - Defaults are quiet: notifications require explicit per-chat opt-in.
 - Attachments are local runtime data, not repository assets or public downloads.
-- The source version line restarted at `0.0.1`; the current source is `0.0.8`,
-  Android installation code 44; desktop release build 44. Build numbers remain monotonic and retain the
+- The source version line restarted at `0.0.1`; the current source is `0.0.9`,
+  Android installation code 45; desktop release build 45. Build numbers remain monotonic and retain the
   original signing identity for in-place upgrades.
 - Desktop manifests use `releaseLine: initial-001`. Previous feeds cannot
   silently reinstall an older feature set after the semantic version reset.

@@ -50,9 +50,25 @@ function nodeResponse(url,signal){
     req.on('error',error=>reject(new Error(error.name==='AbortError'?'更新操作已取消。':'无法连接固定 HTTPS 更新源，请检查网络或稍后重试。')));
   });
 }
-async function electronResponse(url,signal){
+async function electronResponse(url,signal,net=require('electron').net){
   // Chromium respects the user's existing OS proxy; updater traffic has no login cookies.
-  const response=await require('electron').net.fetch(url,{signal,redirect:'manual',credentials:'omit',headers:{Accept:'application/json, application/octet-stream','Accept-Encoding':'identity'}});
+  // Electron fetch cancels manual redirects instead of exposing 3xx responses.
+  // HEAD exposes each hop for the shared allowlist before a body is downloaded.
+  if(url!==FEED){
+    const redirect=await new Promise((resolve,reject)=>{
+      const req=net.request({url,method:'HEAD',redirect:'manual',credentials:'omit',useSessionCookies:false});
+      const abort=()=>{req.abort();reject(new Error('更新操作已取消。'));};
+      const timeout=setTimeout(()=>{req.abort();reject(new Error('更新请求超时。'));},15000);
+      req.on('close',()=>{clearTimeout(timeout);signal.removeEventListener('abort',abort);});
+      req.on('error',reject);
+      req.on('redirect',(status,_method,location)=>{const stream=Readable.from([]);stream.statusCode=status;stream.headers={location};resolve(stream);req.abort();});
+      req.on('response',response=>{if(response.statusCode===200)resolve(null);else{const stream=Readable.from([]);stream.statusCode=response.statusCode;stream.headers=response.headers;resolve(stream);}req.abort();});
+      if(signal.aborted){abort();return;}
+      signal.addEventListener('abort',abort,{once:true});req.end();
+    });
+    if(redirect)return redirect;
+  }
+  const response=await net.fetch(url,{signal,redirect:'error',credentials:'omit',headers:{Accept:'application/json, application/octet-stream','Accept-Encoding':'identity'}});
   const stream=response.body?Readable.fromWeb(response.body):Readable.from([]);
   stream.statusCode=response.status;stream.headers=Object.fromEntries(response.headers.entries());
   return stream;
@@ -143,4 +159,4 @@ class DesktopUpdater extends EventEmitter{
   }
   dispose(){this.active?.abort();}
 }
-module.exports={DesktopUpdater,FEED,RELEASES,MAX_SIZE,newer,validateManifest,request,redirectURL};
+module.exports={DesktopUpdater,FEED,RELEASES,MAX_SIZE,newer,validateManifest,request,redirectURL,electronResponse};

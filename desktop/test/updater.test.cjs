@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {Readable,PassThrough}=require('node:stream'),{createHash}=require('node:crypto'),{EventEmitter}=require('node:events');
-const {DesktopUpdater,FEED,MAX_SIZE,newer,validateManifest,request,redirectURL}=require('../updater.cjs');
+const {DesktopUpdater,FEED,MAX_SIZE,newer,validateManifest,request,redirectURL,electronResponse}=require('../updater.cjs');
 const bytes=Buffer.from('MZ isolated test bytes, not an executable');
 const manifest=()=>({schema:1,appId:'dev.cxpalm.desktop',platform:'win32',arch:'x64',version:'0.0.10',url:'https://github.com/702165405/CXPalm/releases/download/v0.0.10/CXPalm-Setup-0.0.10-x64.exe',size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),notes:'Isolated release notes <script>text only</script>'});
 function setup(t,{raw=manifest(),body=bytes,headers,fetch}={}){
@@ -83,4 +83,16 @@ test('GitHub redirects stay on this repository CDN, are bounded and never redire
  await assert.rejects(request(FEED,new AbortController().signal,redirect));
  await assert.rejects(request(asset,new AbortController().signal,redirect));
  await assert.rejects(request('https://github.com/other/CXPalm/a.exe',new AbortController().signal,fetch));
+});
+
+test('Electron probes redirects without credentials before fetching the approved body',async()=>{
+ const asset=manifest().url,cdn='https://release-assets.githubusercontent.com/github-production-release-asset/1427104245/native-fixture?sig=fixture',heads=[],bodies=[];
+ const net={request:options=>{
+  heads.push(options);const req=new EventEmitter();req.abort=()=>req.emit('close');
+  req.end=()=>queueMicrotask(()=>{if(options.url===asset)req.emit('redirect',302,'HEAD',cdn,{});else req.emit('response',{statusCode:200,headers:{}});});return req;
+ },fetch:async(url,options)=>{bodies.push(url);assert.equal(options.redirect,'error');assert.equal(options.credentials,'omit');return new Response(bytes);}};
+ const response=await request(asset,new AbortController().signal,(url,signal)=>electronResponse(url,signal,net));
+ assert.deepEqual(Buffer.concat(await Array.fromAsync(response)),bytes);
+ assert.deepEqual(bodies,[cdn]);assert.deepEqual(heads.map(row=>row.url),[asset,cdn]);
+ for(const options of heads){assert.equal(options.method,'HEAD');assert.equal(options.credentials,'omit');assert.equal(options.useSessionCookies,false);assert.equal(options.redirect,'manual');}
 });

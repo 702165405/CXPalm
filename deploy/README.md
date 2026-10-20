@@ -103,7 +103,7 @@ Android 覆盖升级需要相同包名和签名、递增的 versionCode。桌面
 
 - Android 清单：`https://raw.githubusercontent.com/702165405/CXPalm/main/updates/download.json`
 - Windows 清单：`https://raw.githubusercontent.com/702165405/CXPalm/main/updates/desktop-download.json`
-- 安装包：本仓库 Releases 中带版本和构建号的固定路径，例如 `releases/download/v0.0.8-build44/`。
+- 安装包：本仓库 Releases 中带版本和构建号的固定路径，例如 `releases/download/v0.0.9-build45/`。
 
 GitHub 下载会跳转到自己的资源 CDN，客户端只接受限定仓库 ID 的 CDN 路径，最多
 三次跳转；清单本身不跟随跳转，也不会向更新服务发送 CXPalm 登录凭据。

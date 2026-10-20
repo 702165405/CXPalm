@@ -10,6 +10,13 @@ Versions describe implemented changes, not physical-device acceptance.
 - Android startup crash reported by a user; root cause and fix unconfirmed.
 - Project license and public repository publication remain pending.
 
+## 0.0.9
+
+- Use credential-free native HEAD probes to validate GitHub download redirects
+  before fetching bodies; Electron cancels redirects in Fetch manual mode.
+- Supersede build44 without replacing its published artifact bytes. The corrected
+  transport passes a real Electron GitHub download/hash/pre-install check.
+
 ## 0.0.8
 
 - Move Android and Windows update manifests to this repository and immutable

@@ -6,8 +6,8 @@ Private test evidence is not part of the source repository.
 
 ## Source Baseline
 
-- Source version: 0.0.8.
-- Android: versionCode 44; desktop package: releaseBuild 44.
+- Source version: 0.0.9.
+- Android: versionCode 45; desktop package: releaseBuild 45.
 - Previous local records report passing Go tests/vet, Windows amd64 and macOS
   amd64/arm64 cross-builds, Web and desktop tests, Android unit tests, Lint and
   APK assembly for this baseline. These are historical reports, not a fresh
@@ -47,6 +47,22 @@ are preserved in ignored storage. Raw test logs are not publication artifacts.
   manifest redirects. Size/hash, signer and downgrade checks remain covered.
 - Public release download and legacy-feed migration acceptance are recorded
   separately after publication; build output alone is not publication evidence.
+
+## Native Redirect Correction (0.0.9 / build45)
+
+Real Electron download acceptance found that its Fetch manual mode cancels
+redirects instead of returning a readable 3xx response. Build44 is superseded,
+not replaced in place. The corrected transport uses credential-free native
+HEAD probes, checks each hop with the shared repository/CDN allowlist, then
+fetches the body without implicit redirects. A regression specifically covers
+this Electron path. A real GitHub download/hash/pre-install check passes with
+the corrected source, without executing the installer.
+
+Final build45 Go tests/vet and all three cross-builds pass. Node reports 59
+passing tests. Android unit/Lint/APK build and original-certificate checks pass;
+hidden Electron update UI check/download/ready/install-refusal passes with an
+observed exit code. Public build45 and legacy bridge results follow after their
+actual network verification. No Android crash fix is claimed by this migration.
 
 ## Known Issues And Acceptance Gaps
 
