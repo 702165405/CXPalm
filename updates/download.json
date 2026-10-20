@@ -1,9 +1,9 @@
 {
-  "version": "0.0.8",
-  "versionCode": 44,
+  "version": "0.0.9",
+  "versionCode": 45,
   "package": "io.github.u702165405.cxpalm.debug",
-  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.8-build44/CXPalm-0.0.8-build44-debug.apk",
-  "size": 9849121,
-  "sha256": "c52a1cf61fed2f9f32bfb3b9589c8b46a7b453ab6ea9046ea409ddf2948dccbc",
-  "notes": "CXPalm 0.0.8 / build44: Android and Windows updates now use 702165405/CXPalm on GitHub. Fixed-repository manifests and release assets, bounded trusted redirects, SHA-256 and existing package/signer/downgrade checks are retained. Existing settings and device authorizations are preserved."
+  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.9-build45/CXPalm-0.0.9-build45-debug.apk",
+  "size": 9849125,
+  "sha256": "e0421f397ebfe42dcb63b29cbad15b6ae93a65bbcb0d0af4589974cd143966cc",
+  "notes": "CXPalm 0.0.9 / build45: Android and Windows updates now use 702165405/CXPalm on GitHub. Fixed-repository manifests and release assets, bounded trusted redirects, SHA-256 and existing package/signer/downgrade checks are retained. Existing settings and device authorizations are preserved. Electron native redirect handling has passed an actual GitHub download check."
 }

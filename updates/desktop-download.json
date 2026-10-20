@@ -1,13 +1,13 @@
 {
   "schema": 1,
   "releaseLine": "initial-001",
-  "build": 44,
+  "build": 45,
   "appId": "dev.cxpalm.desktop",
   "platform": "win32",
   "arch": "x64",
-  "version": "0.0.8",
-  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.8-build44/CXPalm-Setup-0.0.8-build44-x64.exe",
-  "size": 120372857,
-  "sha256": "2a700cfdf9e3bf08b7041247ba9cbff2bab6e1c86fb633348f382ee9cde29b1e",
-  "notes": "CXPalm 0.0.8 / build44: Android and Windows updates now use 702165405/CXPalm on GitHub. Fixed-repository manifests and release assets, bounded trusted redirects, SHA-256 and existing package/signer/downgrade checks are retained. Existing settings and device authorizations are preserved."
+  "version": "0.0.9",
+  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.9-build45/CXPalm-Setup-0.0.9-build45-x64.exe",
+  "size": 120370885,
+  "sha256": "df166b2096683dffc2d89ab61c32a49492a6b593914f774036ba077d41ee8faf",
+  "notes": "CXPalm 0.0.9 / build45: Android and Windows updates now use 702165405/CXPalm on GitHub. Fixed-repository manifests and release assets, bounded trusted redirects, SHA-256 and existing package/signer/downgrade checks are retained. Existing settings and device authorizations are preserved. Electron native redirect handling has passed an actual GitHub download check."
 }
