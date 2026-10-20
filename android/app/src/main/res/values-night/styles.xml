@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.CXPalm" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#101521</item>
+        <item name="android:colorAccent">#B6C8FF</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

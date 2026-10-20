@@ -1,0 +1,808 @@
+// All UI commands go to isolated fixtures, never the real Agent or executor.
+const {chromium} = require('playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const {EventEmitter, once} = require('node:events');
+
+async function main() {
+  const browser = await chromium.launch({headless: true, ...(process.env.CXPALM_TEST_BROWSER ? {executablePath:process.env.CXPALM_TEST_BROWSER} : {})});
+  const context = await browser.newContext({viewport: {width: 1440, height: 960}});
+  const page = await context.newPage();
+  await page.addInitScript(()=>{window.__notices=[];window.__notificationObjects=[];window.Notification=class{static permission='granted';constructor(title,options){this.options=options;window.__notices.push(title);window.__notificationObjects.push(this);}close(){this.closed=true;}static requestPermission(){return Promise.resolve(this.permission);}};});
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('dialog', dialog => dialog.accept());
+  const origin = 'https://cxpalm.test';
+  const secret = 'a'.repeat(64);
+  const device = {id: 'ui-fixture-device', expires: Math.floor(Date.now() / 1000) + 86400};
+  const sent = [], receipts = new Map(), commands = new EventEmitter();
+  let authorized = false;
+  let active = false;
+  let processRevision=0;let processRunning=false;
+  const turnStartedAtMs=Date.now()-65000;
+  let currentSocket;
+  let sequence=0;
+  let replyToken='a'.repeat(64);
+  let sharedReadToken='';
+  let listError='';let listHistorical=false;let listSubscription='';let restored=false;
+  let holdHistory=false;const heldHistory=[];let sentTurn=null;let offlineSession=false;
+  let sessionStatus=0;let holdSelected=false;let holdStartup=false;const heldStartup=[];
+  let projects=[{id:'project-fixture',name:'项目 / Research'}];
+  const sessionPage=q=>({items:q.archived&&!restored?[{id:'archive-fixture',title:'归档示例',archived:true,projectId:'project-fixture',projectName:'项目 / Research',status:'unknown',updated:1791648000}]:!q.archived?[{id:'main-fixture',title:'网页控制端 · 安全检查',cwd:'/isolated/chat-directory',projectId:'project-fixture',projectName:'项目 / Research',status:active?'running':'completed',live:!listHistorical,statusSource:listHistorical?'history':'desktop',unread:sharedReadToken!==replyToken,readToken:replyToken,lastReplyAt:1791648000,updated:1791648000}]:[],projects,hasMore:false,sync:{total:502,checked:502,live:1,scanning:false,error:listError}});
+  let queuedMessages=[];
+  let notificationPreference={enabled:false};let uploadNumber=0;let rejectUpload=false;
+  let imageFixture=false;
+  let nativeGoal=null;
+  let settings={model:"fixture",effort:"high",mode:"default",permission:":workspace"};
+  const snapshot = () => ({type: 'chat.state', data: {id: 'main-fixture', sequence:++sequence,readToken:replyToken, connected: true, snapshot: {
+    notificationPreference,queuedMessages,queueAvailable:true,threadGoal:nativeGoal,goalRevision:'fixture-goal-revision',goalAvailable:true,hasUnreadTurn:sharedReadToken!==replyToken,latestModel:settings.model,latestReasoningEffort:settings.effort,latestCollaborationMode:{mode:settings.mode},latestThreadSettings:{activePermissionProfile:{id:settings.permission==='auto-review'?':workspace':settings.permission},approvalsReviewer:settings.permission==='auto-review'?'auto_review':'user'},controlsRevision:'fixture-revision',latestTokenUsageInfo:{last:{inputTokens:2000},modelContextWindow:10000},threadRuntimeStatus: {type: active ? 'active' : 'idle'}, observedAtMs:Date.now(),turns: [{turnId:'t69',status:active?'inProgress':'completed',turnStartedAtMs,...(active?{}:{durationMs:764351}),items: [
+      {type: 'userMessage', text: '检查这个功能的安全边界。'},
+      {type: 'agentMessage', text: '这是隔离的 UI 测试会话，不是真实模型输出。\n\n```js\nconst safe = true;\n```\n\n<img src=x onerror="window.xss=true">'},
+      {id:'tool-fixture',type:'commandExecution',command:'fixture command --not-executed',status:processRunning?'inProgress':processRevision?'completed':'inProgress',text:'',deferred:true,bodyRevision:'fixture-body-'+processRevision},
+      {id:'reason-fixture',type:'reasoning',summary:[`Visible **reasoning summary** ${processRevision}`, '<img src=x onerror="window.xss=true">']},
+      ...(imageFixture?[{id:'returned-image',type:'imageGeneration',text:'',images:[{id:'f'.repeat(64),name:'fixture-returned.png'}]}]:[]),
+    ]}].concat(sentTurn?[sentTurn]:[]), requests: [{id: 'approval-fixture', method: 'item/commandExecution/requestApproval',
+      params: {command: 'fixture only - not executed', availableDecisions: ['accept', 'decline']}}],
+  }}});
+  await page.route('**/*', async route => {
+    const url = new URL(route.request().url());
+    if (url.origin !== origin) return route.abort();
+    if(url.pathname==='/api/v1/chat/image') {
+      const q=route.request().postDataJSON();assert.equal(q.thread,'main-fixture');assert.equal(q.item,'returned-image');assert.equal(q.image,'f'.repeat(64));
+      return route.fulfill({status:200,contentType:'image/png',body:await fs.readFile(path.join(__dirname,'../assets/icon.png'))});
+    }
+    if(url.pathname==='/api/v1/attachments') {
+      assert.equal(url.searchParams.get('thread'),'main-fixture');
+      assert.match(route.request().headers()['content-type'],/^multipart\/form-data/);
+      if(rejectUpload)return route.fulfill({status:413,body:'Request Entity Too Large'});
+      const id=(++uploadNumber).toString(16).padStart(64,'0');
+      return route.fulfill({status:201,contentType:'application/json',body:JSON.stringify({id,name:'fixture-image.png',size:100,image:true})});
+    }
+    if (url.pathname.startsWith('/api/v1/browser/')) {
+      const name = url.pathname.split('/').at(-1);
+      if(name==='session'&&offlineSession)return route.abort('internetdisconnected');
+      if(name==='session'&&sessionStatus)return route.fulfill({status:sessionStatus,body:'temporary proxy failure fixture'});
+      if(name==='login'){const input=route.request().postDataJSON();if(input.password==='wrong')return route.fulfill({status:401,body:'account or password rejected'});assert.equal(input.username,'owner');assert.equal(input.password,'fixture-password-only');assert.equal(input.remember,true);authorized=true;}
+      if (name === 'logout') authorized = false;
+      return route.fulfill({status: authorized ? 200 : 401, contentType: 'application/json',
+        body: JSON.stringify(authorized ? {device, version: 'fixture'} : {error: 'signed-out'})});
+    }
+    const file = url.pathname === '/cxpalm/' ? 'index.html' : url.pathname.startsWith('/cxpalm/assets/') ? url.pathname.split('/').at(-1) : null;
+    if (!file || !['index.html','app-v1.mjs','protocol-v1.mjs','control-v1.css','icon.svg','markdown-v1.mjs','marked-vendor.mjs','purify-vendor.mjs'].includes(file)) return route.fulfill({status:404, body:'not found'});
+    return route.fulfill({body: await fs.readFile(path.join(__dirname, file)),
+      contentType: file.endsWith('.mjs') ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.svg') ? 'image/svg+xml' : 'text/html'});
+  });
+  await page.routeWebSocket(`${origin.replace('https:', 'wss:')}/api/v1/ws`, socket => {
+    currentSocket=socket;
+    setTimeout(() => socket.send(JSON.stringify({type:'hello',data:{device:device.id,capabilities:['notifications.subscribe','chat.history','chat.read']}})), 10);
+    socket.onMessage(raw => {
+      const q = JSON.parse(raw); sent.push(q); commands.emit(q.method,q);
+      const reply = data => {const send=()=>socket.send(JSON.stringify({id:q.id,type:'result',data}));if(holdHistory&&q.method==='chat.history')heldHistory.push(send);else if(holdStartup&&['notifications.subscribe','sessions.browse'].includes(q.method))heldStartup.push(send);else send();};
+      if(q.method==='notifications.subscribe')return reply({events:[],gap:false,resynced:true,cursor:'baseline:fixture',scope:'all_non_archived'});
+      if(q.method==='sessions.browse')return reply(sessionPage(q));
+      if(q.method==='sessions.subscribe'){listSubscription=q.id;return reply({subscribed:true});}
+      if(q.method==='sessions.unarchive')restored=true;
+      if(q.method==='chat.history'){
+        if(q.thread==='archive-fixture')return reply({offset:0,total:1,hasMore:false,source:'rollout',questions:[],turns:[{turnId:'a',items:[{id:'archived-text',type:'agentMessage',text:'归档正文可以在桌面离线时只读查看。'}]}]});
+        const offset=q.cursor==='latest'?69:q.cursor?Number(q.cursor.slice(1)):q.offset||0;
+        const turns=offset===69?snapshot().data.snapshot.turns:Array.from({length:Math.min(20,70-offset)},(_,i)=>({turnId:'t'+(offset+i),items:[{id:'user-'+(offset+i),type:'userMessage',text:'历史问题 '+(offset+i)},{id:'reply-'+(offset+i),type:'agentMessage',text:'历史回答 '+(offset+i)+(offset+i===0?'\n'+('完整长文本'.repeat(2200)): '')}]}));
+        return reply({offset,total:70,hasMore:offset+turns.length<70,source:'desktop',turns:q.indexOnly?[]:turns,questions:Array.from({length:70},(_,i)=>({turn:'t'+i,offset:i,text:'历史问题 '+i}))});
+      }
+      if(q.method==='chat.read'){
+        const accepted=q.readToken===replyToken;
+        if(accepted)sharedReadToken=q.readToken;
+        reply({accepted});socket.send(JSON.stringify(snapshot()));
+        if(listSubscription)socket.send(JSON.stringify({type:'sessions.page',data:{subscription:listSubscription,page:sessionPage({})}}));
+        return;
+      }
+      if(q.method==='chat.item'){assert.equal(q.item,'tool-fixture');return reply({id:q.item,turn:q.turn,bodyRevision:'fixture-body-'+processRevision,command:'fixture command --not-executed',text:processRevision?`fixture output revision ${processRevision}`:'fixture command output - never executed'});}
+      if(q.method==='chat.catalog')return reply({models:[{id:'fixture',name:'Fixture',efforts:['low','high']},{id:'another',name:'Another',efforts:['low']}],skills:[{id:'skill-fixture',name:'example',description:'fixture only'}],source:'fixture metadata'});
+      if(q.method==='chat.notifications') {
+        notificationPreference={enabled:q.enabled};
+        const receipt={id:q.id,status:'confirmed',result:notificationPreference};receipts.set(q.id,receipt);reply(receipt);socket.send(JSON.stringify(snapshot()));return;
+      }
+      if(q.method==='chat.settings'){if(q.options.model)settings.model=q.options.model;if(q.options.effort)settings.effort=q.options.effort;if(q.options.mode)settings.mode=q.options.mode;if(q.options.permission)settings.permission=q.options.permission;}
+      if (q.method === 'chat.subscribe') { reply({subscribed:true}); if(holdSelected)return; return socket.send(JSON.stringify(q.thread==='archive-fixture'?{type:'chat.state',data:{id:q.thread,archived:true,connected:false,sequence:1,snapshot:{historySource:'rollout',threadRuntimeStatus:{type:'unknown'},turns:[{items:[{id:'archived-text',type:'agentMessage',text:'归档正文可以在桌面离线时只读查看。'}]}]}}}:snapshot())); }
+      if (q.method === 'operation.get') return reply(receipts.get(q.requestId));
+      if (q.method === 'operation.acknowledge') {
+        const receipt={id:q.requestId,status:'acknowledged'};receipts.set(q.requestId,receipt);return reply(receipt);
+      }
+      if (q.text === 'uncertain fixture') {
+        receipts.set(q.id,{id:q.id,status:'unknown'});
+        return socket.close({code:1001,reason:'fixture disconnect'});
+      }
+      if(q.method==='chat.queue')queuedMessages.push({id:q.id,text:q.text,status:'queued'});
+      if(q.method==='chat.queue.cancel')queuedMessages=queuedMessages.filter(item=>item.id!==q.requestId);
+      if (q.method === 'chat.send' || q.method === 'chat.steer') {active = true;if(q.text==='scroll send fixture')sentTurn={turnId:'sent-fixture',status:'inProgress',turnStartedAtMs:Date.now(),items:[{id:'sent-user',type:'userMessage',text:q.text}]};}
+      if(q.method==='chat.goal'){const action=q.options?.goalAction;nativeGoal=action==='clear'?null:action==='pause'?{...nativeGoal,status:'paused'}:action==='resume'?{...nativeGoal,status:'active'}:{objective:q.text,status:'active'};}
+      if (q.method === 'chat.stop') active = false;
+      const receipt={id:q.id,status:'confirmed',result:{fixture:true,applied:true,...(q.method==='sessions.create'?{id:'main-fixture',desktopReady:true}:q.method==='sessions.rename'?{id:q.thread,title:q.text}:{})}};
+      receipts.set(q.id,receipt);reply(receipt);
+      if (q.method.startsWith('chat.')) socket.send(JSON.stringify(snapshot()));
+    });
+  });
+  const screenshots = path.join(__dirname, '..', '.local', 'web-brand-screenshots');
+  await fs.mkdir(screenshots, {recursive:true});
+  async function capture(name){await page.evaluate(()=>Promise.all(document.getAnimations().filter(animation=>animation.effect.getTiming().iterations!==Infinity).map(animation=>animation.finished.catch(()=>{}))));await page.screenshot({path:path.join(screenshots,name)});}
+  try {
+    await page.goto(`${origin}/cxpalm/#pair=${secret}`);
+    await page.locator('#login').waitFor({state:'visible'});
+    await page.waitForFunction(() => document.querySelector('img.brand-mark')?.naturalWidth > 0);
+    assert.equal(await page.locator('link[rel=icon]').getAttribute('href'), 'assets/icon.svg');
+    assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()), '#2457f5');
+    assert.equal(new URL(page.url()).hash, '');
+    assert.equal(await page.locator('#pair-form,#legacy-login,#pair-link').count(),0);
+    await capture('login-desktop.png');
+    await page.locator('#login-username').fill('owner');await page.locator('#login-password').fill('wrong');await page.locator('#login-submit').click();
+    await page.waitForFunction(()=>document.querySelector('#notice-text').textContent.includes('账号或密码错误'));assert.equal(await page.locator('#login-password').inputValue(),'');
+    await page.locator('#login-password').fill('fixture-password-only');await page.locator('#login-remember').check();
+    await page.locator('#login-submit').click();
+    await page.locator('#session-list .session-item').waitFor();
+    assert.equal(await page.locator('#login-password').inputValue(),'');
+    assert.equal(await page.evaluate(()=>[localStorage,sessionStorage].some(storage=>Object.values(storage).some(value=>value.includes('fixture-password-only')))),false);
+    assert.ok(!(await page.locator('#session-list').textContent()).includes('undefined'));
+    await page.locator('#search').fill('chat-directory');
+    assert.equal(await page.locator('#session-list .session-item').count(),1);
+    // Await the debounced server filter before injecting session-state fixtures.
+    const resetSearch=once(commands,'sessions.subscribe');
+    await page.locator('#search').fill('');await resetSearch;
+    await page.evaluate(()=>localStorage.setItem('cxpalm:read:ui-fixture-device:main-fixture','a'.repeat(64)));
+    assert.equal(await page.locator('.session-item.is-unread').count(),1);
+    await page.locator('#session-list .session-item').click();
+    await page.getByText('这是隔离的 UI 测试会话', {exact:false}).waitFor();
+    await page.waitForFunction(()=>!document.querySelector('.session-item.is-unread')).catch(async e=>{console.error('initial state',errors,sent.map(q=>q.method),await page.evaluate(()=>({notice:document.querySelector('#notice-text').textContent,top:document.querySelector('#messages').scrollTop,height:document.querySelector('#messages').scrollHeight,client:document.querySelector('#messages').clientHeight})));throw e;});
+    assert.equal(sharedReadToken,'a'.repeat(64));
+    assert.equal(await page.locator('#session-list .session-status').count(),0,'read completed chat still has a dot');
+    assert.equal(await page.locator('#send-mode option[value="send"]').count(),0);
+    await page.locator('#rename-chat').click();await page.locator('#rename-title').fill('Fixture renamed');
+    const renamed=once(commands,'sessions.rename');await page.locator('#save-rename').click();const [renameCommand]=await renamed;
+    assert.equal(renameCommand.thread,'main-fixture');assert.equal(renameCommand.text,'Fixture renamed');
+    await page.locator('#rename-panel').waitFor({state:'hidden'});
+    await capture('session-read-quiet-desktop.png');
+    const unknownPage=sessionPage({});unknownPage.items[0]={...unknownPage.items[0],status:'unknown',unread:false};
+    currentSocket.send(JSON.stringify({type:'sessions.page',data:{subscription:listSubscription,page:unknownPage}}));
+    await page.waitForFunction(()=>document.querySelector('#session-list .session-item').title.includes('状态未知'));
+    assert.equal(await page.locator('#session-list .session-status').count(),0,'unknown read chat has a phantom dot');
+    currentSocket.send(JSON.stringify({type:'sessions.page',data:{subscription:listSubscription,page:sessionPage({})}}));
+
+    // Marking the same reply unread again must not be blocked by a latched once-key.
+    const readsBefore=sent.filter(q=>q.method==='chat.read').length;
+    sharedReadToken='';currentSocket.send(JSON.stringify(snapshot()));
+    await page.waitForFunction(()=>!document.querySelector('.session-item.is-unread'));
+    await page.waitForTimeout(50);
+    assert.equal(sharedReadToken,replyToken);
+    assert(sent.filter(q=>q.method==='chat.read').length>readsBefore);
+    // Viewing an existing visible reply is allowed while its turn is still running.
+    active=true;sharedReadToken='';currentSocket.send(JSON.stringify(snapshot()));
+    await page.locator('#turn-running').waitFor({state:'visible'});
+    await page.locator('#messages').evaluate(node=>{node.scrollTop=node.scrollHeight;});
+    await page.waitForTimeout(100);assert.equal(sharedReadToken,replyToken);
+    await page.locator('#session-list .session-status.running').waitFor();
+    active=false;currentSocket.send(JSON.stringify(snapshot()));
+
+    currentSocket.send(JSON.stringify({type:'sessions.page',data:{subscription:listSubscription,page:sessionPage({})}}));
+    await page.waitForTimeout(60);assert.equal(await page.locator('.session-item.is-unread').count(),0);
+    assert.equal(sent.filter(q=>q.method==='chat.catalog').length,0,'opening a chat must not scan models/skills');
+    assert.equal(await page.locator('#sidebar #nav-settings').count(),0);
+    assert.equal(await page.locator('.topbar #nav-settings').count(),1);
+    assert.equal(await page.locator('#notice-text').textContent(),'');
+    currentSocket.send(JSON.stringify({type:'notifications.status',data:{error:'fixture reminder sync unavailable'}}));
+    await page.waitForFunction(()=>document.querySelector('#notice-text').textContent==='fixture reminder sync unavailable');
+    currentSocket.send(JSON.stringify({type:'notifications.status',data:{error:''}}));
+    await page.locator('#notice').waitFor({state:'hidden'});
+    assert((await page.locator('#notification-sync-status').textContent()).includes('连接正常'));
+
+    await page.evaluate(async()=>{
+      const {markdown}=await import('/cxpalm/assets/markdown-v1.mjs');
+      const body=document.createElement('div');body.className='message-body';body.id='markdown-fixture';document.querySelector('#messages').append(body);
+      markdown(body,'# 标题\n\n**粗体** 和 *斜体* 与 ~~删除~~\n\n> 引用\n\n- 列表\n- [x] 已完成\n\n| 名称 | 状态 |\n| --- | --- |\n| 网页 | **完成** |\n\n```js\nconst value = "<tag>";\n```\n\n[安全链接](https://example.com) [危险链接](javascript:alert(1))\n\n![不加载远程图片](https://tracker.invalid/image.png)\n\n<img src=x onerror="window.xss=true"><svg onload="window.xss=true"></svg>');
+    });
+    await page.locator('#markdown-fixture h1').waitFor();
+    assert.equal(await page.locator('#markdown-fixture strong').first().textContent(),'粗体');
+    assert.equal(await page.locator('#markdown-fixture table').count(),1);
+    assert.equal(await page.locator('#markdown-fixture th').count(),2);
+    assert.equal(await page.locator('#markdown-fixture input:disabled:checked').count(),1);
+    assert.equal(await page.locator('#markdown-fixture pre code').textContent(),'const value = "<tag>";\n');
+    assert.equal(await page.locator('#markdown-fixture img, #markdown-fixture svg, #markdown-fixture script').count(),0);
+    assert.equal(await page.locator('#markdown-fixture a').count(),1);
+    assert.equal(await page.locator('#markdown-fixture a').getAttribute('rel'),'noopener noreferrer');
+    await page.locator('#messages').evaluate(n=>{n.scrollTop=n.scrollHeight;});
+    await capture('markdown-desktop.png');
+    await page.setViewportSize({width:390,height:844});
+    await page.locator('#messages').evaluate(n=>{n.scrollTop=n.scrollHeight;});
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    await capture('markdown-mobile.png');
+    await page.locator('#markdown-fixture').evaluate(n=>n.remove());
+    await page.setViewportSize({width:1440,height:960});
+    assert.equal(await page.locator('#messages img').count(),0);
+    assert.equal(await page.evaluate(()=>window.xss),undefined);
+    assert.equal(await page.locator('#messages details').first().getAttribute('open'),null);
+    assert.equal(await page.locator('.process-body pre, .process-body p').count(),0,'collapsed process body was eagerly rendered');
+    assert.equal(sent.filter(q=>q.method==='chat.item').length,0,'collapsed process requested a body');
+    await page.locator('#messages summary').first().click();
+    await page.getByText('fixture command output - never executed',{exact:true}).waitFor();
+    await page.evaluate(()=>window.__firstMessage=document.querySelector('#messages .message'));
+    currentSocket.send(JSON.stringify(snapshot()));
+    await page.waitForTimeout(60);
+    assert.equal(await page.evaluate(()=>window.__firstMessage===document.querySelector('#messages .message')),true);
+    const streamSubscription=sent.filter(q=>q.method==='chat.subscribe').at(-1);
+    const baseline=snapshot();baseline.data.streamID=streamSubscription.id;baseline.data.streamRevision=1;currentSocket.send(JSON.stringify(baseline));
+    await page.waitForTimeout(40);
+    currentSocket.send(JSON.stringify({type:'chat.delta',data:{id:'main-fixture',streamID:streamSubscription.id,base:1,streamRevision:2,ops:[
+      {op:'set',path:['sequence'],value:++sequence},
+      {op:'append',path:['snapshot','turns','0','items','1','text'],value:'\n\n增量同步验证'}
+    ]}}));
+    await page.getByText('增量同步验证',{exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>window.__firstMessage===document.querySelector('#messages .message')),true,'delta replaced unchanged message DOM');
+    currentSocket.send(JSON.stringify(snapshot()));await page.waitForTimeout(40);
+    const stale=snapshot();stale.data.sequence=0;stale.data.snapshot.threadRuntimeStatus.type='active';currentSocket.send(JSON.stringify(stale));
+    await page.waitForTimeout(60);assert.equal(await page.locator('#stop').isDisabled(),true);
+    await page.locator('#message').fill('send fixture');await page.locator('#send').click();
+    await page.waitForFunction(()=>document.querySelector('#message').value === '');
+    assert.notEqual(await page.locator('#messages details').first().getAttribute('open'),null);
+    assert.equal(sent.filter(q=>q.method==='chat.item').length,1,'unchanged output was fetched twice');
+    await page.locator('#messages summary').first().click();
+    const commandDetails=page.locator('.message[data-role=commandExecution] details').first();
+    const reasoningDetails=page.locator('.message[data-role=reasoning] details').first();
+    assert.equal(await commandDetails.getAttribute('open'),null);
+    assert.equal(await reasoningDetails.getAttribute('open'),null);
+    assert.equal(await page.locator('.message[data-role=Codex] details').count(),0);
+    await commandDetails.locator('summary').click();
+    await reasoningDetails.locator('summary').click();
+    await page.evaluate(()=>window.__processDetails=document.querySelector('.message[data-role=commandExecution] details'));
+    const priorDetailReads=sent.filter(q=>q.method==='chat.item').length;processRunning=true;
+    for(let i=1;i<=10;i++){processRevision=i;currentSocket.send(JSON.stringify(snapshot()));}
+    await page.waitForTimeout(120);assert.equal(sent.filter(q=>q.method==='chat.item').length,priorDetailReads,'running output revisions triggered repeated full downloads');
+    await commandDetails.getByRole('button',{name:'刷新输出',exact:true}).click();
+    await page.getByText('fixture output revision 10',{exact:true}).waitFor();assert.equal(sent.filter(q=>q.method==='chat.item').length,priorDetailReads+1);
+    processRunning=false;processRevision=1;currentSocket.send(JSON.stringify(snapshot()));
+    await commandDetails.getByText('fixture output revision 1',{exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>window.__processDetails===document.querySelector('.message[data-role=commandExecution] details')),true);
+    assert.notEqual(await commandDetails.getAttribute('open'),null);
+    assert.notEqual(await reasoningDetails.getAttribute('open'),null);
+    assert.equal(await reasoningDetails.locator('strong').textContent(),'reasoning summary');
+    assert.equal(await page.locator('#messages img').count(),0);
+    assert.equal(await commandDetails.locator('pre').first().textContent(),'fixture command --not-executed');
+    await capture('process-expanded-desktop.png');
+    await commandDetails.locator('summary').click();await reasoningDetails.locator('summary').click();
+    const duplicate=snapshot();duplicate.data.snapshot.turns.push({turnId:'different-turn',items:[{id:'tool-fixture',type:'commandExecution',command:'other command',text:'other output'}]});
+    await commandDetails.locator('summary').click();currentSocket.send(JSON.stringify(duplicate));
+    await page.locator('.message[data-role=commandExecution]').nth(1).waitFor();
+    assert.notEqual(await commandDetails.getAttribute('open'),null);
+    assert.equal(await page.locator('.message[data-role=commandExecution] details').nth(1).getAttribute('open'),null);
+    await commandDetails.locator('summary').click();
+    processRevision=2;currentSocket.send(JSON.stringify(snapshot()));
+    await page.waitForFunction(()=>document.querySelectorAll('.message[data-role=commandExecution]').length===1);
+    assert.equal(await commandDetails.getAttribute('open'),null);
+    assert.equal(await reasoningDetails.getAttribute('open'),null);
+    await capture('process-collapsed-desktop.png');
+    await page.setViewportSize({width:320,height:740});await capture('process-collapsed-320.png');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    await page.setViewportSize({width:1440,height:960});
+    assert.equal(await page.locator('#send').isDisabled(),true);
+    await page.waitForFunction(()=>document.querySelector('#send').textContent.includes('引导'));
+    await page.locator('#message').fill('steer fixture');await page.locator('#send').click();
+    await page.waitForFunction(()=>document.querySelector('#message').value === '');
+    await page.locator('#stop').click();
+    await page.getByRole('button',{name:'仅批准这一次',exact:true}).click();
+    await page.locator('#pending').waitFor({state:'hidden'});
+    await capture('chat-desktop.png');
+    assert.equal(await page.locator('#nav-git').count(),0);
+    assert.equal(await page.locator('#create-side').count(),0);
+    assert.equal(await page.locator('dialog').count(),0);
+    assert.equal(await page.locator('#control-panel').isVisible(),false);
+    assert.equal(await page.locator('#skill-dialog').isVisible(),false);
+    const beforeOpen=sent.filter(q=>q.method==='chat.settings').length;
+    await page.locator('#model-button').click();
+    assert.equal(await page.locator('#model').evaluate(el=>el===document.activeElement),true);
+    assert.equal(await page.locator('#model').inputValue(),'fixture');
+    assert.equal(await page.locator('#effort').inputValue(),'high');
+    assert.equal(await page.locator('#apply-settings').isDisabled(),true);
+    assert.equal(await page.locator('#sync-settings').count(),0);
+    assert.equal((await page.locator('#session-settings').textContent()).includes('沿用桌面'),false);
+    await capture('controls-desktop.png');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#model-button').evaluate(el=>el===document.activeElement),true);
+    assert.equal(sent.filter(q=>q.method==='chat.settings').length,beforeOpen);
+    await page.locator('#model-button').click();
+    assert.equal(await page.locator('#model').evaluate(el=>el===document.activeElement),true);
+    await page.locator('#model option[value=another]').waitFor({state:'attached'});
+    await page.locator('#model').selectOption('another');await page.locator('#effort').selectOption('low');await page.locator('#apply-settings').click();
+    await page.waitForFunction(()=>document.querySelector('#settings-current').textContent.includes('another'));
+    const modelPatch=sent.filter(q=>q.method==='chat.settings').at(-1).options;
+    assert.deepEqual(Object.keys(modelPatch).sort(),['effort','expected','model']);
+    await page.locator('#plan-button').click();assert.equal(await page.locator('#plan-mode').inputValue(),'default');assert.equal(await page.locator('#apply-settings').isDisabled(),true);await page.locator('#plan-mode').selectOption('plan');await page.locator('#apply-settings').click();
+    await page.locator('#control-panel').waitFor({state:'hidden'});
+    await page.locator('#plan-button').click();
+    assert.deepEqual(await page.locator('#plan-mode option').evaluateAll(rows=>rows.filter(n=>!n.disabled).map(n=>n.value)),['default','plan','goal']);
+    await page.locator('#plan-mode').selectOption('goal');await page.locator('#apply-settings').click();
+    await page.locator('#message').fill('isolated native goal fixture');await page.locator('#send').click();
+    await page.waitForFunction(()=>document.querySelector('#goal-objective').textContent.includes('isolated native goal fixture'));
+    assert(sent.some(q=>q.method==='chat.goal'&&q.options.expectedGoal==='fixture-goal-revision'));
+    assert(!sent.some(q=>q.method==='chat.settings'&&q.options.mode==='goal'),'goal is not a collaborationMode enum');
+    await page.locator('#goal-pause').click();await page.locator('#goal-resume').waitFor({state:'visible'});
+    await page.locator('#goal-clear').click();await page.locator('#goal-status').waitFor({state:'hidden'});
+    await page.locator('#permission-button').click();await page.locator('#permission').selectOption('auto-review');
+    await page.locator('#apply-settings').click();await page.waitForFunction(()=>document.querySelector('#permission-button').textContent.includes('帮我批准'));
+    assert(sent.some(q=>q.method==='chat.settings'&&q.options.permission==='auto-review'));
+    await page.locator('#permission-button').click();await page.locator('#permission').selectOption('full');
+    const beforeFull=sent.filter(q=>q.method==='chat.settings').length;
+    await page.locator('#apply-settings').click();await page.waitForTimeout(60);
+    assert.equal(sent.filter(q=>q.method==='chat.settings').length,beforeFull);
+    await page.locator('#confirm-full-access').check();await page.locator('#apply-settings').click();
+    await page.locator('#control-panel').waitFor({state:'hidden'});
+    assert(sent.some(q=>q.method==='chat.settings'&&q.options.permission==='full'&&q.options.confirmFullAccess===true));
+    await page.locator('#permission-button').click();assert.equal(await page.locator('#permission').inputValue(),'full');assert.equal(await page.locator('#apply-settings').isDisabled(),true);assert.equal(await page.locator('#full-access-confirm').isVisible(),false);await page.locator('#permission').selectOption('read-only');await page.locator('#apply-settings').click();
+    await page.locator('#control-panel').waitFor({state:'hidden'});
+    const patch=sent.find(q=>q.method==='chat.settings'&&q.options.permission==='read-only');assert.equal(patch.options.permission,'read-only');
+    assert(sent.some(q=>q.method==='chat.settings'&&q.options.mode==='plan'));
+    await page.locator('#control-panel').waitFor({state:'hidden'});
+    assert.equal(await page.locator('.composer-area #context-button').count(),1);
+    await page.waitForFunction(()=>document.querySelector('.turn-elapsed')?.textContent==='用时 12 分 44 秒');
+    assert.equal(await page.locator('#turn-running').isVisible(),false,'completed time duplicated above transcript');
+    assert(await page.locator('#context-button').evaluate(node=>node.getBoundingClientRect().bottom<=document.querySelector('#message').getBoundingClientRect().top));
+    assert.equal(await page.locator('#context-percent').textContent(),'20%');
+    assert.equal(await page.locator('#context-button').getAttribute('aria-label'),'上下文已使用 20%');
+    assert.equal(await page.locator('.context-ring').evaluate(node=>Math.round(node.getBoundingClientRect().width)),19);
+    const unknownContext=snapshot();delete unknownContext.data.snapshot.latestTokenUsageInfo;
+    currentSocket.send(JSON.stringify(unknownContext));
+    await page.locator('#context-button.unknown').waitFor();
+    assert.equal(await page.locator('#context-percent').textContent(),'—');
+    const highContext=snapshot();highContext.data.snapshot.latestTokenUsageInfo.last.inputTokens=9000;
+    currentSocket.send(JSON.stringify(highContext));
+    await page.locator('#context-button.high-usage').waitFor();
+    assert.equal(await page.locator('#context-button').getAttribute('aria-label'),'上下文已使用 90%');
+    currentSocket.send(JSON.stringify(snapshot()));
+    await page.waitForFunction(()=>document.querySelector('#context-percent').textContent==='20%');
+    assert.equal(await page.locator('.message[data-role=Codex] + .turn-elapsed').count(),1);
+    assert.equal(await page.locator('.message-head .turn-elapsed').count(),0);
+    await capture('composer-timing-desktop.png');
+    await page.locator('#context-button').click();
+    const compactRequest=once(commands,'chat.compact',{signal:AbortSignal.timeout(5000)});
+    await page.locator('#compact').click();await compactRequest;await page.locator('#pending').waitFor({state:'hidden'});await page.keyboard.press('Escape');
+    await page.locator('#skill-button').click();await page.locator('#skill-list input').check();await page.getByRole('button',{name:'完成选择',exact:true}).click();
+    assert.equal(await page.locator('#skill-summary').textContent(),'Skill · 1');
+    await page.locator('#message').fill('skill fixture');await page.locator('#send').click();await page.waitForFunction(()=>document.querySelector('#message').value==='');assert.deepEqual(sent.find(q=>q.text==='skill fixture').skills,['skill-fixture']);
+    assert.equal(await page.locator('#queue-send').isVisible(),true);
+    await page.locator('#send-mode').selectOption('queue');
+    await page.locator('#message').fill('queue fixture <b>not markup</b>');
+    assert.match(await page.locator('#send').textContent(),/加入队列/);
+    const queueRequest=once(commands,'chat.queue');await page.locator('#send').click();await queueRequest;
+    await page.locator('#message-queue').waitFor({state:'visible'});
+    await page.waitForFunction(()=>document.querySelector('#message').value==='');
+    assert.equal(await page.locator('#message-queue b').count(),0);
+    assert.match(await page.locator('#message-queue').textContent(),/等待发送/);
+    await capture('queued-message-desktop.png');
+    await page.setViewportSize({width:390,height:844});await capture('queued-message-mobile.png');await page.setViewportSize({width:1440,height:960});
+    const cancelQueue=once(commands,'chat.queue.cancel');await page.getByRole('button',{name:'取消排队消息',exact:true}).click();await cancelQueue;
+    await page.locator('#message-queue').waitFor({state:'hidden'});
+    assert.equal(await page.locator('#send-mode option[value=send]').count(),0);await page.locator('#send-mode').selectOption('auto');await page.locator('#stop').click();
+    const writesBeforeReconnect=sent.filter(q=>['chat.send','chat.steer'].includes(q.method)).length;
+    const restoredChat=once(commands,'chat.subscribe',{signal:AbortSignal.timeout(10000)});
+    currentSocket.close({code:1001,reason:'idle connection fixture'});
+    await restoredChat;
+    await page.locator('#connection.online').waitFor();
+    await page.waitForFunction(()=>!document.querySelector('#context-button').disabled);
+    assert.equal(sent.filter(q=>['chat.send','chat.steer'].includes(q.method)).length,writesBeforeReconnect);
+    await page.locator('#message').fill('uncertain fixture');await page.locator('#send').click();
+    await page.locator('#pending').waitFor();
+    await page.reload();
+    await page.locator('#ack-pending').waitFor({state:'visible'});
+    await page.locator('#messages .message').first().waitFor();
+    assert.equal(sent.filter(q=>q.text==='uncertain fixture').length,1);
+    await page.locator('#ack-pending').click();await page.locator('#pending').waitFor({state:'hidden'});
+    await page.setViewportSize({width:390,height:844});
+    await page.locator('#show-list').click();
+    await page.locator('#session-list .session-item').click();
+    await page.locator('#messages .message').first().waitFor();
+    await capture('chat-mobile.png');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth > innerWidth),false);
+    await page.locator('#plan-button').click();await capture('controls-mobile.png');
+    assert.equal(await page.locator('#control-panel').evaluate(el=>el.scrollWidth>el.clientWidth),false);
+    await page.keyboard.press('Escape');
+    await page.locator('#skill-button').click();await capture('skills-mobile.png');await page.keyboard.press('Escape');
+    await page.setViewportSize({width:320,height:740});await capture('chat-320.png');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    await page.locator('#model-button').click();assert.equal(await page.locator('#control-panel').evaluate(el=>el.scrollWidth>el.clientWidth),false);await page.keyboard.press('Escape');
+    await page.setViewportSize({width:390,height:844});
+    await page.locator('#nav-settings').click();
+    await page.locator('.settings-card').filter({has:page.locator('#theme')}).locator('summary').click();
+    await page.locator('.settings-card').filter({has:page.locator('#notify-complete')}).locator('summary').click();
+    await page.locator('.settings-card').filter({has:page.locator('#send-key')}).locator('summary').click();
+    await page.locator('#theme').selectOption('dark');
+    await page.locator('#notify-complete').check();await page.locator('#notify-approval').check();await page.locator('#send-key').selectOption('enter');
+    await page.locator('#nav-chat').click();
+    active=true;currentSocket.send(JSON.stringify(snapshot()));await page.waitForFunction(()=>document.querySelector('#send').textContent.includes('引导'));
+    await page.waitForFunction(()=>document.querySelector('#turn-running')?.textContent.startsWith('Codex 正在工作… · 1:'));
+    const elapsedBefore=await page.locator('#turn-running').textContent();await page.waitForFunction(before=>document.querySelector('#turn-running')?.textContent!==before,elapsedBefore,{timeout:3500});
+    await capture('turn-running-mobile.png');
+    assert(await page.locator('#turn-running').evaluate(node=>node.getBoundingClientRect().bottom<=document.querySelector('#messages').getBoundingClientRect().top));
+    const liveRestored=once(commands,'chat.subscribe',{signal:AbortSignal.timeout(10000)});
+    currentSocket.close({code:1001,reason:'running timer reconnect fixture'});
+    await page.locator('#turn-running').waitFor({state:'hidden'});
+    await liveRestored;
+    await page.waitForTimeout(80);assert.equal(sent.filter(q=>q.method==='notifications.subscribe').at(-1).cursor,'baseline:fixture');
+    await page.locator('#turn-running').waitFor({state:'visible'});
+    assert(!(await page.locator('#turn-running').textContent()).endsWith('0:00'));
+    active=false;currentSocket.send(JSON.stringify(snapshot()));
+    await page.locator('#turn-running').waitFor({state:'hidden'});
+    await page.waitForFunction(()=>document.querySelector('.turn-elapsed')?.textContent==='用时 12 分 44 秒');
+    assert.equal(await page.locator('#turn-running').isVisible(),false,'completed time duplicated above transcript');
+    await capture('composer-timing-mobile.png');
+    if(await page.locator('#notice').isVisible())await page.locator('#dismiss-notice').click();
+    const offscreen={type:'notification',data:{id:'b'.repeat(64),kind:'complete',thread:'offscreen-chat',title:'另一会话的完成提醒'}};
+    currentSocket.send(JSON.stringify(offscreen));currentSocket.send(JSON.stringify(offscreen));
+    await page.waitForFunction(()=>window.__notices.length>0);await page.waitForTimeout(60);assert.equal(await page.evaluate(()=>window.__notices.length),1);
+    assert.equal(await page.locator('#view-title').textContent(),'网页控制端 · 安全检查');
+    assert.equal(await page.locator('#notice').isVisible(),false,'foreground task event created an inline banner');
+    assert((await page.evaluate(()=>window.__notificationObjects[0].options.body)).includes('cxpalm.test'));
+    const notificationJump=once(commands,'chat.subscribe',{signal:AbortSignal.timeout(10000)});
+    await page.evaluate(()=>window.__notificationObjects[0].onclick());
+    assert.equal((await notificationJump)[0].thread,'offscreen-chat');
+    assert.equal(await page.evaluate(()=>window.__notificationObjects[0].closed),true);
+    await page.locator('#show-list').click();
+    await page.locator('#session-list .session-item').click();await page.getByText('检查这个功能的安全边界。',{exact:true}).waitFor();
+    await page.evaluate(()=>Object.defineProperty(document,'hidden',{configurable:true,get:()=>true}));
+    const approvalNotice={type:'notification',data:{id:'c'.repeat(64),kind:'approval',thread:'main-fixture',title:'网页控制端 · 安全检查'}};
+    currentSocket.send(JSON.stringify(approvalNotice));currentSocket.send(JSON.stringify(approvalNotice));
+    await page.waitForFunction(()=>window.__notices.length===2);
+    assert.equal(await page.locator('#notice').isVisible(),false,'background task event created an inline banner');
+    await page.evaluate(()=>{delete document.hidden;Notification.permission='denied';});
+    currentSocket.send(JSON.stringify({type:'notification',data:{...offscreen.data,id:'d'.repeat(64)}}));
+    await page.waitForTimeout(100);
+    assert.equal(await page.evaluate(()=>window.__notices.length),2);
+    assert.equal(await page.locator('#notice').isVisible(),false,'denied permission fell back to an inline banner');
+    await page.evaluate(()=>Notification.permission='granted');
+    await page.reload();await page.locator('#nav-settings').click();assert.equal(await page.locator('#notify-complete').isChecked(),true);assert.equal(await page.locator('#send-key').inputValue(),'enter');
+    assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()), '#b6c8ff');
+    await capture('settings-mobile-dark.png');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth > innerWidth),false);
+    await page.setViewportSize({width:320,height:740});
+    await capture('settings-320-dark.png');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth > innerWidth),false);
+    await page.setViewportSize({width:844,height:390});
+    await capture('settings-landscape-dark.png');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth > innerWidth),false);
+    await page.setViewportSize({width:1440,height:960});
+    if(await page.locator('#nav-chat').isVisible())await page.locator('#nav-chat').click();
+    await page.setViewportSize({width:1440,height:960});
+    assert.equal(await page.locator('#session-list').getByText('官方桌面会话',{exact:true}).count(),0);
+    assert.equal(await page.locator('.project-heading').textContent(),'项目 / Research · 1');
+    await page.locator('.project-heading').click();assert.equal(await page.locator('.project-heading').getAttribute('aria-expanded'),'false');
+    assert.equal(await page.locator('#session-list .session-item').isVisible(),false);
+    currentSocket.send(JSON.stringify(snapshot()));
+    await page.waitForTimeout(100);assert.equal(await page.locator('#session-list .session-item').isVisible(),false);
+    await page.locator('#list-mode').selectOption('recent');assert.equal(await page.locator('#session-list .session-item').isVisible(),true);
+    await page.locator('#list-mode').selectOption('projects');assert.equal(await page.locator('#session-list .session-item').isVisible(),false);
+    await page.locator('.project-heading').click();assert.equal(await page.locator('#session-list .session-item').isVisible(),true);
+    assert.equal(await page.locator('.session-title time').textContent(),'10/11');
+    assert.equal(await page.locator('.session-item.is-unread').count(),0);
+    assert.equal(await page.locator('#session-list .session-status').count(),0);
+    assert.equal(await page.locator('#session-list').getByText('已读',{exact:true}).count(),0);
+    assert.equal(await page.locator('#session-list').getByText('已完成',{exact:true}).count(),0);
+    await capture('sessions-read-colors-desktop.png');
+    // Settings and hidden tabs must not acknowledge new replies.
+    await page.locator('#nav-settings').click();
+    replyToken='b'.repeat(64);
+    currentSocket.send(JSON.stringify(snapshot()));
+    currentSocket.send(JSON.stringify({type:'sessions.page',data:{subscription:listSubscription,page:sessionPage({})}}));
+    await page.waitForFunction(()=>!!document.querySelector('.session-item.is-unread'));
+    assert.equal(sharedReadToken,'a'.repeat(64));
+    await page.locator('#nav-chat').click();
+    await page.waitForFunction(()=>!document.querySelector('.session-item.is-unread'));
+    // Scroll up: a reply is not read until its latest content is visible.
+    await page.evaluate(()=>{const n=document.querySelector('#messages');n.style.height='120px';n.style.flex='none';n.scrollTop=0;});
+    replyToken='c'.repeat(64);currentSocket.send(JSON.stringify(snapshot()));
+    currentSocket.send(JSON.stringify({type:'sessions.page',data:{subscription:listSubscription,page:sessionPage({})}}));
+    await page.waitForFunction(()=>!!document.querySelector('.session-item.is-unread'));
+    assert.equal(sharedReadToken,'b'.repeat(64));
+    await page.evaluate(()=>{const n=document.querySelector('#messages');n.scrollTop=n.scrollHeight;});
+    await page.waitForFunction(()=>!document.querySelector('.session-item.is-unread'));
+    await page.evaluate(()=>{document.querySelector('#messages').removeAttribute('style');});
+
+    await page.evaluate(()=>Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'}));
+    replyToken='d'.repeat(64);currentSocket.send(JSON.stringify(snapshot()));
+    currentSocket.send(JSON.stringify({type:'sessions.page',data:{subscription:listSubscription,page:sessionPage({})}}));
+    await page.waitForFunction(()=>!!document.querySelector('.session-item.is-unread'));
+    assert.equal(sharedReadToken,'c'.repeat(64));
+    await page.evaluate(()=>{delete document.visibilityState;document.dispatchEvent(new Event('visibilitychange'));});
+    await page.waitForFunction(()=>!document.querySelector('.session-item.is-unread'));
+    await page.reload();await page.locator('#messages .message').first().waitFor();
+    assert.equal(await page.locator('.session-item.is-unread').count(),0);
+    assert.equal(sharedReadToken,'d'.repeat(64));
+    await page.setViewportSize({width:390,height:844});await page.locator('#show-list').click();
+    replyToken='e'.repeat(64);currentSocket.send(JSON.stringify(snapshot()));
+    currentSocket.send(JSON.stringify({type:'sessions.page',data:{subscription:listSubscription,page:sessionPage({})}}));
+    await page.waitForFunction(()=>!!document.querySelector('.session-item.is-unread'));
+    await capture('sessions-unread-colors-mobile.png');
+    assert.equal(sharedReadToken,'d'.repeat(64));
+    await page.locator('#close-list').click();await page.waitForFunction(()=>!document.querySelector('.session-item.is-unread'));
+    await page.setViewportSize({width:1440,height:960});
+    await page.locator('#nav-settings').click();await page.locator('.settings-card').filter({has:page.locator('#theme')}).locator('summary').click();await page.locator('#theme').selectOption('light');await page.locator('#nav-chat').click();
+    await capture('sessions-read-colors-light.png');
+    const next=sessionPage({});next.items[0].status='running';next.items[0].unread=false;
+    currentSocket.send(JSON.stringify({type:'sessions.page',data:{subscription:listSubscription,page:next}}));
+    await page.locator('#session-list .session-status.running').waitFor();assert.equal(await page.locator('.archive-action').isDisabled(),true);
+    await page.locator('#session-list .session-status.running').evaluate(n=>window.fixtureStatusNode=n);
+    currentSocket.send(JSON.stringify({type:'sessions.page',data:{subscription:listSubscription,page:next}}));
+    await page.waitForTimeout(50);assert.equal(await page.locator('#session-list .session-status.running').evaluate(n=>n===window.fixtureStatusNode),true,'live list push reset breathing node');
+    const stalePage=sessionPage({});stalePage.items[0].title='stale list';currentSocket.send(JSON.stringify({type:'sessions.page',data:{subscription:'obsolete',page:stalePage}}));
+    await page.waitForTimeout(60);assert.equal(await page.locator('#session-list').getByText('stale list').count(),0);
+    // Full history and right-edge question map remain independent of live state.
+    await page.locator('#question-rail').waitFor({state:'visible'});
+    await page.locator('#messages').evaluate(node=>{node.scrollTop=node.scrollHeight;node.dispatchEvent(new Event('scroll'));});
+    await page.waitForFunction(()=>document.querySelector('#question-slider').value==='69');
+    assert.equal(await page.locator('#question-list button[aria-current=step]').getAttribute('data-turn'),'t69');
+    assert.equal(await page.locator('#question-list').evaluate(n=>n.scrollHeight-n.scrollTop-n.clientHeight<5),true);
+
+    await page.locator('#question-toggle').click();
+    await page.locator('#question-list button').first().click();
+    await page.locator('#messages').getByText('历史问题 0',{exact:true}).waitFor();
+    assert((await page.locator('#messages').textContent()).includes('完整长文本'.repeat(2200)),'long historical reply was cut');
+    await page.locator('#messages').evaluate(node=>{node.scrollTop=1000;node.dispatchEvent(new Event('scroll'));});
+    await page.waitForFunction(()=>document.querySelector('#question-slider').value==='0');
+    assert.equal(await page.locator('#question-list button[aria-current=step]').getAttribute('data-turn'),'t0');
+
+    assert.equal(await page.locator('#messages').getByText('历史问题 69',{exact:true}).count(),0);
+    currentSocket.send(JSON.stringify(snapshot()));
+    await page.locator('#messages').getByText('历史问题 0',{exact:true}).waitFor();
+    assert.equal(await page.locator('#messages').getByText('检查这个功能的安全边界。',{exact:true}).count(),0,'live update displaced history');
+    await page.locator('#question-toggle').click();await capture('question-map-history-desktop.png');await page.locator('#question-toggle').click();
+    await page.locator('#question-slider').evaluate(n=>{n.value='35';n.dispatchEvent(new Event('input',{bubbles:true}));});
+    await page.locator('#question-slider').dispatchEvent('change');
+    await page.locator('#messages').getByText('历史问题 35',{exact:true}).waitFor();
+    await page.locator('#messages').evaluate(node=>{node.scrollTop=node.scrollHeight;node.dispatchEvent(new Event('scroll'));});
+    await page.waitForFunction(()=>document.querySelector('#question-slider').value==='54');
+    assert.equal(await page.locator('#question-list button[aria-current=step]').getAttribute('data-turn'),'t54');
+    const questionAlignment=await page.evaluate(()=>{
+      const list=document.querySelector('#question-list'),row=list.querySelector('button.active');
+      const rect=list.getBoundingClientRect(),question=row.getBoundingClientRect();
+      return {visible:question.top>=rect.top-1&&question.bottom<=rect.bottom+1};
+    });
+    assert(questionAlignment.visible,'active question is outside its navigator');
+    await page.locator('#question-slider').evaluate(n=>{n.value='10';n.dispatchEvent(new Event('input',{bubbles:true}));});
+    await page.locator('#messages').evaluate(n=>{n.scrollTop-=80;});await page.waitForTimeout(80);
+    assert.equal(await page.locator('#question-slider').inputValue(),'10','reading-position updates hijacked an active scrub');
+    await page.locator('#question-slider').dispatchEvent('change');
+    await page.locator('#messages').getByText('历史问题 10',{exact:true}).waitFor();
+
+
+
+    await page.locator('#messages').getByRole('button',{name:'↑ 更早的内容',exact:true}).click();
+    await page.locator('#messages').getByText('历史问题 15',{exact:true}).waitFor();
+    await page.locator('#messages').getByRole('button',{name:'回到最新 ↓',exact:true}).click();
+    await page.getByText('检查这个功能的安全边界。',{exact:true}).waitFor();
+    await page.setViewportSize({width:390,height:844});await page.locator('#question-toggle').click();
+    await capture('question-map-mobile.png');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    await page.setViewportSize({width:320,height:740});await capture('question-map-320.png');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    await page.locator('#question-list button').first().click();await page.locator('#messages').getByText('历史问题 0',{exact:true}).waitFor();
+    await page.locator('#messages').getByRole('button',{name:'回到最新 ↓',exact:true}).click();
+    await page.getByText('检查这个功能的安全边界。',{exact:true}).waitFor();
+    await page.setViewportSize({width:1440,height:960});
+    // A deliberate upward scroll loads older turns once and keeps the visible anchor.
+    await page.locator('#question-slider').evaluate(n=>{n.value='35';n.dispatchEvent(new Event('change',{bubbles:true}));});
+    await page.locator('#messages').getByText('历史问题 35',{exact:true}).waitFor();
+    await page.locator('#messages').evaluate(n=>{n.scrollTop=100;});
+    const olderBefore=sent.filter(q=>q.method==='chat.history'&&q.offset===15).length;
+    const anchorBefore=await page.locator('#messages .message').first().evaluate(n=>n.getBoundingClientRect().top);
+    const box=await page.locator('#messages').boundingBox();await page.mouse.move(box.x+box.width/2,box.y+80);
+    holdHistory=true;await page.mouse.wheel(0,-60);
+    await page.waitForFunction(()=>document.querySelector('.history-controls button').disabled);
+    await page.mouse.wheel(0,-5);
+    assert.equal(sent.filter(q=>q.method==='chat.history'&&q.offset===15).length,olderBefore+1,'duplicate edge request');
+    holdHistory=false;for(const send of heldHistory.splice(0))send();
+    await page.locator('#messages').getByText('历史问题 15',{exact:true}).waitFor();
+    assert.equal(await page.locator('#messages').getByText('历史问题 35',{exact:true}).count(),1,'loaded turn was replaced');
+    const anchorAfter=await page.locator('#messages .message.user[data-turn=t35]').evaluate(n=>n.getBoundingClientRect().top);
+    assert(Math.abs(anchorAfter-anchorBefore-65)<6,'prepend jumped away from reading anchor');
+    const loadedCount=sent.filter(q=>q.method==='chat.history').length;await page.waitForTimeout(100);
+    assert.equal(sent.filter(q=>q.method==='chat.history').length,loadedCount,'layout eagerly drained history');
+    // Already at the top: an upward wheel still fetches, despite no scroll event.
+    await page.locator('#messages').evaluate(n=>{n.scrollTop=0;});await page.mouse.wheel(0,-60);
+    await page.locator('#messages').getByText('历史问题 0',{exact:true}).waitFor();
+    assert.equal(await page.locator('#messages').getByText('历史问题 35',{exact:true}).count(),1);
+    const atStartCount=sent.filter(q=>q.method==='chat.history').length;
+    await page.locator('#messages').evaluate(n=>{n.scrollTop=0;});await page.mouse.wheel(0,-60);await page.waitForTimeout(100);
+    assert.equal(sent.filter(q=>q.method==='chat.history').length,atStartCount,'fetched before the beginning');
+    // Downward scrolling appends the next range; it never replaces the preceding range.
+    await page.locator('#messages').evaluate(n=>{n.scrollTop=n.scrollHeight-n.clientHeight-120;});
+    await page.mouse.wheel(0,100);
+    await page.locator('#messages').getByText('历史问题 68',{exact:true}).waitFor();
+    assert.equal(await page.locator('#messages').getByText('历史问题 15',{exact:true}).count(),1);
+    await page.locator('#messages').getByRole('button',{name:'回到最新 ↓',exact:true}).click();
+    await page.getByText('检查这个功能的安全边界。',{exact:true}).waitFor();
+    // Sending from old history returns to the new official user message, not the old page.
+    active=false;currentSocket.send(JSON.stringify(snapshot()));
+    await page.locator('#question-list button').first().click();
+    await page.locator('#messages').getByText('历史问题 0',{exact:true}).waitFor();
+    await page.locator('#message').fill('scroll send fixture');await page.locator('#send').click();
+    await page.locator('#messages').getByText('scroll send fixture',{exact:true}).waitFor();
+    await page.waitForFunction(()=>{const box=document.querySelector('#messages').getBoundingClientRect(),row=document.querySelector('.message[data-turn="sent-fixture"]').getBoundingClientRect();return row.bottom<=box.bottom+2&&row.bottom>box.top;});
+    assert.equal(await page.locator('#messages').getByText('历史问题 0',{exact:true}).count(),0);
+    await page.waitForFunction(()=>document.querySelector('#message').value==='');
+    sentTurn=null;active=false;currentSocket.send(JSON.stringify(snapshot()));
+    await capture('continuous-history-send-desktop.png');
+    // Read chats still get a visible latest arrow when browsing away from the bottom.
+    await page.locator('#question-slider').evaluate(n=>{n.value='0';n.dispatchEvent(new Event('change',{bubbles:true}));});
+    await page.locator('#messages').getByText('历史问题 0',{exact:true}).waitFor();
+    await page.locator('#jump-latest').waitFor({state:'visible'});
+    const originalExpanded=await page.locator('#question-toggle').getAttribute('aria-expanded');
+    for(const width of [1440,390,320]) {
+      await page.setViewportSize({width,height:width===1440?960:844});
+      for(const expanded of [false,true]) {
+        if((await page.locator('#question-toggle').getAttribute('aria-expanded'))!==String(expanded))await page.locator('#question-toggle').click();
+        const bounds=await page.evaluate(()=>{const button=document.querySelector('#jump-latest').getBoundingClientRect(),pane=document.querySelector('.transcript-layout').getBoundingClientRect(),rail=document.querySelector('#question-rail').getBoundingClientRect();return {gap:pane.right-button.right,inside:button.left>=pane.left&&button.bottom<=pane.bottom,separate:rail.bottom+4<=button.top};});
+        assert(bounds.gap>=0&&bounds.gap<=16&&bounds.inside,`latest arrow is not right-aligned at ${width}px`);
+        assert(bounds.separate,`latest arrow overlaps question navigation at ${width}px`);
+        await capture(`jump-right-${width}-${expanded?'expanded':'collapsed'}.png`);
+      }
+    }
+    if((await page.locator('#question-toggle').getAttribute('aria-expanded'))!==originalExpanded)await page.locator('#question-toggle').click();
+    await page.setViewportSize({width:390,height:844});await capture('navigation-icons-mobile.png');await page.setViewportSize({width:1440,height:960});
+    assert.equal(await page.locator('#jump-latest svg').count(),1);
+    await page.locator('#jump-latest').click();await page.getByText('检查这个功能的安全边界。',{exact:true}).waitFor();
+    await page.locator('#jump-latest').waitFor({state:'hidden'});
+    // An arrow must not disappear inside the old 80px dead zone, even on live refresh.
+    await page.locator('#messages').evaluate(box=>{box.scrollTop=box.scrollHeight-box.clientHeight-30;box.dispatchEvent(new Event('scroll'));});
+    await page.locator('#jump-latest').waitFor({state:'visible'});
+    currentSocket.send(JSON.stringify(snapshot()));await page.waitForTimeout(150);
+    assert.equal(await page.locator('#jump-latest').isVisible(),true);
+    await page.locator('#jump-latest').click();await page.locator('#jump-latest').waitFor({state:'hidden'});
+    // Late read-only results must not replace a reselected chat, even with the same ID.
+    holdHistory=true;
+    await page.locator('#question-list button').first().click();
+    await page.waitForFunction(()=>document.querySelector('.history-controls button').disabled);
+    await page.locator('#session-list .session-item').click();
+    holdHistory=false;for(const send of heldHistory.splice(0))send();
+    await page.getByText('检查这个功能的安全边界。',{exact:true}).waitFor();
+    assert.equal(await page.locator('#messages').getByText('历史问题 0',{exact:true}).count(),0);
+    await page.emulateMedia({reducedMotion:'reduce'});
+    assert.equal(await page.locator('.session-status.running').first().evaluate(n=>getComputedStyle(n,'::after').animationName),'none');
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await page.locator('#archived-chats').click();await page.locator('#session-list .session-item').getByText('归档示例').waitFor();
+    assert.equal(await page.locator('.archive-action').isEnabled(),true);await capture('sessions-archive-desktop.png');
+    await page.locator('#session-list .session-item').click();await page.getByText('归档正文可以在桌面离线时只读查看。',{exact:true}).waitFor();
+    assert.equal(await page.locator('#send').isDisabled(),true);assert.equal(await page.locator('#stop').isDisabled(),true);await capture('session-archive-body-desktop.png');
+    await page.locator('.archive-action').click();await page.getByText('没有已归档会话',{exact:true}).waitFor();
+    assert(sent.some(q=>q.method==='sessions.unarchive'&&q.thread==='archive-fixture'));
+    await page.locator('#active-chats').click();await page.locator('#session-list .session-item').waitFor();
+    await page.locator('#project-filter').selectOption('project-fixture');
+    await page.waitForFunction(()=>document.querySelector('#project-filter').value==='project-fixture');
+    await page.locator('#new-chat').click();await page.locator('#new-chat-panel').waitFor({state:'visible'});await capture('sessions-new-desktop.png');
+    assert.equal(await page.locator('#new-project option[value=none]').count(),1);
+    await page.locator('#new-project').selectOption('project-fixture');
+    await page.locator('#create-chat').click();await page.locator('#new-chat-panel').waitFor({state:'hidden'});
+    assert(sent.some(q=>q.method==='sessions.create'&&q.project==='project-fixture'));
+    await page.locator('#new-chat').click();await page.locator('#new-project').selectOption('none');await page.locator('#create-chat').click();await page.locator('#new-chat-panel').waitFor({state:'hidden'});assert(sent.some(q=>q.method==='sessions.create'&&q.project==='none'));
+    const savedProjects=projects;projects=[];await page.locator('#refresh').click();await page.waitForFunction(()=>document.querySelector('#new-project').options.length===1);await page.locator('#new-chat').click();assert.equal(await page.locator('#new-project').inputValue(),'none');assert.equal(await page.locator('#create-chat').isEnabled(),true);await capture('new-chat-without-projects.png');await page.locator('#cancel-create').click();projects=savedProjects;await page.locator('#refresh').click();await page.waitForFunction(()=>document.querySelector('#new-project').options.length===2);
+    await page.setViewportSize({width:390,height:844});await page.locator('#show-list').click();await capture('sessions-project-mobile.png');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    await page.setViewportSize({width:320,height:740});await capture('sessions-project-320.png');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    // Computer shortcuts store only public site names/addresses; authorization stays origin-bound.
+    await page.setViewportSize({width:1440,height:960});
+    await page.locator('#computer-switch summary').click();await page.locator('#computer-manage').click();
+    await page.locator('#computer-name').fill('Office');await page.locator('#computer-address').fill('https://office.example/cxpalm/');
+    await page.locator('#computer-shortcut-form button').click();
+    await page.waitForFunction(()=>JSON.parse(localStorage.getItem('cxpalm:computer-shortcuts')).some(row=>row.origin==='https://office.example'));
+    assert.deepEqual(await page.evaluate(()=>Object.keys(JSON.parse(localStorage.getItem('cxpalm:computer-shortcuts'))[0]).sort()),['name','origin']);
+    await page.locator('#computer-switch summary').click();
+    const office=page.locator('#computer-links .computer-link').filter({hasText:'Office'});
+    assert.equal(await office.getAttribute('href'),'https://office.example/cxpalm/');
+    assert.equal(await page.locator('#computer-links a[target=_blank]').count()>0,true);
+    await capture('computer-switch-desktop.png');
+    await page.setViewportSize({width:320,height:740});await capture('computer-switch-320.png');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#computer-switch').getAttribute('open'),null);
+    await page.locator('#computer-name').fill('Unsafe');await page.locator('#computer-address').fill('https://office.example/#pair=not-a-real-secret');
+    await page.locator('#computer-shortcut-form button').click();await page.locator('#notice').waitFor({state:'visible'});
+    assert.equal(await page.evaluate(()=>localStorage.getItem('cxpalm:computer-shortcuts').includes('not-a-real-secret')),false);
+    await page.locator('#dismiss-notice').click();
+    if(await page.locator('#nav-chat').isVisible())await page.locator('#nav-chat').click();
+    await page.setViewportSize({width:1440,height:960});
+    assert.equal(await page.locator('#session-sync').isVisible(),false,'normal historical/unloaded chats displayed a failure banner');
+    listError='会话列表同步暂不可用，正在重试';await page.locator('#refresh').click();await page.locator('#session-sync').filter({hasText:listError}).waitFor();
+    listError='';await page.locator('#refresh').click();await page.locator('#session-sync').waitFor({state:'hidden'});
+    listHistorical=true;await page.locator('#refresh').click();await page.waitForFunction(()=>document.querySelector('.session-item[data-thread="main-fixture"]').title.startsWith('历史记录'));
+    assert.equal(await page.locator('.session-row').filter({has:page.locator('[data-thread="main-fixture"]')}).locator('.archive-action').isDisabled(),true,'historical completion granted live archive authority');
+    listHistorical=false;await page.locator('#refresh').click();await page.waitForFunction(()=>!document.querySelector('.session-item[data-thread="main-fixture"]').title.startsWith('历史记录'));
+    const cold=snapshot();cold.data.connected=false;cold.data.error='desktop state changed; reconnect to request a fresh snapshot';cold.data.snapshot.historySource='rollout';cold.data.snapshot.threadRuntimeStatus={type:'unknown'};delete cold.data.snapshot.latestModel;delete cold.data.snapshot.latestReasoningEffort;
+    currentSocket.send(JSON.stringify(cold));
+    await page.waitForFunction(()=>document.querySelector('#model-button').disabled);
+    assert((await page.locator('#chat-status').textContent()).includes('正在同步官方桌面'));assert(!(await page.locator('#chat-status').textContent()).includes('离线缓存'));
+    await page.locator('#notice').filter({hasText:'desktop state changed'}).waitFor();
+    const beforeRefresh=sent.length;holdSelected=true;
+    await page.locator('#message').fill('cold selection draft fixture');
+    await page.locator('#refresh').click();await page.waitForFunction(()=>document.querySelector('#send').disabled);
+    assert(sent.slice(beforeRefresh).some(q=>q.method==='chat.subscribe'),'refresh did not resubscribe selected chat');
+    assert.equal(await page.locator('#message').inputValue(),'cold selection draft fixture');
+    assert(!sent.slice(beforeRefresh).some(q=>['chat.send','chat.steer','chat.settings'].includes(q.method)),'refresh replayed a write');
+    holdSelected=false;currentSocket.send(JSON.stringify(snapshot()));
+    await page.waitForFunction(()=>!document.querySelector('#model-button').disabled&&!document.querySelector('#send').disabled);
+    await page.locator('#notice').waitFor({state:'hidden'});
+    await page.locator('#message').fill('');
+    const reportUnrelated=snapshot();reportUnrelated.data.connected=false;reportUnrelated.data.error='desktop owner disconnected';currentSocket.send(JSON.stringify(reportUnrelated));
+    await page.locator('#notice').filter({hasText:'desktop owner disconnected'}).waitFor();
+    await page.locator('#notice-text').evaluate(n=>{n.textContent='unrelated operation receipt needs inspection';});
+    currentSocket.send(JSON.stringify(snapshot()));await page.waitForFunction(()=>!document.querySelector('#model-button').disabled);
+    assert.equal(await page.locator('#notice').isVisible(),true);assert.equal(await page.locator('#notice-text').textContent(),'unrelated operation receipt needs inspection');await page.locator('#dismiss-notice').click();
+    const writesBeforeRecovery=sent.filter(q=>['chat.send','chat.steer','chat.settings'].includes(q.method)).length;
+    sessionStatus=502;currentSocket.close({code:1001,reason:'temporary proxy fixture'});
+    await page.locator('#notice').filter({hasText:'HTTP 502'}).waitFor();sessionStatus=0;
+    await page.locator('#reconnect').click();await page.locator('#connection.online').waitFor();await page.locator('#notice').waitFor({state:'hidden'});
+    await page.waitForFunction(()=>!document.querySelector('#model-button').disabled);
+    assert.equal(sent.filter(q=>['chat.send','chat.steer','chat.settings'].includes(q.method)).length,writesBeforeRecovery);
+    // A half-open transport has no close event: foreground wakeup must invalidate it.
+    const heartbeatWrites=sent.filter(q=>['chat.send','chat.steer','chat.settings'].includes(q.method)).length;
+    await page.evaluate(()=>{window.__realNow=Date.now;Date.now=()=>window.__realNow()+31000;document.dispatchEvent(new Event('visibilitychange'));return window.__realNow();});
+    await page.waitForFunction(()=>!document.querySelector('#connection').classList.contains('online'));
+    await page.evaluate(()=>{Date.now=window.__realNow;delete window.__realNow;});
+    await page.locator('#reconnect').click();await page.locator('#connection.online').waitFor();
+    await page.waitForFunction(()=>!document.querySelector('#model-button').disabled);
+    assert.equal(sent.filter(q=>['chat.send','chat.steer','chat.settings'].includes(q.method)).length,heartbeatWrites,'heartbeat recovery replayed writes');
+    // Reopening the selected chat must not wait for either slow startup feed.
+    holdStartup=true;const startCommands=sent.length;
+    await page.reload();await page.locator('#messages .message').first().waitFor();
+    const startup=sent.slice(startCommands);
+    assert(startup.some(q=>q.method==='chat.subscribe'),'restore did not start while feeds were held');
+    assert(!startup.some(q=>q.method==='chat.catalog'),'restore eagerly scanned catalog');
+    assert(heldStartup.length>=2,'test must actually hold list and notification replies');
+    holdStartup=false;for(const send of heldStartup.splice(0))send();
+    // A lost socket and a fresh page load with unavailable API both retain cached reading.
+    await page.setViewportSize({width:1440,height:960});
+    assert.equal(await page.locator('#notify-chat').getAttribute('aria-pressed'),'false');
+    await page.locator('#notify-chat').click();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='true');
+    await page.reload();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='true');
+    await page.locator('#notify-chat').click();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='false');
+    rejectUpload=true;
+    await page.locator('#message').evaluate(node=>{const data=new DataTransfer();data.items.add(new File(['small clipboard fixture'],'small.png',{type:'image/png'}));node.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));});
+    await page.locator('#notice').filter({hasText:'HTTP 413'}).waitFor();
+    const rejection=await page.locator('#notice').innerText();assert(rejection.includes('20M'));assert(!rejection.includes('存储配额'));
+    assert.equal(await page.locator('.attachment-chip').count(),0);
+    await page.locator('#dismiss-notice').click();rejectUpload=false;
+    await page.locator('#attachment-input').setInputFiles({name:'fixture.png',mimeType:'image/png',buffer:Buffer.from('isolated upload bytes')});
+    await page.locator('.attachment-chip').waitFor();
+    await page.locator('#message').fill('');
+    await page.locator('#send').click();await page.waitForFunction(()=>document.querySelectorAll('.attachment-chip').length===0);
+    assert(sent.some(q=>['chat.send','chat.steer'].includes(q.method)&&q.text===''&&q.attachments?.length===1),'attachment-only send missing');
+    await page.locator('#message').evaluate(node=>{const data=new DataTransfer();data.items.add(new File(['clipboard fixture'],'copied.png',{type:'image/png'}));node.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));});
+    await page.locator('.attachment-chip').waitFor();await page.reload();await page.locator('.attachment-chip').waitFor();
+    await page.setViewportSize({width:320,height:740});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await capture('attachments-320.png');
+    await page.locator('.attachment-chip button').click();await page.waitForFunction(()=>document.querySelectorAll('.attachment-chip').length===0);
+    imageFixture=true;currentSocket.send(JSON.stringify(snapshot()));
+    await page.locator('.conversation-image canvas').waitFor();
+    await page.locator('.conversation-image').click();await page.locator('.image-viewer[open] canvas').waitFor();await capture('returned-image-viewer.png');
+    await page.getByRole('button',{name:'关闭图片',exact:true}).click();
+    await page.reload();await page.locator('.conversation-image canvas').waitFor();
+    imageFixture=false;currentSocket.send(JSON.stringify(snapshot()));
+    await page.waitForTimeout(800);
+    assert(await page.evaluate(()=>!!sessionStorage.getItem('cxpalm:reading-session')));
+    const writesBeforeOffline=sent.filter(q=>['chat.send','chat.steer','chat.settings'].includes(q.method)).length;
+    offlineSession=true;currentSocket.close({code:1001,reason:'offline cache fixture'});
+    await page.locator('#reconnect').waitFor({state:'visible'});
+    assert(await page.locator('#messages .message').count()>0);assert.equal(await page.locator('#send').isDisabled(),true);
+    await page.reload();await page.locator('#messages .message').first().waitFor();
+    assert.equal(await page.locator('#send').isDisabled(),true);
+    assert.equal(await page.locator('#approvals button').count(),0,'cached approval controls restored');
+    assert.equal(await page.locator('#session-list .session-status').count(),0,'cached runtime is presented as live');
+    await page.locator('#message').fill('offline draft retained');
+    await capture('offline-reading-mobile.png');
+    assert.equal(sent.filter(q=>['chat.send','chat.steer','chat.settings'].includes(q.method)).length,writesBeforeOffline);
+    offlineSession=false;await page.locator('#reconnect').click();await page.locator('#connection.online').waitFor();
+    await page.waitForFunction(()=>document.querySelector('#approvals button'));
+    assert.equal(await page.locator('#message').inputValue(),'offline draft retained');
+    assert.equal(sent.filter(q=>['chat.send','chat.steer','chat.settings'].includes(q.method)).length,writesBeforeOffline);
+    authorized=false;await page.reload();await page.locator('#login').waitFor({state:'visible'});
+    assert.equal(await page.evaluate(()=>Object.keys(sessionStorage).filter(k=>k.startsWith('cxpalm:reading')).length),0,'authorization loss retained reading data');
+    assert.deepEqual(errors,[]);
+    assert(sent.some(q=>q.method==='chat.send') && sent.some(q=>q.method==='chat.steer') && sent.some(q=>q.method==='chat.stop') && sent.some(q=>q.method==='chat.approve'));
+    assert(!sent.some(q=>['files.','terminal.','git.','side.','projects.'].some(prefix=>q.method.startsWith(prefix))));
+    console.log('Isolated Chromium UI checks passed: old-fragment clearing and password login, sessions, safe text/code, send/steer/stop/approval, models/effort/permissions/plan, inline non-modal settings, stable message DOM, stale-state rejection, native skill inputs, context, send modes, reload non-replay, desktop/mobile/light/dark.');
+    console.log('Screenshots:',screenshots);
+  } catch(error) {await page.screenshot({path:path.join(screenshots,'failure.png')});console.error('UI failure metrics:',await page.evaluate(()=>{const box=node=>node?.getBoundingClientRect().toJSON();return {viewport:[innerWidth,innerHeight,document.documentElement.scrollWidth],overflow:[...document.querySelectorAll('body *')].filter(n=>n.getBoundingClientRect().right>innerWidth+1&&n.getBoundingClientRect().width).slice(0,12).map(n=>[n.tagName,n.id,n.className,n.getBoundingClientRect().right,getComputedStyle(n).overflowX]),messages:box(document.querySelector('#messages')),composer:box(document.querySelector('#composer')),lastReply:box([...document.querySelectorAll('.message[data-role="Codex"]')].at(-1)),scroll:[document.querySelector('#messages')?.scrollTop,document.querySelector('#messages')?.scrollHeight]};}));throw error;} finally { await browser.close(); }
+}
+main().catch(error=>{console.error(error);process.exitCode=1;});

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<title>CXPalm</title><link rel="stylesheet" href="style.css"><script src="i18n.js" defer></script><script src="app.js" defer></script>
+</head>
+<body>
+<svg class="symbols" aria-hidden="true"><defs>
+<symbol id="icon-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+<symbol id="icon-link" viewBox="0 0 24 24"><path d="m10 13 4-4m-6 7-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 0 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0" transform="translate(1 1)"/></symbol>
+<symbol id="icon-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 5h4m-3 14h2"/></symbol>
+<symbol id="icon-pulse" viewBox="0 0 24 24"><path d="M2 12h5l3-8 4 16 3-8h5"/></symbol>
+<symbol id="icon-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+<symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 8 10 8 10s8-5 8-10V5z"/><path d="m8 11 3 3 5-6"/></symbol>
+<symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 5V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h1"/></symbol>
+<symbol id="icon-power" viewBox="0 0 24 24"><path d="M12 2v10M6 5a9 9 0 1 0 12 0"/></symbol>
+<symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M5 8a8 8 0 0 1 13-3l2 3M4 16l2 3a8 8 0 0 0 13-3"/></symbol>
+<symbol id="icon-folder" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></symbol>
+<symbol id="icon-chat" viewBox="0 0 24 24"><path d="M21 11a9 9 0 0 1-9 9H4l-2 2V11a9 9 0 0 1 19 0z"/><path d="M7 9h10M7 13h6"/></symbol>
+<symbol id="icon-external" viewBox="0 0 24 24"><path d="M14 3h7v7m0-7L10 14M10 3H4a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-6"/></symbol>
+<symbol id="icon-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></symbol>
+<symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></symbol>
+</defs></svg>
+<div class="titlebar"><span>CXPalm Desktop</span><span id="fixture-label" hidden>隔离界面测试 · 非真实连接</span></div>
+<div class="shell">
+<aside class="sidebar">
+<a class="brand" href="#" aria-label="CXPalm 概览"><img src="icon.svg" alt="" width="38" height="38"><span>CXPalm<small>DESKTOP CONTROL</small></span></a>
+<div class="nav-label">你的控制中心</div>
+<nav aria-label="主要导航">
+<button class="nav-item selected" data-page="overview" aria-current="page"><svg><use href="#icon-grid"/></svg><span>总览</span><span class="nav-key">01</span></button>
+<button class="nav-item" data-page="connect"><svg><use href="#icon-link"/></svg><span>连接与登录</span><span class="nav-key">02</span></button>
+<button class="nav-item" data-page="devices"><svg><use href="#icon-phone"/></svg><span>授权设备</span><span id="nav-devices" class="nav-count">—</span></button>
+<button class="nav-item" data-page="diagnostics"><svg><use href="#icon-pulse"/></svg><span>连接诊断</span><span class="nav-key">04</span></button>
+<button class="nav-item" data-page="settings"><svg><use href="#icon-settings"/></svg><span>设置</span><span class="nav-key">05</span></button>
+<button class="nav-item" data-page="updates"><svg><use href="#icon-download"/></svg><span>应用更新</span><span id="nav-update" class="nav-key">06</span></button>
+</nav>
+<div class="sidebar-note"><span class="tiny-orbit"></span><strong>电脑在这里。<br>灵感不必。</strong><p>让官方桌面继续执行，<br>把连接带到你的手边。</p></div>
+<div class="sidebar-bottom"><div class="local-badge"><svg><use href="#icon-shield"/></svg>本地管理 · 无公开管理端口</div><div class="version"><span id="version">v0.0.1</span><span>LOCAL FIRST</span></div></div>
+</aside>
+<main>
+<header class="page-heading"><div><span class="eyebrow" id="page-eyebrow">YOUR PERSONAL BRIDGE</span><h1 id="page-title">一切，就绪于此。</h1></div><div class="heading-actions"><button class="refresh-control" id="refresh" aria-label="刷新状态" title="刷新状态"><svg><use href="#icon-refresh"/></svg><span id="refresh-label">刷新状态</span></button><span class="status-badge" id="global-status"><i></i><span>正在读取</span></span></div></header>
+<div id="notice" class="notice" role="alert" hidden><span id="notice-text"></span><button id="dismiss-notice" aria-label="关闭提示">×</button></div>
+<section data-view="overview" class="page-view">
+<div class="hero-grid">
+<article class="hero">
+<div class="hero-content"><span class="eyebrow">ONE DESKTOP. EVERYWHERE.</span><h2>你的电脑。<br>随时，随地。</h2><p id="hero-description">让手机与官方 Codex 桌面保持连接。<br>会话留在电脑，掌控随你出发。</p><div class="hero-actions"><button id="start" class="button primary"><svg><use href="#icon-power"/></svg><span>启动 Agent</span></button><button id="stop" class="button danger" hidden><svg><use href="#icon-power"/></svg>停止 Agent</button><button id="hero-config" class="button soft"><svg><use href="#icon-settings"/></svg>连接设置</button></div><span id="owner-note" class="hero-footnote">不会自动启动服务或接管其他进程。</span></div>
+<div class="orbit-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><div class="computer-art"><span class="art-dot"></span><span class="art-line"></span><span class="art-line short"></span><div class="art-code">&gt; CXPalm<span>_</span></div><div class="art-footer">OFFICIAL OWNER</div></div><div class="phone-art"><div></div><span></span><span></span><small>IN YOUR PALM</small></div><div class="art-connection"><i></i><i></i><i></i></div></div>
+</article>
+<article class="card connection-teaser"><div class="card-kicker"><span class="eyebrow">NEXT SCREEN</span><span class="icon-tile"><svg><use href="#icon-phone"/></svg></span></div><h2>下一块屏幕，<br>现在连上。</h2><p>账号密码登录，继续电脑上的会话。<br>记住登录 30 天，设备随时可撤销。</p><div class="connection-path"><span><svg><use href="#icon-grid"/></svg>官方桌面</span><i></i><span><svg><use href="#icon-phone"/></svg>你的设备</span></div><button class="button outline wide" id="go-connect">连接设备<svg><use href="#icon-arrow"/></svg></button></article>
+</div>
+<div class="stats"><article class="stat"><span class="stat-icon blue"><svg><use href="#icon-chat"/></svg></span><div><span class="stat-number" id="active-count">—</span><span class="stat-label">未归档会话</span></div><span class="stat-detail">跨项目发现</span></article><article class="stat"><span class="stat-icon neutral"><svg><use href="#icon-folder"/></svg></span><div><span class="stat-number" id="archive-count">—</span><span class="stat-label">已归档会话</span></div><span class="stat-detail">仍在电脑上</span></article><article class="stat"><span class="stat-icon green"><svg><use href="#icon-shield"/></svg></span><div><span class="stat-number" id="device-count">—</span><span class="stat-label">有效授权设备</span></div><button class="text-button" id="go-devices">管理 ↗</button></article></div>
+<div class="lower-grid"><article class="card address-card"><div class="section-heading"><h2>你的连接地址</h2><span class="tag">HTTPS / WSS</span></div><p class="muted">在网页或 App 使用你设置的账号密码登录。</p><div class="address-box"><span id="address">保存连接设置后显示</span><button class="icon-button" id="copy-address" aria-label="复制控制端地址"><svg><use href="#icon-copy"/></svg></button></div><button class="text-button" id="open-web">在浏览器中打开<svg><use href="#icon-external"/></svg></button><div class="quiet-note"><svg><use href="#icon-shield"/></svg>管理界面不对外开放，连接权限由你掌握。</div></article><article class="card activity-card"><div class="section-heading"><h2>最近动态</h2><span class="small-label">本次打开期间</span></div><ol id="activity-list" class="activity-list"></ol></article></div>
+</section>
+<section data-view="connect" class="page-view" hidden>
+<article class="card"><span class="eyebrow">SIGN IN. STAY CONNECTED.</span><h2>一个账号，连接你的设备。</h2><p>在设置中创建登录账号，再在网页或 App 输入账号密码。勾选记住登录后，30 天内无需重新输入。密码仅保存在本机的加盐哈希中，登录凭据可在授权设备里撤销。</p><button class="button primary" id="go-login-settings">设置登录账号<svg><use href="#icon-arrow"/></svg></button></article></section>
+<section data-view="devices" class="page-view" hidden>
+<article class="card devices-panel"><div class="section-heading"><div><span class="eyebrow">TRUSTED DEVICES</span><h2>只留下，你信任的设备。</h2><p class="muted">有效授权与历史记录分开。撤销不会删除会话或停止官方桌面任务。</p></div><button id="reload-devices" class="button outline"><svg><use href="#icon-refresh"/></svg>同步授权</button></div>
+<div class="device-tabs" role="tablist" aria-label="授权记录"><button id="tab-active" class="selected" role="tab" aria-selected="true" aria-controls="active-device-panel">当前有效授权 <span id="valid-device-count">0</span></button><button id="tab-logs" role="tab" aria-selected="false" aria-controls="device-log-panel">授权日志</button></div>
+<div id="active-device-panel" role="tabpanel" aria-labelledby="tab-active"><div id="devices-list" class="devices-list"></div></div>
+<div id="device-log-panel" role="tabpanel" aria-labelledby="tab-logs" hidden><p class="small-label">最近 200 条持久记录。旧版未记录的 IP、连接和撤销时间不补造。</p><div id="device-logs" class="device-logs"></div></div></article>
+<article class="card ip-policy-card"><div class="section-heading"><div><span class="eyebrow">NETWORK BOUNDARY</span><h2>IP 白名单</h2></div><label class="policy-switch"><span id="policy-toggle-label">关闭</span><input id="policy-enabled" type="checkbox" role="switch" aria-label="开启 IP 白名单"><i></i></label></div><p class="muted">只限制 CXPalm 登录和会话 API，不是系统防火墙。开关和规则在点击保存后生效；关闭时不限制 IP。</p><label for="policy-entries" class="field-label">允许的 IP 或网段 · 每行一条</label><textarea id="policy-entries" rows="4" placeholder="例如 203.0.113.8&#10;192.168.1.0/24&#10;2001:db8::/48" spellcheck="false" autocomplete="off"></textarea><div class="policy-actions"><span id="policy-status" class="small-label">尚未读取</span><button id="save-policy" class="button primary">保存访问策略</button></div><p class="small-label">开启前请确认手机出口 IP；移动网络或 NAT 地址可能变化。外部旧 Agent 不能由本窗口保证生效，须先更新并从本窗口启动。隧道模式须由可信反向代理覆盖客户端 IP 头。</p></article>
+</section>
+<section data-view="diagnostics" class="page-view" hidden><div class="diagnostic-top"><article class="card"><div class="section-heading"><div><span class="eyebrow">A CLEAR PICTURE</span><h2>连接有迹可循。</h2></div><button class="button diagnostic-action" id="diagnose"><svg><use href="#icon-pulse"/></svg>检查连接</button></div><p class="muted">读取历史元数据并测试官方桌面 IPC，不发送消息或修改会话设置。</p><div id="checks" class="checks"></div><p id="diagnostic-time" class="small-label">尚未主动检测官方桌面连接</p></article><article class="card configuration"><span class="eyebrow">LOCAL CONFIGURATION</span><h2>本机配置</h2><dl><dt>配置文件</dt><dd id="config-path">尚未选择</dd><dt>Codex 数据目录</dt><dd id="codex-home">—</dd><dt>Agent 监听</dt><dd id="listen">—</dd><dt>远程隧道</dt><dd id="tunnel">—</dd></dl><button class="button outline wide" id="choose-config"><svg><use href="#icon-folder"/></svg>选择其他配置</button><p class="small-label">需要修改 HTTPS 地址、远程服务器或启动行为？请前往“设置”。导入配置不会自动启动网关。</p></article></div></section>
+<section data-view="settings" class="page-view" hidden>
+<article class="card language-card"><div><span class="eyebrow">LANGUAGE / 语言</span><h2>应用语言</h2><p>切换后立即生效，只改变界面语言，不翻译会话内容。</p></div><label for="desktop-language" class="language-picker"><span>语言</span><select id="desktop-language" aria-label="应用语言"><option value="zh-CN">中文</option><option value="en">English</option></select></label></article>
+<div class="settings-intro"><span class="tag">ON THIS COMPUTER</span><p>连接到你的服务器，按你的习惯启动。所有修改均需保存，不会自动部署远程服务。</p></div>
+<article class="card login-settings"><span class="eyebrow">ACCOUNT / ON THIS COMPUTER</span><h2>登录账号</h2><p class="muted">网页和 App 使用这里设置的账号密码登录。勾选记住登录后，30 天内无需重新输入。</p><form id="login-settings-form"><div class="settings-fields"><label class="setting-field" for="account-username">账号<input id="account-username" name="username" autocomplete="username" maxlength="80" required spellcheck="false"></label><label class="setting-field" for="account-password">新密码<input id="account-password" name="new-password" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label><label class="setting-field" for="account-confirm">确认密码<input id="account-confirm" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label></div><p class="small-label">密码至少 12 个字符，仅保存加盐哈希。首次设置保留现有设备；修改账号密码会退出所有已登录设备。</p><div class="settings-save"><p id="account-status" role="status">正在读取登录设置</p><button id="save-account" type="submit" class="button primary">保存登录账号</button></div></form></article>
+<div class="settings-layout">
+<article class="card connection-settings">
+<div class="section-heading"><div><span class="eyebrow">01 / CONNECTION</span><h2>把连接，设在这里。</h2></div><button id="reload-settings" class="text-button"><svg><use href="#icon-refresh"/></svg>重新读取</button></div>
+<p class="muted">新环境直接填写即可；首次保存会在本机创建一份配置，无需手写 JSON。</p>
+<form id="connection-form">
+<label class="setting-field" for="setting-origin">HTTPS 公网地址<input id="setting-origin" type="url" placeholder="https://your-domain.com" required maxlength="2048" spellcheck="false" autocomplete="off"><small>只填域名和可选端口，不含 /cxpalm/。TLS 证书由远程反向代理提供。</small></label>
+<div class="remote-heading"><div><h3>远程服务器 · SSH 隧道</h3><p>让公网服务器转发到本机网关</p></div><label class="policy-switch"><input id="setting-ssh-enabled" type="checkbox" role="switch" aria-label="启用 SSH 反向隧道"><i></i></label></div>
+<div class="settings-fields">
+<label class="setting-field full" for="setting-host">服务器地址 / 已有 SSH 别名<input id="setting-host" type="text" placeholder="server.example.com 或 my-server" maxlength="253" spellcheck="false" autocomplete="off"></label>
+<label class="setting-field" for="setting-user">SSH 用户名<input id="setting-user" type="text" placeholder="留空沿用 OpenSSH 配置" maxlength="64" spellcheck="false" autocomplete="off"></label>
+<label class="setting-field" for="setting-ssh-port">SSH 端口<input id="setting-ssh-port" type="number" placeholder="默认 22 / 沿用 SSH 配置" min="1" max="65535"></label>
+<label class="setting-field full" for="setting-remote-port">服务器本地转发端口<input id="setting-remote-port" type="number" min="1024" max="65535" value="18791"><small>服务器反向代理需指向 127.0.0.1:此端口；不是 SSH 端口。</small></label>
+</div>
+<div class="settings-security"><svg><use href="#icon-shield"/></svg><p>使用本机 OpenSSH 密钥 / ssh-agent 和已验证的主机指纹，不保存 SSH 密码。新服务器需先在终端完成密钥登录与指纹确认；本页不安装证书、不修改服务器或防火墙。</p></div>
+<div class="settings-save"><p id="connection-save-status" role="status">正在读取本机设置</p><button class="button primary" id="save-connection" type="submit">保存连接设置<svg><use href="#icon-arrow"/></svg></button></div>
+</form>
+<details class="settings-advanced"><summary>配置文件与高级导入</summary><p id="settings-config-path"></p><button id="import-config" class="text-button">导入已有配置</button><p>数据目录和已有设备授权保持不变。开启隧道不代表公网已连通，可前往“连接诊断”检查。</p></details>
+</article>
+<div class="settings-side">
+<article class="card startup-settings"><span class="eyebrow">02 / STARTUP</span><h2>启动，由你决定。</h2><p class="muted">两个选项独立生效，默认均关闭。</p>
+<label class="startup-row" for="setting-login-start"><div><strong>登录电脑后自动启动</strong><p>开启后，登录电脑时自动启动网关。</p><small>桌面控制台在后台托盘运行。</small></div><span class="policy-switch"><input id="setting-login-start" type="checkbox" role="switch"><i></i></span></label>
+<label class="startup-row" for="setting-app-start"><div><strong>打开 App 时自动启动网关</strong><p>手动打开桌面 App 时，一并启动网关。</p><small>关闭此项不影响“登录电脑后自动启动”。</small></div><span class="policy-switch"><input id="setting-app-start" type="checkbox" role="switch"><i></i></span></label>
+<p id="startup-save-status" class="small-label" role="status">保存后在下次对应启动时生效，不会立即启动网关。</p><button class="button outline wide" id="save-startup">保存启动设置</button></article>
+<article class="card settings-update-link"><span class="eyebrow">03 / APP UPDATES</span><h2>让体验，保持新鲜。</h2><p class="muted">无需登录即可检查桌面版本，下载与安装均由你确认。</p><button id="go-updates" class="button outline wide">检查应用更新<svg><use href="#icon-arrow"/></svg></button></article>
+</div>
+</div></section>
+<section data-view="updates" class="page-view" hidden>
+<article class="card update-card"><div class="update-hero"><div class="update-mark"><svg><use href="#icon-download"/></svg><span></span></div><div><span class="eyebrow">A LITTLE NEW. A LITTLE BETTER.</span><h2>每一次更新，<br>都让连接更好一点。</h2><p>只更新 CXPalm 桌面应用和内置网关。配置、授权与官方 Codex 会话保留。</p></div><span class="tag" id="update-phase">尚未检查</span></div>
+<div class="update-body"><div class="update-info"><div class="update-version-line"><div><span>当前桌面版本</span><strong id="update-current">—</strong></div><svg><use href="#icon-arrow"/></svg><div><span>可用版本</span><strong id="update-latest">—</strong></div></div><p id="update-message" role="status">正在读取更新状态</p><p id="update-time" class="small-label">启动或打开窗口时自动检查，自动检查至少间隔 6 小时；不会自动下载。</p><div id="update-progress-wrap" hidden><div class="update-progress-label"><span>下载安装包</span><span id="update-progress-text">0%</span></div><progress id="update-progress" max="100" value="0" aria-label="更新下载进度"></progress></div><div class="update-actions"><button id="check-update" class="button outline"><svg><use href="#icon-refresh"/></svg>检查更新</button><button id="download-update" class="button primary" hidden><svg><use href="#icon-download"/></svg>下载更新</button><button id="cancel-update" class="button outline" hidden>取消下载</button><button id="install-update" class="button primary" hidden>退出并安装<svg><use href="#icon-arrow"/></svg></button></div></div>
+<div class="update-notes"><span class="eyebrow">WHAT'S NEW</span><h3>更新说明</h3><p id="update-notes">发现新版本后，说明会显示在这里。</p><span id="update-size" class="tag" hidden></span></div></div>
+<div class="update-boundary"><svg><use href="#icon-shield"/></svg><div><strong>先校验，再由你确认。</strong><p>只访问固定 HTTPS 发布站点，不发送登录凭据。不接受重定向；下载完成和安装前均校验大小与 SHA-256。确认安装后停止本窗口的网关并打开 Windows 安装向导，不停止外部网关或官方 Codex。当前测试安装包未签名，Windows 可能显示安全提示。</p></div></div></article>
+<p class="update-footnote">本页更新的是电脑端，不是 Android APK。更新源尚未发布或网络异常时，可重试，不影响现有网关运行。</p>
+</section>
+<footer class="page-footer"><span><i></i> 你的桌面，始终是执行的地方。</span><span>DESIGNED FOR YOUR PALM.</span></footer>
+</main></div>
+<dialog id="revoke-dialog"><span class="eyebrow">DEVICE AUTHORIZATION</span><h2>撤销这台设备？</h2><p id="revoke-name"></p><p class="muted">设备会失去访问权限。此操作不删除会话，也不停止官方桌面的任务。</p><div class="dialog-actions"><button class="button outline" id="cancel-revoke">取消</button><button class="button danger" id="confirm-revoke">确认撤销</button></div></dialog>
+<div id="toast" role="status" hidden></div>
+</body></html>

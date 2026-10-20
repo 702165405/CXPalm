@@ -1,0 +1,51 @@
+// Isolated Electron UI acceptance. No real Agent, account store, network or model.
+process.env.CXPALM_DESKTOP_FIXTURE='1';process.env.CXPALM_DESKTOP_SMOKE='1';
+const {app}=require('electron');const path=require('node:path');const fs=require('node:fs/promises');const assert=require('node:assert/strict');
+const output=path.resolve(__dirname,'../../.local/desktop-ui-tests');
+app.setPath('userData',path.resolve(__dirname,'../../.local/desktop-ui-profile-'+process.pid));app.disableHardwareAcceleration();
+const desktop=require('../main.cjs');
+async function evaluate(win,script){try{return await win.webContents.executeJavaScript(script,true);}catch(error){console.error('Failed renderer expression: '+script);throw error;}}
+async function wait(win,predicate){const until=Date.now()+10000;while(Date.now()<until){if(await evaluate(win,predicate))return;await new Promise(resolve=>setTimeout(resolve,80));}throw new Error('UI condition timed out: '+predicate);}
+async function click(win,id){await evaluate(win,`document.getElementById(${JSON.stringify(id)}).click()`);}
+async function capture(win,name){await new Promise(resolve=>setTimeout(resolve,200));const image=await win.webContents.capturePage();await fs.writeFile(path.join(output,name+'.png'),image.toPNG());}
+(async()=>{
+ await desktop.ready;const win=desktop.getWindow();await fs.mkdir(output,{recursive:true});
+ assert.equal(await evaluate(win,"(()=>{const ids=[...document.querySelectorAll('[id]')].map(n=>n.id);return ids.length===new Set(ids).size})()"),true);
+ const problems=[];win.webContents.on('console-message',details=>{if(details.level==='error')problems.push(details.message);});win.webContents.on('preload-error',(_event,_path,error)=>problems.push(String(error)));win.webContents.on('render-process-gone',()=>problems.push('renderer exited'));
+ await wait(win,"document.getElementById('active-count').textContent==='13'");
+ assert.equal(await evaluate(win,"typeof require"),'undefined');assert.equal(await evaluate(win,"typeof process"),'undefined');
+ assert.equal(await evaluate(win,"document.getElementById('fixture-label').hidden"),false);
+ await click(win,'start');await wait(win,"document.getElementById('global-status').textContent.includes('运行中')");await capture(win,'overview');
+ await click(win,'go-connect');assert.equal(await evaluate(win,"document.querySelector('#create-pair,#legacy-desktop-pair')===null"),true);await capture(win,'account-connect');
+ await evaluate(win,"document.querySelector('[data-page=devices]').click()");await wait(win,"document.querySelectorAll('.device-row').length===2");
+ assert.equal(await evaluate(win,"document.querySelectorAll('.device-row img').length"),0);
+ assert.ok((await evaluate(win,"document.getElementById('devices-list').textContent")).includes('<img'));
+ await evaluate(win,"document.querySelector('.device-row button').click()");await click(win,'confirm-revoke');await wait(win,"document.getElementById('device-count').textContent==='1'");await wait(win,"document.querySelectorAll('.device-row').length===1");await click(win,'tab-logs');await wait(win,"!document.getElementById('device-log-panel').hidden");assert.ok((await evaluate(win,"document.getElementById('device-logs').textContent")).includes('撤销授权'));await click(win,'tab-active');
+ await evaluate(win,"document.getElementById('policy-enabled').click();document.getElementById('policy-entries').value='203.0.113.7';document.getElementById('policy-entries').dispatchEvent(new Event('input'))");await click(win,'save-policy');await wait(win,"document.getElementById('policy-status').textContent.includes('启用')");await capture(win,'devices');await click(win,'tab-logs');await capture(win,'authorization-log');await click(win,'tab-active');
+ await evaluate(win,"document.getElementById('policy-enabled').click()");await click(win,'save-policy');await wait(win,"document.getElementById('policy-status').textContent.includes('关闭')");
+ await evaluate(win,"document.querySelector('[data-page=diagnostics]').click()");assert.equal(await evaluate(win,"document.getElementById('refresh-label').textContent"),'重新检测');await click(win,'refresh');await wait(win,"document.getElementById('diagnostic-time').textContent.includes('最近检测')");await capture(win,'diagnostics');
+ win.setSize(900,740);await new Promise(resolve=>setTimeout(resolve,250));assert.equal(await evaluate(win,'document.documentElement.scrollWidth<=window.innerWidth'),true);await capture(win,'compact');
+ await evaluate(win,"document.querySelector('[data-page=overview]').click()");await click(win,'stop');await wait(win,"document.getElementById('global-status').textContent.includes('已停止')");
+ await evaluate(win,"document.querySelector('[data-page=settings]').click()");await wait(win,"document.getElementById('setting-origin').value==='https://cxpalm.example.test'");
+ assert.equal(await evaluate(win,"document.getElementById('setting-login-start').checked"),false);assert.equal(await evaluate(win,"document.getElementById('setting-app-start').checked"),false);
+ await click(win,'setting-login-start');await click(win,'save-startup');await wait(win,"document.getElementById('startup-save-status').textContent.includes('登录启动开启')");
+ assert.equal(await evaluate(win,"document.getElementById('setting-app-start').checked"),false);
+ await click(win,'setting-login-start');await click(win,'setting-app-start');await click(win,'save-startup');await wait(win,"document.getElementById('startup-save-status').textContent.includes('打开 App 启动开启')");
+ assert.equal(await evaluate(win,"document.getElementById('setting-login-start').checked"),false);
+ await click(win,'setting-app-start');await click(win,'save-startup');await wait(win,"document.getElementById('startup-save-status').textContent.includes('打开 App 启动关闭')");
+ await evaluate(win,"document.getElementById('setting-origin').value='https://updated.example.test';document.getElementById('setting-origin').dispatchEvent(new Event('input'))");
+ await click(win,'save-connection');await wait(win,"document.getElementById('connection-save-status').textContent.includes('已读取')");
+ assert.equal(await evaluate(win,"document.getElementById('global-status').textContent.includes('已停止')"),true);
+ assert.equal(await evaluate(win,"document.getElementById('setting-origin').value"),'https://updated.example.test');
+ await evaluate(win,"window.cxDesktop.invoke('start')");await click(win,'refresh');await wait(win,"document.getElementById('save-connection').disabled");
+ assert.equal(await evaluate(win,"window.cxDesktop.saveConnection({}).then(()=>false,()=>true)"),true);
+ await evaluate(win,"window.cxDesktop.invoke('stop')");await click(win,'refresh');await wait(win,"!document.getElementById('save-connection').disabled");
+ await wait(win,"!document.getElementById('save-account').disabled");
+ await evaluate(win,"document.getElementById('account-username').value='owner';document.getElementById('account-password').value='fixture-password-only';document.getElementById('account-confirm').value='fixture-password-only'");
+ await click(win,'save-account');await wait(win,"document.getElementById('account-status').textContent.includes('登录账号已保存')");
+ assert.equal(await evaluate(win,"document.getElementById('account-password').value"),'');assert.equal(await evaluate(win,"document.getElementById('account-confirm').value"),'');
+ win.setSize(1280,860);await capture(win,'settings');win.setSize(900,740);await capture(win,'settings-compact');
+ assert.equal(await evaluate(win,'document.documentElement.scrollWidth<=window.innerWidth'),true);
+ assert.deepEqual(problems,[]);console.log('PASS: isolated Electron window, sandbox, start/stop UI, account login, safe device names, confirmed revocation, diagnostics and 900px layout');
+ console.log('Screenshots: '+output);await fs.writeFile(path.join(output,'result.json'),JSON.stringify({passed:true,isolated:true,scenarios:['sandbox','start-stop','account-login','device-text-safety','device-revocation','authorization-log-separation','ip-policy-enable-disable','diagnostic-refresh','diagnostics','compact-layout','connection-settings','independent-startup-switches','save-without-start','running-config-guard','settings-compact']}));await desktop.closeForTest();
+})().catch(error=>{console.error(error);app.exit(1);});

@@ -1,0 +1,77 @@
+{
+  "name": "cxpalm-desktop",
+  "productName": "CXPalm",
+  "version": "0.0.7",
+  "private": true,
+  "description": "CXPalm local desktop control center",
+  "author": "CXPalm",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "pack": "electron-builder --win --x64 --dir",
+    "smoke": "electron test/smoke.cjs"
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "dev.cxpalm.desktop",
+    "productName": "CXPalm",
+    "asar": true,
+    "directories": {
+      "output": "../dist/desktop"
+    },
+    "files": [
+      "main.cjs",
+      "host-client.cjs",
+      "settings.cjs",
+      "updater.cjs",
+      "preload.cjs",
+      "ui/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../.local/desktop-build/agent",
+        "to": "agent"
+      },
+      {
+        "from": "../assets/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "../locales",
+        "to": "locales",
+        "filter": [
+          "*.json"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "../assets/icon.ico",
+      "target": [
+        "dir",
+        "nsis"
+      ],
+      "signExecutable": false
+    },
+    "mac": {
+      "icon": "../assets/icon.png",
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dir"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "CXPalm-Setup-${version}-build42-${arch}.${ext}"
+    }
+  },
+  "releaseBuild": 42
+}

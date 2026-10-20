@@ -1,0 +1,4 @@
+# Replace both the hostname and reverse-forwarded port. Server setup is manual.
+cxpalm.example.com {
+    reverse_proxy 127.0.0.1:18790
+}

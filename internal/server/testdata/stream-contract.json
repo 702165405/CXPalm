@@ -1,0 +1,384 @@
+[
+  {
+    "event": {
+      "type": "chat.state",
+      "data": {
+        "archived": false,
+        "connected": true,
+        "id": "thread",
+        "sequence": 1,
+        "snapshot": {
+          "requests": [],
+          "threadRuntimeStatus": {
+            "type": "active"
+          },
+          "turns": [
+            {
+              "items": [
+                {
+                  "id": "q",
+                  "text": "question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question ",
+                  "type": "userMessage"
+                },
+                {
+                  "id": "a",
+                  "text": "prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix ",
+                  "type": "agentMessage"
+                }
+              ],
+              "turnId": "t"
+            }
+          ]
+        },
+        "streamID": "fixture-stream",
+        "streamRevision": 1
+      }
+    },
+    "expected": {
+      "archived": false,
+      "connected": true,
+      "id": "thread",
+      "sequence": 1,
+      "snapshot": {
+        "requests": [],
+        "threadRuntimeStatus": {
+          "type": "active"
+        },
+        "turns": [
+          {
+            "items": [
+              {
+                "id": "q",
+                "text": "question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question ",
+                "type": "userMessage"
+              },
+              {
+                "id": "a",
+                "text": "prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix ",
+                "type": "agentMessage"
+              }
+            ],
+            "turnId": "t"
+          }
+        ]
+      },
+      "streamID": "fixture-stream",
+      "streamRevision": 1
+    }
+  },
+  {
+    "event": {
+      "type": "chat.delta",
+      "data": {
+        "base": 1,
+        "id": "thread",
+        "ops": [
+          {
+            "op": "set",
+            "path": [
+              "sequence"
+            ],
+            "value": 2
+          },
+          {
+            "op": "set",
+            "path": [
+              "snapshot",
+              "turns",
+              "0",
+              "items",
+              "1",
+              "bodyRevision"
+            ],
+            "value": "transient"
+          },
+          {
+            "op": "set",
+            "path": [
+              "snapshot",
+              "turns",
+              "0",
+              "items",
+              "1",
+              "deferred"
+            ],
+            "value": true
+          },
+          {
+            "op": "append",
+            "path": [
+              "snapshot",
+              "turns",
+              "0",
+              "items",
+              "1",
+              "text"
+            ],
+            "value": "世界🙂"
+          }
+        ],
+        "streamID": "fixture-stream",
+        "streamRevision": 2
+      }
+    },
+    "expected": {
+      "archived": false,
+      "connected": true,
+      "id": "thread",
+      "sequence": 2,
+      "snapshot": {
+        "requests": [],
+        "threadRuntimeStatus": {
+          "type": "active"
+        },
+        "turns": [
+          {
+            "items": [
+              {
+                "id": "q",
+                "text": "question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question ",
+                "type": "userMessage"
+              },
+              {
+                "bodyRevision": "transient",
+                "deferred": true,
+                "id": "a",
+                "text": "prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix 世界🙂",
+                "type": "agentMessage"
+              }
+            ],
+            "turnId": "t"
+          }
+        ]
+      },
+      "streamID": "fixture-stream",
+      "streamRevision": 2
+    }
+  },
+  {
+    "event": {
+      "type": "chat.delta",
+      "data": {
+        "base": 2,
+        "id": "thread",
+        "ops": [
+          {
+            "op": "set",
+            "path": [
+              "sequence"
+            ],
+            "value": 3
+          },
+          {
+            "op": "set",
+            "path": [
+              "snapshot",
+              "requests",
+              "0"
+            ],
+            "value": {
+              "id": "approval",
+              "params": null
+            }
+          },
+          {
+            "op": "remove",
+            "path": [
+              "snapshot",
+              "turns",
+              "0",
+              "items",
+              "1",
+              "bodyRevision"
+            ],
+            "value": null
+          },
+          {
+            "op": "remove",
+            "path": [
+              "snapshot",
+              "turns",
+              "0",
+              "items",
+              "1",
+              "deferred"
+            ],
+            "value": null
+          },
+          {
+            "op": "set",
+            "path": [
+              "snapshot",
+              "turns",
+              "1"
+            ],
+            "value": {
+              "items": [
+                {
+                  "id": "q2",
+                  "text": "Next",
+                  "type": "userMessage"
+                }
+              ],
+              "turnId": "next"
+            }
+          }
+        ],
+        "streamID": "fixture-stream",
+        "streamRevision": 3
+      }
+    },
+    "expected": {
+      "archived": false,
+      "connected": true,
+      "id": "thread",
+      "sequence": 3,
+      "snapshot": {
+        "requests": [
+          {
+            "id": "approval",
+            "params": null
+          }
+        ],
+        "threadRuntimeStatus": {
+          "type": "active"
+        },
+        "turns": [
+          {
+            "items": [
+              {
+                "id": "q",
+                "text": "question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question question ",
+                "type": "userMessage"
+              },
+              {
+                "id": "a",
+                "text": "prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix prefix 世界🙂",
+                "type": "agentMessage"
+              }
+            ],
+            "turnId": "t"
+          },
+          {
+            "items": [
+              {
+                "id": "q2",
+                "text": "Next",
+                "type": "userMessage"
+              }
+            ],
+            "turnId": "next"
+          }
+        ]
+      },
+      "streamID": "fixture-stream",
+      "streamRevision": 3
+    }
+  },
+  {
+    "event": {
+      "type": "chat.state",
+      "data": {
+        "archived": false,
+        "connected": true,
+        "id": "thread",
+        "sequence": 4,
+        "snapshot": {
+          "threadRuntimeStatus": {
+            "type": "active"
+          },
+          "turns": [
+            {
+              "items": [
+                {
+                  "id": "q2",
+                  "text": "Next",
+                  "type": "userMessage"
+                }
+              ],
+              "turnId": "next"
+            }
+          ]
+        },
+        "streamID": "fixture-stream",
+        "streamRevision": 4
+      }
+    },
+    "expected": {
+      "archived": false,
+      "connected": true,
+      "id": "thread",
+      "sequence": 4,
+      "snapshot": {
+        "threadRuntimeStatus": {
+          "type": "active"
+        },
+        "turns": [
+          {
+            "items": [
+              {
+                "id": "q2",
+                "text": "Next",
+                "type": "userMessage"
+              }
+            ],
+            "turnId": "next"
+          }
+        ]
+      },
+      "streamID": "fixture-stream",
+      "streamRevision": 4
+    }
+  },
+  {
+    "event": {
+      "type": "chat.state",
+      "data": {
+        "archived": false,
+        "connected": true,
+        "id": "thread",
+        "sequence": 5,
+        "snapshot": {
+          "threadRuntimeStatus": null,
+          "turns": [
+            {
+              "items": [
+                {
+                  "id": "q2",
+                  "text": "Next",
+                  "type": "userMessage"
+                }
+              ],
+              "turnId": "next"
+            }
+          ]
+        },
+        "streamID": "fixture-stream",
+        "streamRevision": 5
+      }
+    },
+    "expected": {
+      "archived": false,
+      "connected": true,
+      "id": "thread",
+      "sequence": 5,
+      "snapshot": {
+        "threadRuntimeStatus": null,
+        "turns": [
+          {
+            "items": [
+              {
+                "id": "q2",
+                "text": "Next",
+                "type": "userMessage"
+              }
+            ],
+            "turnId": "next"
+          }
+        ]
+      },
+      "streamID": "fixture-stream",
+      "streamRevision": 5
+    }
+  }
+]

@@ -1,0 +1,13 @@
+{
+  "name": "cxpalm-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "vendor": "node vendor.cjs",
+    "test": "node --test protocol.test.mjs"
+  },
+  "dependencies": {
+    "dompurify": "3.4.17",
+    "marked": "18.1.1"
+  }
+}

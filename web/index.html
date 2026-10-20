@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="referrer" content="no-referrer">
+  <title>CXPalm · 网页控制端</title>
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+  <link rel="stylesheet" href="assets/control-v1.css">
+  <script type="module" src="assets/app-v1.mjs"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="CXPalm 首页"><img class="brand-mark" src="assets/icon.svg" width="34" height="34" alt="">CXPalm<span class="brand-label">0.0.7 · 随身工作台</span></a>
+    <details id="computer-switch" class="computer-switch"><summary aria-label="快速切换电脑" title="快速切换电脑"><svg viewBox="0 0 24 24" aria-hidden="true" class="nav-icon"><path d="M3 4h18v13H3z M8 21h8 M12 17v4"/></svg><span id="computer-current"></span><span aria-hidden="true">⌄</span></summary><div class="computer-menu"><strong>切换电脑</strong><div id="computer-links"></div><p id="computer-switch-note" class="footnote"></p><button id="computer-manage" type="button" class="quiet">管理电脑入口</button></div></details>
+    <span id="connection" class="connection" role="status">正在检查连接…</span>
+    <button id="nav-settings" class="global-settings quiet" data-page="settings" type="button" aria-label="全局设置" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg><span>设置</span></button>
+    <button id="reconnect" class="quiet icon-action" type="button" aria-label="重新连接" title="重新连接" hidden><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 8a8 8 0 1 0 0 8 M20 3v5h-5"/></svg></button>
+  </header>
+  <div id="notice" class="notice" role="alert" hidden><span id="notice-text"></span><button id="dismiss-notice" class="quiet" aria-label="关闭提示" type="button">关闭</button></div>
+  <main id="login" class="login" hidden>
+    <section class="login-card">
+      <span class="eyebrow">DESKTOP → BROWSER</span>
+      <h1>继续电脑上的会话。</h1>
+      <p class="muted">连接你自己的 Codex 桌面。会话、进度和审批都在这里，任务仍在电脑上运行。</p>
+      <form id="login-form">
+        <label for="login-username">账号</label><input id="login-username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="80" required>
+        <label for="login-password">密码</label><input id="login-password" name="password" type="password" autocomplete="current-password" maxlength="256" required>
+        <label class="remember-login"><input id="login-remember" type="checkbox">记住登录 · 30 天内无需重新登录</label>
+        <button id="login-submit" class="primary" type="submit">登录电脑 ↗</button>
+      </form>
+      <p class="footnote">先在电脑 CXPalm 的「设置 → 登录账号」设置账号密码。勾选后安全保存登录凭据，不在网页保存明文密码；不勾选时使用临时登录。</p>
+      <p class="footnote">独立配套工具 · 会话始终由官方桌面执行</p>
+    </section>
+  </main>
+  <div id="shell" class="shell" hidden>
+    <aside id="sidebar" class="sidebar" aria-label="会话导航">
+      <button id="close-list" class="quiet" type="button" hidden>收起列表</button>
+      <div class="list-heading"><h2>工作会话</h2><div class="list-actions"><button id="new-chat" class="quiet" type="button" aria-label="新建会话">＋ 新建</button><button id="refresh" class="quiet" type="button" aria-label="刷新会话">↻</button></div></div>
+      <div class="session-scope" aria-label="会话范围"><button id="active-chats" class="selected" type="button" aria-pressed="true">会话</button><button id="archived-chats" type="button" aria-pressed="false">已归档</button></div>
+      <div class="list-filters"><label class="sr-only" for="project-filter">按项目查看</label><select id="project-filter"><option value="">全部项目</option><option value="none">无项目</option></select><label class="sr-only" for="list-mode">列表视图</label><select id="list-mode"><option value="projects">按项目</option><option value="recent">按最近</option></select></div>
+      <section id="new-chat-panel" class="new-chat-panel" hidden><h3>新建会话</h3><label for="new-project">选择项目（可选）</label><select id="new-project"></select><p>可选择“无项目”，使用独立工作目录。创建后自动打开官方桌面，连接成功即可发送消息。</p><div class="actions"><button id="create-chat" type="button" class="primary">创建</button><button id="cancel-create" type="button" class="quiet">取消</button></div></section>
+      <label class="sr-only" for="search">搜索会话</label><input id="search" type="search" placeholder="搜索会话或工作目录…" autocomplete="off">
+      <p id="session-sync" class="sidebar-note" role="status" hidden></p><div id="session-list" class="session-list"></div><button id="load-more" class="quiet" type="button" hidden>加载更多</button><details class="session-legend"><summary>状态颜色说明</summary><div class="status-key"><span><i class="session-status running"></i>进行中 · 呼吸</span><span><i class="session-status completed"></i>未读</span><span><i class="session-status waiting"></i>等待确认 · 呼吸</span><span><i class="session-status interrupted"></i>未读 · 已中断</span><span><i class="session-status failed"></i>未读 · 失败</span></div><p>已读且空闲的会话不显示点；状态尚未同步不会显示灰点或冒充未读。亮色标题 = 官方未读，网页与 App 共享阅读状态。呼吸仅用于进行中或等待确认。</p></details>
+      <a href="download.html" class="download-link">Android 下载与版本说明 ↗</a>
+    </aside>
+    <main class="console">
+      <div class="console-heading"><button id="show-list" class="quiet" aria-expanded="false" type="button" aria-label="打开会话列表" title="返回会话列表"><svg viewBox="0 0 24 24" aria-hidden="true" class="nav-icon"><path d="M19 12H5 M11 6l-6 6 6 6"/></svg></button><div class="heading-copy"><h1 id="view-title">选择一个会话</h1><p id="view-subtitle">官方桌面 · 同一个会话</p></div><button id="rename-chat" class="quiet rename-chat" type="button" title="重命名会话" aria-label="重命名会话" hidden><svg viewBox="0 0 24 24" class="nav-icon" aria-hidden="true"><path d="m14 5 5 5 M4 20l5-1L20 8q2-2 0-4t-4 0L5 15Z M13 20h8"/></svg></button></div>
+      <form id="rename-panel" class="rename-panel" hidden><label for="rename-title">会话名称</label><input id="rename-title" maxlength="120" required autocomplete="off"><button id="save-rename" type="submit" class="primary">保存</button><button id="cancel-rename" class="quiet" type="button">取消</button></form>
+      <section id="pending" class="pending" aria-label="操作回执" hidden><div><strong id="pending-title">操作等待确认</strong><p id="pending-detail"></p></div><div class="actions"><button id="check-pending" type="button">查询原操作结果</button><button id="ack-pending" type="button" hidden>我已在桌面核对</button></div></section>
+      <section id="chat-view" class="view chat-view">
+        <div id="turn-running" class="turn-running" role="timer" aria-label="本轮执行用时" hidden></div><div class="transcript-layout"><div id="messages" class="messages" aria-label="聊天内容"><div class="empty"><span class="empty-symbol">↗</span><h2>电脑上的工作，在这里继续。</h2><p>从左侧选择官方桌面会话，查看最近内容或继续对话。<br>不会在另一个执行器里接管主会话。</p></div></div>
+        <aside id="question-rail" class="question-rail" aria-label="我的问题导航" hidden><button id="question-toggle" type="button" aria-label="展开或收起我的问题" aria-expanded="false">≡<span>我的问题</span></button><div class="question-track"><div id="question-list" class="question-list"></div><input id="question-slider" type="range" min="0" max="0" value="0" aria-label="滑动定位我的问题"></div></aside><button id="jump-latest" type="button" class="jump-latest" aria-label="回到最新消息" title="回到最新消息" hidden><svg viewBox="0 0 24 24" aria-hidden="true" class="nav-icon"><path d="M12 4v15 M6 13l6 6 6-6"/></svg></button></div>
+        <div id="approvals" class="approvals" aria-live="polite"></div>
+        <div class="composer-area"><div class="composer-context"><button id="context-button" class="context-badge unknown" data-panel="context-dialog" type="button" aria-label="查看上下文用量"><span class="context-ring" aria-hidden="true"></span><span id="context-percent" aria-hidden="true">—</span></button></div><div class="composer-tools" aria-label="会话工具">
+          <button id="attach-file" class="tool-chip" type="button" disabled>＋ 附件</button><button id="notify-chat" class="tool-chip" type="button" aria-pressed="false" disabled>通知：关</button>
+          <button id="model-button" class="tool-chip" data-panel="control-panel" type="button" title="模型与推理强度"><span id="model-label">模型</span><span class="chevron" aria-hidden="true"></span></button>
+          <button id="skill-button" class="tool-chip" data-panel="skill-dialog" type="button" title="选择 Skill"><span aria-hidden="true">＋</span><span id="skill-summary">Skill</span></button>
+          <button id="permission-button" class="tool-chip" data-panel="control-panel" type="button" title="下一轮权限"><svg class="permission-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3 20 6v6c0 5-4 8-8 10-4-2-8-5-8-10V6Z"/><path d="m8 12 3 3 5-6"/></svg><span id="permission-label">权限</span></button>
+          <button id="plan-button" class="tool-chip" data-panel="control-panel" type="button" title="默认 / 计划 / 目标" aria-label="默认 / 计划 / 目标"><svg viewBox="0 0 24 24" aria-hidden="true" class="nav-icon"><path d="M9 6h11 M9 12h11 M9 18h11 M3 6l1 1 2-3 M3 12l1 1 2-3 M3 18l1 1 2-3"/></svg><span id="plan-label" class="sr-only">默认模式</span></button>
+        </div>  <section hidden id="control-panel" class="inline-panel panel" aria-labelledby="control-title">
+    <header class="panel-heading"><div><span class="eyebrow">CONVERSATION</span><h2 id="control-title">会话设置</h2></div><button class="quiet panel-close" type="button" data-close aria-label="关闭会话设置">×</button></header>
+    <p id="settings-current" class="current-settings">选择会话后读取当前配置。</p>
+    <form id="session-settings" class="control-grid">
+      <label data-control="model">模型<select id="model"></select></label>
+      <label data-control="model">推理强度<select id="effort"></select></label>
+      <label data-control="permission">工具权限<select id="permission"><option value="" disabled>自定义权限</option><option value="read-only">只读 · 需要审批</option><option value="workspace" hidden disabled>手动批准（当前）</option><option value="auto-review">帮我批准</option><option value="full">完全访问 · 无审批（高风险）</option></select></label>
+      <label data-control="plan">协作模式<select id="plan-mode"><option value="" disabled hidden>未识别模式</option><option value="default">默认 · 直接执行</option><option value="plan">计划模式 · 先规划</option><option value="goal">目标模式 · 持续完成目标</option></select><small>目标模式：下一条消息设为原生目标，由原桌面持续执行。</small></label>
+      <label id="full-access-confirm" class="check" hidden><input id="confirm-full-access" type="checkbox"><span>我确认允许本会话下一轮完全访问电脑并关闭审批（高风险）</span></label><p class="footnote">设置对下一轮对话生效，不会重发消息或改变正在执行的任务。</p>
+      <div class="actions panel-actions"><button id="apply-settings" class="primary" type="submit" disabled>保存设置</button></div>
+    </form>
+  </section>
+  <section hidden id="skill-dialog" class="inline-panel panel" aria-labelledby="skill-title">
+    <header class="panel-heading"><div><span class="eyebrow">TOOLS FOR THIS MESSAGE</span><h2 id="skill-title">选择 Skill</h2></div><button class="quiet panel-close" type="button" data-close aria-label="关闭 Skill 选择">×</button></header>
+    <p class="muted panel-description">为接下来的消息带上专业能力，最多选择 8 个。</p><label class="sr-only" for="skill-search">搜索 Skill</label><input id="skill-search" type="search" placeholder="搜索名称或描述…"><div id="skill-list"></div><p id="catalog-source" class="footnote"></p><div class="panel-actions"><button class="primary" type="button" data-close>完成选择</button></div>
+  </section>
+  <section hidden id="context-dialog" class="inline-panel panel compact-panel" aria-labelledby="context-title">
+    <header class="panel-heading"><div><span class="eyebrow">CONTEXT</span><h2 id="context-title">上下文用量</h2></div><button class="quiet panel-close" type="button" data-close aria-label="关闭上下文用量">×</button></header>
+    <p id="context-usage" class="current-settings">等待官方桌面数据</p><p class="muted panel-description">压缩会生成上下文摘要，不会删除聊天历史。任务运行中不可压缩。</p><div class="panel-actions"><button id="compact" type="button" disabled>压缩上下文</button></div>
+  </section>
+<section id="goal-status" class="inline-panel" hidden><p id="goal-objective"></p><div class="actions"><button id="goal-pause" type="button">暂停目标</button><button id="goal-resume" type="button">恢复目标</button><button id="goal-clear" type="button">关闭目标</button></div></section>
+<section id="message-queue" class="message-queue" aria-label="排队消息" hidden></section>
+<form id="composer" class="composer">
+          <div id="attachment-list" class="attachment-list" aria-live="polite"></div>
+          <input id="attachment-input" type="file" multiple hidden>
+          <p id="attachment-status" class="attachment-status" role="status"></p>
+          <label class="sr-only" for="message">消息草稿</label><textarea id="message" rows="2" maxlength="80000" placeholder="选择会话后继续对话…" disabled></textarea>
+          <div class="composer-footer"><label class="send-preferences"><span class="sr-only">发送模式</span><select id="send-mode" aria-describedby="send-mode-help" title="智能发送：空闲时开始新一轮；执行中引导当前任务，不中断、不另开会话。"><option value="auto">智能发送</option><option value="queue">排队发送</option><option value="steer">仅引导任务</option></select></label><div class="actions"><button id="stop" class="quiet" type="button" disabled>停止</button><button id="queue-send" class="quiet" type="button" hidden disabled title="当前任务结束后发送">排队 ≡</button><button id="send" class="primary" type="submit" disabled>发送 ↗</button></div></div>
+        </form><p id="send-mode-help" class="send-mode-help">智能发送：空闲时开始新一轮；执行中引导当前任务，不中断、不另开会话。</p><p id="chat-status" class="chat-status" role="status">等待选择会话</p></div>
+      </section>
+      <section id="settings-view" class="view" hidden><div class="section-body settings">
+        <header class="settings-heading"><div><span class="eyebrow">PREFERENCES</span><h2>全局设置</h2></div><button id="nav-chat" data-page="chat" class="quiet" type="button" aria-label="返回会话" title="返回会话"><svg viewBox="0 0 24 24" aria-hidden="true" class="nav-icon"><path d="M19 12H5 M11 6l-6 6 6 6"/></svg></button></header><p class="section-intro">通用偏好在这里管理。模型、思考深度、Skill 与权限在会话输入框上方独立设置。</p>
+        <details class="settings-card"><summary>通用设置</summary><div class="settings-content"><div class="setting-row"><label for="send-key">发送快捷键</label><select id="send-key"><option value="modifier">Ctrl / ⌘ + Enter 发送</option><option value="enter">Enter 发送，Shift + Enter 换行</option></select></div></div></details><details class="settings-card"><summary>提醒 · 独立管理</summary><div class="settings-content"><p class="muted">不改变模型、Skill 或工具权限。</p><label class="check"><input id="notify-complete" type="checkbox"><span>任务完成提醒<small>任务结束时通知你</small></span></label><label class="check"><input id="notify-approval" type="checkbox"><span>新审批提醒<small>需要确认时及时回来</small></span></label><label class="check"><input id="notify-sound" type="checkbox"><span>提示音<small>点击下方按钮后启用</small></span></label><button id="enable-notifications" type="button">启用浏览器通知 / 提示音</button><p id="notification-sync-status" class="muted" role="status">提醒尚未连接</p><p id="notification-status" class="muted"></p><p class="footnote">会话默认不通知。在会话输入框上方开启「会话通知」后，该电脑的网页与 App 才接收该会话的提醒；关闭后不补发旧提醒。连接多台电脑时，分别保持各电脑的网页标签打开；已允许通知的标签通过浏览器通知提醒，不再显示站内任务提醒条。通知点击可打开对应会话。关闭页面后不会后台监控或推送。</p></div></details>
+        <details class="settings-card"><summary>外观</summary><div class="settings-content"><div class="setting-row"><label for="theme">配色</label><select id="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></div></div></details>
+        <details id="computer-shortcut-settings" class="settings-card"><summary>电脑快捷切换</summary><div class="settings-content"><p>保存电脑站点地址后，可从顶部名称快速切换，或在新标签页同时查看。快捷入口保存在此浏览器的当前站点，只保存名称和地址，不保存密码或授权；新电脑需在自己的站点登录。</p><div id="computer-shortcuts"></div><form id="computer-shortcut-form"><label>电脑名称<input id="computer-name" maxlength="80" required placeholder="例如：办公室"></label><label>HTTPS 地址<input id="computer-address" type="url" required placeholder="https://your-computer.example"></label><button type="submit">添加电脑入口</button></form></div></details>
+        <details class="settings-card"><summary>连接与授权</summary><div class="settings-content"><dl id="device-info"></dl><p class="footnote">凭据仅保存在此站点的 Secure / HttpOnly Cookie 中，不写入网址或本地存储。</p><button id="logout" type="button">退出并撤销此浏览器授权</button></div></details>
+        <details class="settings-card"><summary>权限边界</summary><div class="settings-content"><p>主会话继续由官方 Codex 桌面执行，沿用会话的工具权限和审批。移除工作区入口不等于 Codex 只读。</p><p>历史可分页读取，也可通过“我的问题”导航定位。不支持的审批仍需在官方桌面处理。</p><a href="download.html">Android 下载与版本说明 ↗</a></div></details>
+      </div></section>
+    </main>
+  </div>
+  <noscript><p class="notice">请启用 JavaScript 以使用网页控制端。不会因脚本不可用而执行任何操作。</p></noscript>
+</body>
+</html>

@@ -1,0 +1,19 @@
+const {contextBridge,ipcRenderer} = require('electron');
+contextBridge.exposeInMainWorld('cxDesktop',Object.freeze({
+  getLanguage:()=>ipcRenderer.invoke('desktop:language-get'),
+  setLanguage:value=>ipcRenderer.invoke('desktop:language-set',value),
+  invoke:(method,args={})=>ipcRenderer.invoke('desktop:invoke',{method,args}),
+  updateStatus:()=>ipcRenderer.invoke('desktop:update-status'),
+  checkUpdate:()=>ipcRenderer.invoke('desktop:update-check'),
+  downloadUpdate:()=>ipcRenderer.invoke('desktop:update-download'),
+  cancelUpdate:()=>ipcRenderer.invoke('desktop:update-cancel'),
+  installUpdate:()=>ipcRenderer.invoke('desktop:update-install'),
+  onUpdate:callback=>{const listener=(_event,value)=>callback(value);ipcRenderer.on('desktop:update-changed',listener);return()=>ipcRenderer.removeListener('desktop:update-changed',listener);},
+  getSettings:()=>ipcRenderer.invoke('desktop:settings-get'),
+  saveConnection:input=>ipcRenderer.invoke('desktop:settings-connection',input),
+  saveStartup:input=>ipcRenderer.invoke('desktop:settings-startup',input),
+  chooseConfig:()=>ipcRenderer.invoke('desktop:choose-config'),
+  openWeb:()=>ipcRenderer.invoke('desktop:open-web'),
+  onChanged:callback=>{ const listener=()=>callback();ipcRenderer.on('desktop:changed',listener);return()=>ipcRenderer.removeListener('desktop:changed',listener); },
+  copy:kind=>ipcRenderer.invoke('desktop:copy',kind),
+}));
