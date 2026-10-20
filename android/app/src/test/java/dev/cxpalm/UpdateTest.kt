@@ -15,7 +15,7 @@ import java.util.concurrent.CancellationException
 class UpdateTest {
     private val pkg = "io.github.u702165405.cxpalm.debug"
     private val bytes = "apk fixture, not an installable APK".toByteArray()
-    private fun manifest(code: Int = 3) = UpdateManifest("0.0.2", code, pkg, "$UPDATE_ORIGIN/cxpalm/CXPalm-0.0.2-build3-debug.apk", bytes.size.toLong(), sha256(bytes), "中文说明")
+    private fun manifest(code: Int = 3) = UpdateManifest("0.0.2", code, pkg, "$UPDATE_RELEASES/v0.0.2-build3/CXPalm-0.0.2-build3-debug.apk", bytes.size.toLong(), sha256(bytes), "中文说明")
     private fun rejected(block: () -> Unit) { try { block(); fail("Unsafe update accepted") } catch (_: IllegalArgumentException) { } }
     private fun transport(status: Int = 200, body: ByteArray = bytes, inspect: (Request) -> Unit = {}): UpdateTransport =
         UpdateTransport(updateHttpClient().newBuilder().addInterceptor { chain ->
@@ -40,7 +40,7 @@ class UpdateTest {
         assertEquals(manifest(), parseUpdateManifest(manifest().json(), pkg))
         val old = JSONObject(manifest().json()).remove("notes")
         assertNotNull(old)
-        val raw = JSONObject(manifest().json()).apply { remove("notes"); put("apk", "CXPalm-0.0.2-build3-debug.apk") }
+        val raw = JSONObject(manifest().json()).apply { remove("notes") }
         assertEquals(manifest().copy(notes = ""), parseUpdateManifest(raw.toString(), pkg))
     }
     @Test fun noUpdateAndOlderManifestsDoNotOfferDownloads() {
@@ -56,15 +56,17 @@ class UpdateTest {
         }
         rejected { parseUpdateManifest(" ".repeat(MAX_MANIFEST_BYTES.toInt() + 1), pkg) }
     }
-    @Test fun onlyFixedHttpsApkPathsAreAccepted() {
-        assertEquals("https://win.lqilt.top/cxpalm/download.json", UPDATE_MANIFEST_URL)
-        assertEquals(manifest().apk, updateApkUrl("CXPalm-0.0.2-build3-debug.apk"))
+    @Test fun onlyFixedRepositoryReleaseApkPathsAreAccepted() {
+        assertEquals("https://raw.githubusercontent.com/702165405/CXPalm/main/updates/download.json", UPDATE_MANIFEST_URL)
         assertEquals(manifest().apk, updateApkUrl(manifest().apk))
-        for (input in listOf("https://mac.lqilt.top/cxpalm/a.apk", "http://win.lqilt.top/cxpalm/a.apk", "https://win.lqilt.com/cxpalm/a.apk", "https://evil.invalid/cxpalm/a.apk",
-            "https://user@win.lqilt.top/cxpalm/a.apk", "https://win.lqilt.top:443/cxpalm/a.apk", "//win.lqilt.top/cxpalm/a.apk",
-            "../a.apk", "/android/a.apk", "a.apk?token=x", "a.apk#x", "%61.apk", "/cxpalm/../cxpalm/a.apk", "a.zip")) {
+        for (input in listOf("https://win.lqilt.top/cxpalm/a.apk", "http://github.com/702165405/CXPalm/releases/download/v0.0.2-build3/a.apk",
+            manifest().apk.replace("702165405", "another-owner"), manifest().apk.replace("CXPalm/releases", "Other/releases"),
+            manifest().apk.replace("github.com/", "user@github.com/"), manifest().apk.replace("github.com/", "github.com:443/"),
+            "//github.com/702165405/CXPalm/a.apk", "CXPalm-0.0.2-build3-debug.apk", "../a.apk", "/android/a.apk",
+            manifest().apk+"?token=x", manifest().apk+"#x", manifest().apk.replace(".apk", "%2eapk"), manifest().apk.replace(".apk", ".zip"))) {
             rejected { updateApkUrl(input) }
         }
+        rejected { parseUpdateManifest(JSONObject(manifest().json()).put("apk", manifest().apk.replace("v0.0.2-build3", "v0.0.1-build3")).toString(), pkg) }
     }
     @Test fun packageVersionAndExactInstalledSignerAreRequired() {
         val installed = ApkIdentity(pkg, "0.0.1", 2, setOf("installed-certificate"))
@@ -136,5 +138,32 @@ class UpdateTest {
         }.build()
         rejected { UpdateTransport(client).download(manifest(), file) }; assertFalse(file.exists())
         rejected { transport(body = ByteArray(MAX_MANIFEST_BYTES.toInt() + 1)).manifest(pkg) }
+    }
+
+    @Test fun githubRedirectsAreRepositoryBoundedAndNeverCarryLoginHeaders() = temp { file ->
+        val cdn = "https://release-assets.githubusercontent.com/github-production-release-asset/1427104245/fixture-asset?sig=fixture"
+        assertEquals(cdn, updateRedirectUrl(manifest().apk, cdn))
+        for (target in listOf(cdn.replace("1427104245", "99"), cdn.replace("release-assets.githubusercontent.com", "evil.invalid"),
+            cdn.replace("https://", "http://"), cdn+"#fragment", cdn.replace("https://", "https://user@"), manifest().apk)) {
+            rejected { updateRedirectUrl(manifest().apk, target) }
+        }
+        val urls = mutableListOf<String>()
+        val client = updateHttpClient().newBuilder().addInterceptor { chain ->
+            val request = chain.request(); urls.add(request.url.toString())
+            assertNull(request.header("Authorization")); assertNull(request.header("Cookie")); assertNull(request.header("Origin"))
+            val redirect = request.url.host == "github.com"
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(if(redirect) 302 else 200).message("fixture")
+                .header("Location", cdn).body((if(redirect) byteArrayOf() else bytes).toResponseBody()).build()
+        }.build()
+        UpdateTransport(client).download(manifest(), file)
+        assertEquals(listOf(manifest().apk, cdn), urls)
+        assertArrayEquals(bytes, file.readBytes())
+        val loop = updateHttpClient().newBuilder().addInterceptor { chain ->
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(302).message("fixture")
+                .header("Location", cdn).body(byteArrayOf().toResponseBody()).build()
+        }.build()
+        try { UpdateTransport(loop).download(manifest(),file); fail("redirect loop accepted") } catch (_: IOException) { }
+        assertFalse(file.exists())
+        try { UpdateTransport(loop).manifest(pkg); fail("manifest redirect accepted") } catch (_: IOException) { }
     }
 }

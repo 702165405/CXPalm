@@ -29,11 +29,11 @@ The Android namespace/application ID `io.github.u702165405.cxpalm` (plus the
 debug suffix) identifies the app; it is not an account token. Renaming it breaks
 in-place updates and existing app storage compatibility.
 
-Native updater code, matching tests and local release tooling contain the
-public origin `https://win.lqilt.top`. It is an existing update trust allowlist,
-not a private SSH endpoint or credential. It is intentionally not replaced by
-a placeholder in executable code during a privacy-only cleanup: doing so would
-break installed-client update behavior. Login origins remain separate.
+Native update manifests are served from this repository's `main/updates/`
+directory on `raw.githubusercontent.com`. Packages are immutable release assets
+under `https://github.com/702165405/CXPalm/releases/download/`. Only bounded
+redirects to GitHub release-asset CDN paths for this repository ID are accepted.
+No device bearer or browser cookies are sent. Login origins remain separate.
 
 Before independently distributing a build, review/update all of:
 

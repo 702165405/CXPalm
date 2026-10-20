@@ -138,7 +138,7 @@ import io.github.u702165405.cxpalm.R
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("${update.manifest.version} · build ${update.manifest.versionCode} · ${fileSize(update.manifest.size)}")
             Text(update.manifest.notes.ifBlank { tr("发布者未提供更新说明。") })
-            Text(tr("来自 {0}/cxpalm/。点击后使用网络流量下载，校验后仍需系统安装确认。" , UPDATE_ORIGIN), style = MaterialTheme.typography.bodySmall)
+            Text(tr("来自 {0}。点击后使用网络流量下载，校验后仍需系统安装确认。" , UPDATE_ORIGIN), style = MaterialTheme.typography.bodySmall)
         }
     }, confirmButton = { TextButton(onClick = { updatePrompt = false; page = "settings"; updates.download() }) { Text(tr("下载更新")) } },
         dismissButton = { TextButton(onClick = { updatePrompt = false }) { Text(tr("稍后")) } })

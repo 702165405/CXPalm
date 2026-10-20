@@ -6,8 +6,8 @@ Private test evidence is not part of the source repository.
 
 ## Source Baseline
 
-- Source version: 0.0.7.
-- Android: versionCode 43; desktop package: releaseBuild 42.
+- Source version: 0.0.8.
+- Android: versionCode 44; desktop package: releaseBuild 44.
 - Previous local records report passing Go tests/vet, Windows amd64 and macOS
   amd64/arm64 cross-builds, Web and desktop tests, Android unit tests, Lint and
   APK assembly for this baseline. These are historical reports, not a fresh
@@ -33,6 +33,20 @@ Fresh checks during privacy/documentation preparation:
 No public repository, source commit, push, binary release, installation or
 server change is performed as part of this preparation. Local private records
 are preserved in ignored storage. Raw test logs are not publication artifacts.
+
+## GitHub Update Migration Checks (0.0.8 / build44)
+
+- Go default tests/vet and Windows amd64/macOS amd64+arm64 cross-builds pass.
+- Node regression suite: 58 pass. Android: 74 unit tests, 73 pass and one
+  opt-in network test skipped; Lint and APK assembly pass.
+- Windows installer builds; hidden Electron check/download/ready fixture passes
+  without running an installer. APK package/version and the original signing
+  certificate are verified. This does not establish physical-device acceptance.
+- Regression cases reject other repositories, other CDN repository IDs,
+  non-HTTPS destinations, credential-bearing redirects, redirect loops and
+  manifest redirects. Size/hash, signer and downgrade checks remain covered.
+- Public release download and legacy-feed migration acceptance are recorded
+  separately after publication; build output alone is not publication evidence.
 
 ## Known Issues And Acceptance Gaps
 

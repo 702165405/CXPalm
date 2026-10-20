@@ -22,6 +22,6 @@ exports.create=()=>{
 exports.updateOptions=()=>{
  const {Readable}=require('node:stream'),{createHash}=require('node:crypto');
  const bytes=Buffer.from('CXPalm isolated update fixture - NOT AN EXECUTABLE');
- const manifest={schema:1,appId:'dev.cxpalm.desktop',platform:'win32',arch:'x64',version:'0.1.1',url:'https://win.lqilt.top/cxpalm/CXPalm-Setup-0.1.1-x64.exe',size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),notes:'隔离更新演示：配置保留与体验优化。<img src=x onerror=alert(1)> 此处仅为文本。'};
+ const manifest={schema:1,appId:'dev.cxpalm.desktop',platform:'win32',arch:'x64',version:'0.1.1',url:'https://github.com/702165405/CXPalm/releases/download/v0.1.1/CXPalm-Setup-0.1.1-x64.exe',size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),notes:'隔离更新演示：配置保留与体验优化。<img src=x onerror=alert(1)> 此处仅为文本。'};
  return {platform:'win32',arch:'x64',fetch:async url=>{const body=url.endsWith('.json')?Buffer.from(JSON.stringify(manifest)):bytes;const stream=Readable.from([body]);stream.headers={'content-length':String(body.length)};return stream;}};
 };

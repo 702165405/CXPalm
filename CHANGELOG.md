@@ -10,6 +10,15 @@ Versions describe implemented changes, not physical-device acceptance.
 - Android startup crash reported by a user; root cause and fix unconfirmed.
 - Project license and public repository publication remain pending.
 
+## 0.0.8
+
+- Move Android and Windows update manifests to this repository and immutable
+  packages to GitHub Releases. Preserve package identity and anti-downgrade checks.
+- Permit only bounded, credential-free download redirects to GitHub CDN paths
+  scoped to this repository. Manifest requests do not follow redirects.
+- Use Electron's native networking for desktop updates so the user's existing
+  operating-system proxy can be respected without changing proxy settings.
+
 ## 0.0.7
 
 - Align session membership with official records; exclude metadata-only stubs

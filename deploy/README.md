@@ -81,8 +81,8 @@ Nginx 模板允许 **20 MiB 的完整请求体**。单个附件的应用上限�
 
 - **网页**：发布 `web/` 中所需的静态资源，保持 HTML、脚本和样式版本配套。
 - **Android / 桌面端**：客户端检查 HTTPS 更新清单，下载并校验后，由用户确认安装。
-- **自建分发**：登录服务器与原生更新源是两套独立配置。当前原生代码仍绑定既有
-  发布站点的白名单；仅更改登录地址不会更改更新源。独立分发前，统一调整更新器、
+- **自建分发**：登录服务器与原生更新源是两套独立配置。当前原生代码绑定 `702165405/CXPalm`
+  的清单与 Releases 白名单；仅更改登录地址不会更改更新源。独立分发前，统一调整更新器、
   发布脚本和对应测试，具体位置见 [更新源说明](../docs/PUBLICATION.md#deliberately-preserved-public-compatibility-identifiers)。
 
 更新包应使用带版本/构建号的不可变文件名。先上传包并核对实际 HTTPS 下载的
@@ -98,3 +98,16 @@ Android 覆盖升级需要相同包名和签名、递增的 versionCode。桌面
 维护时保留自己的配置与授权存储，更新前做好私有备份；不要以清除应用数据作为
 常规更新步骤。故障反馈与漏洞报告方式见 [贡献指南](../CONTRIBUTING.md) 和
 [安全说明](../SECURITY.md)。
+
+## 仓库更新源
+
+- Android 清单：`https://raw.githubusercontent.com/702165405/CXPalm/main/updates/download.json`
+- Windows 清单：`https://raw.githubusercontent.com/702165405/CXPalm/main/updates/desktop-download.json`
+- 安装包：本仓库 Releases 中带版本和构建号的固定路径，例如 `releases/download/v0.0.8-build44/`。
+
+GitHub 下载会跳转到自己的资源 CDN，客户端只接受限定仓库 ID 的 CDN 路径，最多
+三次跳转；清单本身不跟随跳转，也不会向更新服务发送 CXPalm 登录凭据。
+
+旧客户端不会凭空改变内置更新源。迁移版本通过旧源提供最后一次兼容更新，安装后
+后续检查转到本仓库；也可从 Releases 手动安装。不要把旧清单直接改成 GitHub URL，
+旧客户端会按原有白名单拒绝它。仓库更新是否可达取决于设备实际网络。

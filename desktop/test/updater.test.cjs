@@ -1,8 +1,8 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {Readable,PassThrough}=require('node:stream'),{createHash}=require('node:crypto'),{EventEmitter}=require('node:events');
-const {DesktopUpdater,FEED,MAX_SIZE,newer,validateManifest,request}=require('../updater.cjs');
+const {DesktopUpdater,FEED,MAX_SIZE,newer,validateManifest,request,redirectURL}=require('../updater.cjs');
 const bytes=Buffer.from('MZ isolated test bytes, not an executable');
-const manifest=()=>({schema:1,appId:'dev.cxpalm.desktop',platform:'win32',arch:'x64',version:'0.0.10',url:'https://win.lqilt.top/cxpalm/CXPalm-Setup-0.0.10-x64.exe',size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),notes:'Isolated release notes <script>text only</script>'});
+const manifest=()=>({schema:1,appId:'dev.cxpalm.desktop',platform:'win32',arch:'x64',version:'0.0.10',url:'https://github.com/702165405/CXPalm/releases/download/v0.0.10/CXPalm-Setup-0.0.10-x64.exe',size:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),notes:'Isolated release notes <script>text only</script>'});
 function setup(t,{raw=manifest(),body=bytes,headers,fetch}={}){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'cxpalm-updates-'));t.after(()=>{assert.ok(path.resolve(root).startsWith(path.join(os.tmpdir(),'cxpalm-updates-')));fs.rmSync(root,{recursive:true,force:true});});
  const calls=[];const updater=new DesktopUpdater({version:'0.0.9',cacheDir:root,platform:'win32',arch:'x64',fetch:fetch|| (async(url,signal)=>{calls.push(url);const stream=Readable.from([url===FEED?Buffer.from(JSON.stringify(raw)):body]);stream.headers=url===FEED?{}:headers||{};return stream;})});t.after(()=>updater.dispose());return {root,updater,calls};
@@ -11,13 +11,13 @@ test('stable numeric versions and platform/URL/hash/size trust boundaries',()=>{
  assert.equal(newer('0.1.0','0.0.10'),true);assert.equal(newer('0.0.10','0.0.9'),true);assert.equal(newer('1.10.0','1.9.9'),true);assert.equal(newer('0.0.9','0.0.10'),false);assert.equal(newer('0.0.9','0.0.9'),false);
  for(const version of ['v1.0.0','1.0.0-beta','01.0.0','1.0',null])assert.throws(()=>newer(version,'0.0.9'));
  assert.equal(validateManifest(manifest()).version,'0.0.10');
- for(const change of [{schema:2},{appId:'other'},{arch:'arm64'},{platform:'darwin'},{size:0},{size:MAX_SIZE+1},{size:1.2},{sha256:'bad'},{notes:'x'.repeat(8001)},{url:'http://win.lqilt.top/cxpalm/CXPalm-Setup-0.0.10-x64.exe'},{url:'https://evil.test/CXPalm.exe'},{url:manifest().url+'?'},{url:manifest().url+'#'},{url:manifest().url.replace('0.0.10','0.0.9')}])assert.throws(()=>validateManifest({...manifest(),...change}));
+ for(const change of [{schema:2},{appId:'other'},{arch:'arm64'},{platform:'darwin'},{size:0},{size:MAX_SIZE+1},{size:1.2},{sha256:'bad'},{notes:'x'.repeat(8001)},{url:'http://github.com/702165405/CXPalm/releases/download/v0.0.10/CXPalm-Setup-0.0.10-x64.exe'},{url:'https://evil.test/CXPalm.exe'},{url:manifest().url+'?'},{url:manifest().url+'#'},{url:manifest().url.replace('0.0.10','0.0.9')}])assert.throws(()=>validateManifest({...manifest(),...change}));
 });
 test('check does not download; automatic throttling, manual refresh and no downgrades',async t=>{
  const {updater,calls}=setup(t);assert.equal((await updater.check()).phase,'available');assert.deepEqual(calls,[FEED]);
  await updater.check(true);assert.equal(calls.length,1);await updater.check();assert.equal(calls.length,2);
  const restarted=new DesktopUpdater({version:'0.0.9',platform:'win32',arch:'x64',cacheDir:updater.cacheDir,fetch:()=>{throw new Error('throttled restart must not fetch');}});assert.equal((await restarted.check(true)).phase,'idle');
- const old=setup(t,{raw:{...manifest(),version:'0.0.8',url:manifest().url.replace('0.0.10','0.0.8')}}).updater;
+ const old=setup(t,{raw:{...manifest(),version:'0.0.8',url:manifest().url.replaceAll('0.0.10','0.0.8')}}).updater;
  assert.equal((await old.check()).phase,'current');await assert.rejects(old.download());
  const unsupported=new DesktopUpdater({version:'0.0.9',cacheDir:updater.cacheDir,platform:'darwin',fetch:()=>{throw new Error('must not access network');}});
  assert.equal((await unsupported.check(true)).phase,'unsupported');await assert.rejects(unsupported.check());
@@ -65,8 +65,22 @@ test('corrected 0.0.x release line rejects legacy feed without allowing a downgr
 });
 
 test('initial release build namespace is immutable and stays on the exact trusted HTTPS path',()=>{
- const release={...manifest(),releaseLine:'initial-001',build:36,url:'https://win.lqilt.top/cxpalm/CXPalm-Setup-0.0.9-build36-x64.exe'};
+ const release={...manifest(),releaseLine:'initial-001',build:36,url:'https://github.com/702165405/CXPalm/releases/download/v0.0.9-build36/CXPalm-Setup-0.0.9-build36-x64.exe'};
  release.version='0.0.9';
  assert.equal(validateManifest(release).build,36);
  for(const change of [{build:0},{build:'36'},{releaseLine:'preview-001'},{url:'https://evil.example/CXPalm-Setup-0.0.9-build36-x64.exe'},{url:'https://win.lqilt.top/cxpalm/../CXPalm-Setup-0.0.9-build36-x64.exe'}])assert.throws(()=>validateManifest({...release,...change}));
+});
+
+test('GitHub redirects stay on this repository CDN, are bounded and never redirect manifests',async()=>{
+ const asset=manifest().url,cdn='https://release-assets.githubusercontent.com/github-production-release-asset/1427104245/fixture-asset?sig=fixture';
+ assert.equal(redirectURL(asset,cdn),cdn);
+ for(const target of ['http://release-assets.githubusercontent.com/github-production-release-asset/1427104245/id',cdn.replace('1427104245','99'),cdn.replace('release-assets.githubusercontent.com','evil.test'),cdn+'#fragment',cdn.replace('https://','https://user@'),asset.replace('702165405','other')])assert.throws(()=>redirectURL(asset,target));
+ const calls=[];
+ const fetch=async url=>{calls.push(url);const response=Readable.from([bytes]);response.statusCode=url===asset?302:200;response.headers=url===asset?{location:cdn}:{};return response;};
+ assert.deepEqual(Buffer.concat(await Array.fromAsync(await request(asset,new AbortController().signal,fetch))),bytes);
+ assert.deepEqual(calls,[asset,cdn]);
+ const redirect=async()=>{const response=Readable.from([]);response.statusCode=302;response.headers={location:cdn};return response;};
+ await assert.rejects(request(FEED,new AbortController().signal,redirect));
+ await assert.rejects(request(asset,new AbortController().signal,redirect));
+ await assert.rejects(request('https://github.com/other/CXPalm/a.exe',new AbortController().signal,fetch));
 });

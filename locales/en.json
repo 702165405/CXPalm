@@ -727,5 +727,6 @@
   "列表已同步": "Session list synchronized",
   "实时": "Live",
   "其余按历史记录显示": "Other statuses are from history",
-  "正在同步官方桌面 · 历史暂为只读": "Syncing the official desktop; history is temporarily read-only"
+  "正在同步官方桌面 · 历史暂为只读": "Syncing the official desktop; history is temporarily read-only",
+  "来自 {0}。点击后使用网络流量下载，校验后仍需系统安装确认。": "From {0}. Download uses network data; installation still requires system confirmation after verification."
 }

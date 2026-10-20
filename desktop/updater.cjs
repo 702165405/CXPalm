@@ -5,8 +5,10 @@ const {createHash,randomUUID}=require('node:crypto');
 const {EventEmitter}=require('node:events');
 const {Transform}=require('node:stream');
 const {pipeline}=require('node:stream/promises');
+const {Readable}=require('node:stream');
 const {readJSON,atomicJSON}=require('./settings.cjs');
-const FEED='https://win.lqilt.top/cxpalm/desktop-download.json';
+const RELEASES='https://github.com/702165405/CXPalm/releases/download';
+const FEED='https://raw.githubusercontent.com/702165405/CXPalm/main/updates/desktop-download.json';
 const MAX_SIZE=512*1024*1024;
 function versionParts(value){
   if(typeof value!=='string'||!/^(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})$/.test(value))throw new Error('更新版本号无效。');
@@ -18,23 +20,57 @@ function validateManifest(raw){
   versionParts(raw.version);
   if(raw.build!==undefined&&(!Number.isSafeInteger(raw.build)||raw.build<1||raw.build>2147483647||raw.releaseLine!=='initial-001'))throw new Error('更新构建标识无效。');
   const suffix=raw.build===undefined?'':`-build${raw.build}`;
-  const expected=`https://win.lqilt.top/cxpalm/CXPalm-Setup-${raw.version}${suffix}-x64.exe`;
+  const expected=`${RELEASES}/v${raw.version}${suffix}/CXPalm-Setup-${raw.version}${suffix}-x64.exe`;
   if(raw.url!==expected)throw new Error('更新下载地址不在固定发布范围内。');
   if(!Number.isSafeInteger(raw.size)||raw.size<1||raw.size>MAX_SIZE||typeof raw.sha256!=='string'||! /^[a-f0-9]{64}$/i.test(raw.sha256)||typeof raw.notes!=='string'||raw.notes.length>8000)throw new Error('更新清单的大小、校验值或说明无效。');
   if(raw.releaseLine!==undefined&&(typeof raw.releaseLine!=='string'||!/^[a-z0-9-]{1,40}$/.test(raw.releaseLine)))throw new Error('更新发布系列无效。');
   return Object.freeze({...(raw.build===undefined?{}:{build:raw.build}),...(raw.releaseLine?{releaseLine:raw.releaseLine}:{}),version:raw.version,url:expected,size:raw.size,sha256:raw.sha256.toLowerCase(),notes:raw.notes});
 }
-function request(url,signal){
+function releaseAsset(url){return /^https:\/\/github\.com\/702165405\/CXPalm\/releases\/download\/v\d+\.\d+\.\d+(?:-build\d+)?\/CXPalm-[A-Za-z0-9._-]+\.exe$/.test(url);}
+function redirectURL(from,location){
+  const previous=new URL(from);
+  if(!releaseAsset(from)&&!cdnAsset(previous))throw new Error('更新跳转来源不受信任。');
+  if(typeof location!=='string'||location.length>16384)throw new Error('更新跳转地址无效。');
+  const next=new URL(location,previous);
+  if(!cdnAsset(next))throw new Error('更新跳转不属于此仓库的 GitHub 下载服务。');
+  return next.href;
+}
+function cdnAsset(url){
+  return url.protocol==='https:'&&!url.username&&!url.password&&!url.port&&!url.hash&&
+    ['release-assets.githubusercontent.com','objects.githubusercontent.com'].includes(url.hostname)&&
+    /^\/github-production-release-asset(?:-2e65be)?\/1427104245\/[A-Za-z0-9-]+$/.test(url.pathname);
+}
+function nodeResponse(url,signal){
   return new Promise((resolve,reject)=>{
     // Node HTTPS sends neither browser cookies nor signed-in device credentials.
     const req=https.get(url,{signal,headers:{Accept:'application/json, application/octet-stream','Accept-Encoding':'identity','User-Agent':'CXPalm-Desktop-Updater'}},response=>{
-      if(response.statusCode!==200){response.destroy();reject(new Error(response.statusCode===404?'桌面更新源尚未发布（HTTP 404），请稍后重试。':`更新服务器返回 HTTP ${response.statusCode}；不跟随重定向。`));return;}
-      if(response.headers['content-encoding']&&response.headers['content-encoding']!=='identity'){response.destroy();reject(new Error('更新服务器返回了不支持的压缩内容。'));return;}
       resolve(response);
     });
     req.setTimeout(15000,()=>req.destroy(new Error('更新请求超时，请检查网络。')));
     req.on('error',error=>reject(new Error(error.name==='AbortError'?'更新操作已取消。':'无法连接固定 HTTPS 更新源，请检查网络或稍后重试。')));
   });
+}
+async function electronResponse(url,signal){
+  // Chromium respects the user's existing OS proxy; updater traffic has no login cookies.
+  const response=await require('electron').net.fetch(url,{signal,redirect:'manual',credentials:'omit',headers:{Accept:'application/json, application/octet-stream','Accept-Encoding':'identity'}});
+  const stream=response.body?Readable.fromWeb(response.body):Readable.from([]);
+  stream.statusCode=response.status;stream.headers=Object.fromEntries(response.headers.entries());
+  return stream;
+}
+async function request(url,signal,fetchResponse=process.versions.electron?electronResponse:nodeResponse){
+  if(url!==FEED&&!releaseAsset(url))throw new Error('更新请求不在固定仓库范围内。');
+  const download=url!==FEED;
+  for(let hop=0;hop<=3;hop++){
+    const response=await fetchResponse(url,signal);
+    if([301,302,303,307,308].includes(response.statusCode)){
+      try{if(!download||hop===3)throw new Error('更新重定向次数或来源不受信任。');url=redirectURL(url,response.headers.location);}
+      finally{response.destroy();}
+      continue;
+    }
+    if(response.statusCode!==200){response.destroy();throw new Error(response.statusCode===404?'桌面更新源尚未发布（HTTP 404），请稍后重试。':`更新服务器返回 HTTP ${response.statusCode}。`);}
+    if(response.headers['content-encoding']&&response.headers['content-encoding']!=='identity'){response.destroy();throw new Error('更新服务器返回了不支持的压缩内容。');}
+    return response;
+  }
 }
 class DesktopUpdater extends EventEmitter{
   constructor({version,releaseLine=null,cacheDir,platform=process.platform,arch=process.arch,packaged=true,fetch=request}){
@@ -107,4 +143,4 @@ class DesktopUpdater extends EventEmitter{
   }
   dispose(){this.active?.abort();}
 }
-module.exports={DesktopUpdater,FEED,MAX_SIZE,newer,validateManifest,request};
+module.exports={DesktopUpdater,FEED,RELEASES,MAX_SIZE,newer,validateManifest,request,redirectURL};

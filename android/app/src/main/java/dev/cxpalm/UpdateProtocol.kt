@@ -11,8 +11,9 @@ import java.net.URI
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
-const val UPDATE_ORIGIN = "https://win.lqilt.top"
-const val UPDATE_MANIFEST_URL = "$UPDATE_ORIGIN/cxpalm/download.json"
+const val UPDATE_ORIGIN = "https://github.com/702165405/CXPalm"
+const val UPDATE_RELEASES = "$UPDATE_ORIGIN/releases/download"
+const val UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/702165405/CXPalm/main/updates/download.json"
 const val MAX_MANIFEST_BYTES = 65536L
 const val MAX_APK_BYTES = 128L * 1024 * 1024
 const val UPDATE_INTERVAL_MS = 6L * 60 * 60 * 1000
@@ -26,15 +27,25 @@ data class UpdateManifest(val version: String, val versionCode: Int, val package
 }
 
 fun updateApkUrl(value: String): String {
-    val input = URI(value)
-    require(!value.startsWith("//") && !input.isOpaque) { "更新地址不受信任" }
-    val uri = URI("$UPDATE_ORIGIN/cxpalm/").resolve(input)
-    require(uri.scheme == "https" && uri.host == "win.lqilt.top" && uri.port == -1 &&
+    val uri = URI(value)
+    require(uri.scheme == "https" && uri.host == "github.com" && uri.port == -1 &&
         uri.rawUserInfo == null && uri.rawQuery == null && uri.rawFragment == null &&
-        uri.rawPath.matches(Regex("/cxpalm/[A-Za-z0-9][A-Za-z0-9._-]*\\.apk")) &&
-        !value.contains("..") && !value.contains('%')) { "更新 APK 必须位于固定 HTTPS 站点的 /cxpalm/ 下" }
+        uri.rawPath.matches(Regex("/702165405/CXPalm/releases/download/v[0-9]+\\.[0-9]+\\.[0-9]+-build[0-9]+/CXPalm-[A-Za-z0-9._-]+\\.apk")) &&
+        !value.contains("..") && !value.contains('%')) { "更新 APK 必须位于固定 GitHub 仓库的发布路径下" }
     return uri.toASCIIString()
 }
+
+internal fun updateRedirectUrl(from: String, location: String): String {
+    val previous = URI(from)
+    require(runCatching { updateApkUrl(from) }.isSuccess || updateCdn(previous)) { "更新跳转来源不受信任" }
+    require(location.length <= 16384) { "更新跳转地址过长" }
+    val next = previous.resolve(location)
+    require(updateCdn(next)) { "更新跳转不属于此仓库的 GitHub 下载服务" }
+    return next.toASCIIString()
+}
+private fun updateCdn(uri: URI): Boolean = uri.scheme == "https" && uri.port == -1 && uri.rawUserInfo == null && uri.rawFragment == null &&
+    uri.host in listOf("release-assets.githubusercontent.com", "objects.githubusercontent.com") &&
+    uri.rawPath?.matches(Regex("/github-production-release-asset(?:-2e65be)?/1427104245/[A-Za-z0-9-]+")) == true
 
 fun parseUpdateManifest(text: String, installedPackage: String): UpdateManifest {
     require(text.toByteArray(Charsets.UTF_8).size <= MAX_MANIFEST_BYTES) { "更新清单过大" }
@@ -55,13 +66,15 @@ fun parseUpdateManifest(text: String, installedPackage: String): UpdateManifest 
     val pkg = string("package")
     val hash = string("sha256")
     val notes = if (data.has("notes")) string("notes") else ""
-    require(version.isNotBlank() && version.length <= 80 && version.none { it.isISOControl() }) { "版本名称无效" }
+    require(version.matches(Regex("(0|[1-9][0-9]{0,8})\\.(0|[1-9][0-9]{0,8})\\.(0|[1-9][0-9]{0,8})"))) { "版本名称无效" }
     require(code in 1..Int.MAX_VALUE.toLong()) { "版本号无效" }
     require(size in 1..MAX_APK_BYTES) { "更新 APK 大小超出安全限制" }
     require(pkg == installedPackage) { "更新不属于当前应用" }
     require(hash.matches(Regex("[0-9a-fA-F]{64}"))) { "更新校验值无效" }
     require(notes.length <= 4000) { "更新说明过长" }
-    return UpdateManifest(version, code.toInt(), pkg, updateApkUrl(string("apk")), size, hash.lowercase(), notes)
+    val apk = updateApkUrl(string("apk"))
+    require(apk == "$UPDATE_RELEASES/v$version-build$code/CXPalm-$version-build$code-debug.apk") { "APK 路径与清单版本不一致" }
+    return UpdateManifest(version, code.toInt(), pkg, apk, size, hash.lowercase(), notes)
 }
 
 fun shouldAutoCheck(now: Long, last: Long): Boolean = last == 0L || (now >= last && now - last >= UPDATE_INTERVAL_MS)
@@ -88,17 +101,35 @@ fun verifyUpdateFile(file: File, manifest: UpdateManifest, active: () -> Unit = 
     require(digest.digest().joinToString("") { "%02x".format(it) } == manifest.sha256) { "APK SHA-256 校验失败" }
 }
 
-// Deliberately separate from BridgeClient: no account token, cookies, redirects or implicit retries.
+// Separate from BridgeClient: no account token, cookies or automatic redirects/retries.
 fun updateHttpClient(): OkHttpClient = OkHttpClient.Builder()
     .connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).callTimeout(10, TimeUnit.MINUTES)
     .followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false).build()
 
 class UpdateTransport(private val client: OkHttpClient = updateHttpClient()) {
+    private fun response(url: String, download: Boolean, onCall: (Call) -> Unit, active: () -> Unit = {}): okhttp3.Response {
+        var current = url
+        for (hop in 0..3) {
+            active()
+            val call = client.newCall(Request.Builder().url(current).header("Accept", if(download) "application/octet-stream" else "application/json")
+                .header("Accept-Encoding", "identity").build())
+            if (!download) call.timeout().timeout(30, TimeUnit.SECONDS)
+            onCall(call)
+            val result = call.execute()
+            if (result.code !in listOf(301,302,303,307,308)) {
+                if (result.header("Content-Encoding")?.let { it != "identity" } == true) { result.close(); throw IOException("更新响应压缩方式不受支持") }
+                return result
+            }
+            result.use {
+                if (!download || hop == 3) throw IOException("更新重定向次数或来源不受信任")
+                current = try { updateRedirectUrl(current, it.header("Location") ?: throw IOException("更新跳转地址缺失")) }
+                    catch (_: IllegalArgumentException) { throw IOException("更新跳转不受信任") }
+            }
+        }
+        throw IOException("更新重定向次数过多")
+    }
     fun manifest(packageName: String, onCall: (Call) -> Unit = {}): UpdateManifest {
-        val call = client.newCall(Request.Builder().url(UPDATE_MANIFEST_URL).header("Accept", "application/json").build())
-        call.timeout().timeout(30, TimeUnit.SECONDS)
-        onCall(call)
-        return call.execute().use { response ->
+        return response(UPDATE_MANIFEST_URL, false, onCall).use { response ->
             if (response.code != 200) throw IOException("检查更新失败（HTTP ${response.code}）")
             val body = response.body ?: throw IOException("更新清单为空")
             require(body.contentLength() <= MAX_MANIFEST_BYTES) { "更新清单过大" }
@@ -109,11 +140,9 @@ class UpdateTransport(private val client: OkHttpClient = updateHttpClient()) {
 
     fun download(manifest: UpdateManifest, partial: File, onCall: (Call) -> Unit = {},
         active: () -> Unit = {}, progress: (Long) -> Unit = {}) {
-        val call = client.newCall(Request.Builder().url(updateApkUrl(manifest.apk)).header("Accept-Encoding", "identity").build())
-        onCall(call)
         try {
-            call.execute().use { response ->
-                if (response.code != 200) throw IOException("下载失败（HTTP ${response.code}），不会跟随跳转")
+            response(updateApkUrl(manifest.apk), true, onCall, active).use { response ->
+                if (response.code != 200) throw IOException("下载失败（HTTP ${response.code}）")
                 val body = response.body ?: throw IOException("APK 响应为空")
                 val length = body.contentLength()
                 require(length == -1L || length == manifest.size) { "APK 响应大小不匹配" }
