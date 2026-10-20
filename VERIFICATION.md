@@ -19,6 +19,15 @@ Private test evidence is not part of the source repository.
 - No USB phone was available. Android installation, startup and real-message
   sending on the reporting device remain unverified; no real message was sent
   by the tests. No server/firewall or IP-policy changes are part of this fix.
+- All six GitHub release assets pass fresh public size/SHA-256 checks. The
+  actual Electron updater detects and downloads the upgrade and rechecks it
+  before installation; the installer was not executed by that test. Android's
+  opt-in JVM updater check also passes against the public feed and APK.
+- Local desktop/gateway resources are deployed, health reports 0.0.10 and a
+  passive original-owner snapshot succeeds. Configuration, preferences,
+  authorizations, IP-policy settings and startup configuration remain unchanged.
+- Web uses two new versioned modules; public entry/module bytes match staged
+  hashes. Previous modules remain unchanged.
 
 ## Source Baseline
 
