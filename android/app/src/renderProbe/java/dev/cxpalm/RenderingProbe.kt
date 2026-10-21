@@ -23,6 +23,15 @@ class RenderingProbeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val case = intent.getStringExtra("case") ?: "long-code"
+        if(case=="sessions-active" || case=="sessions-archived") {
+            val client=fixtureClient()
+            val archived=case=="sessions-archived"
+            val state=ViewState(connected=true,archived=archived,sessions=listOf(JSONObject()
+                .put("id","synthetic").put("title","Session preview").put("archived",archived)
+                .put("status","idle").put("live",true)))
+            setContent { CxpalmTheme { SessionsPage(state,client) } }
+            return
+        }
         if(case=="composer-preview" || case=="composer-preview-long") {
             val client=fixtureClient()
             client.draft(if(case.endsWith("-long")) "先检查移动端的阅读空间。\n输入多行时再展开。\n保留附件、引导和排队功能。" else "")
@@ -123,11 +132,20 @@ class RenderingProbeRunner : Instrumentation() {
         start()
     }
     override fun onStart() {
+        val automation=if(case=="sessions-active" || case=="sessions-archived") uiAutomation else null
         val activity = startActivitySync(Intent(targetContext, RenderingProbeActivity::class.java)
             .putExtra("case", case).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         // Markdown parsing and the following Compose measure happen asynchronously.
         Thread.sleep(holdMs)
         waitForIdleSync()
+        if(case=="sessions-active" || case=="sessions-archived") {
+            fun labels(node: android.view.accessibility.AccessibilityNodeInfo): List<String> =
+                listOfNotNull(node.text?.toString(),node.contentDescription?.toString()) +
+                    (0 until node.childCount).flatMap { index -> node.getChild(index)?.let(::labels).orEmpty() }
+            val visible=labels(checkNotNull(automation?.rootInActiveWindow))
+            check(visible.any { it.contains("Session preview") }) { "Session list did not render" }
+            check(visible.none { it in listOf("归档","取消归档","Archive","Unarchive") }) { "Unsupported archive action is visible" }
+        }
         runOnMainSync { activity.finish() }
         finish(Activity.RESULT_OK, Bundle().apply { putString("result", "PASS: $case rendered without process death; heap limit=${java.lang.Runtime.getRuntime().maxMemory()}") })
     }

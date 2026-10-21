@@ -141,7 +141,7 @@ label{display:block;margin:14px 0 6px;font-size:13px;font-weight:500}
 .project-heading::before{content:"";width:6px;height:6px;flex:none;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translateY(-2px);transition:transform .15s}
 .project-heading[aria-expanded="false"]::before{transform:rotate(-45deg)}
 .session-row{display:flex;position:relative;flex-shrink:0}
-.session-item{flex:1;min-width:0;text-align:left;background:transparent;border:1px solid transparent;border-radius:10px;padding:10px 34px 10px 12px;overflow:hidden}
+.session-item{flex:1;min-width:0;text-align:left;background:transparent;border:1px solid transparent;border-radius:10px;padding:10px 12px;overflow:hidden}
 .session-item:hover:not(:disabled){background:color-mix(in srgb,var(--surface) 65%,transparent);border-color:transparent}
 .session-item.selected,.session-item.selected:hover:not(:disabled){background:var(--surface);border-color:var(--line);box-shadow:var(--shadow-sm)}
 .session-item small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
@@ -152,9 +152,6 @@ label{display:block;margin:14px 0 6px;font-size:13px;font-weight:500}
 .session-item.is-unread .session-title strong{color:var(--accent);font-weight:650}
 .session-item.selected .session-title strong{color:var(--ink);font-weight:550}
 .session-item.selected.is-unread .session-title strong{color:var(--accent)}
-.archive-action{position:absolute;right:4px;top:50%;transform:translateY(-50%);padding:4px 7px;background:transparent;border:0;color:var(--muted);font-size:15px;opacity:0;transition:opacity .15s}
-.session-row:hover .archive-action,.session-row:focus-within .archive-action,.archive-action:focus-visible{opacity:1}
-.archive-action:hover:not(:disabled){background:color-mix(in srgb,var(--muted) 12%,transparent);color:var(--ink)}
 .sidebar-note{font-size:13px;color:var(--muted);margin:16px 8px;text-align:center}
 #load-more{flex-shrink:0;font-size:13px}
 .session-legend{font-size:12px;margin:0 6px;color:var(--muted);line-height:1.6;flex-shrink:0}
@@ -471,7 +468,6 @@ pre{white-space:pre;overflow:auto;background:var(--surface);border:1px solid var
   .panel-heading{margin-bottom:8px}
 }
 @media(pointer:coarse){
-  .archive-action{opacity:1;min-width:44px;min-height:44px}
   .session-row .session-item{padding-right:46px}
   .list-actions button{min-width:44px;min-height:40px}
 }

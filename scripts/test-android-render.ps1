@@ -16,7 +16,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Start a fresh isolated emulator first' }
 if ($LASTEXITCODE -ne 0) { throw 'Probe build failed' }
 & $adb -s $Serial install -r (Join-Path $root 'android\app\build\outputs\apk\debug\app-debug.apk')
 if ($LASTEXITCODE -ne 0) { throw 'Probe install failed' }
-$cases = @('long-code','many-lines','paragraph','table','user','chat','unmatched-question','archive-rejected','archive-other-chat','archive-unknown','archive-legacy','composer-preview','composer-preview-long')
+$cases = @('long-code','many-lines','paragraph','table','user','chat','unmatched-question','archive-rejected','archive-other-chat','archive-unknown','archive-legacy','composer-preview','composer-preview-long','sessions-active','sessions-archived')
 if ($CaptureDirectory) {
     $captures = (Resolve-Path -LiteralPath $CaptureDirectory).Path
     $privateRoot = [IO.Path]::GetFullPath((Join-Path $root '.local')) + '\'

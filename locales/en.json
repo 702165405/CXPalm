@@ -560,7 +560,7 @@
   "更新源尚未切换到新的 0.0.x 发布系列，不会安装旧版本。": "The update feed has not moved to the new 0.0.x release line. Old releases will not be installed.",
   "会话已创建，但尚未确认官方桌面接管。请在电脑上的 Codex 打开该会话；连接后将自动同步，不要重复创建。": "The chat was created, but desktop ownership is not confirmed yet. Open it in Codex on your computer. It will sync automatically; do not create it again.",
   "已归档 · 只读历史": "Archived · Read-only history",
-  "这里可以查看归档正文。返回会话列表取消归档后，才能继续对话。": "View the archived conversation here. Return to the chat list and unarchive it to continue.",
+  "这里可以查看归档正文。请在官方桌面取消归档后继续对话。": "View the archived conversation here. Unarchive it in the official desktop app to continue.",
   "已加载 5000 条，请用项目或搜索缩小范围": "5,000 chats loaded. Narrow the project or search filter.",
   "自定义权限": "Custom permissions",
   "模型未读取": "Model unavailable",

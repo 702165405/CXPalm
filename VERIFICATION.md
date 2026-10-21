@@ -4,6 +4,26 @@ This public record intentionally excludes real conversation titles, IDs,
 content, device identifiers, account counts, private paths and deployment logs.
 Private test evidence is not part of the source repository.
 
+## Unsupported Archive Actions Hidden (0.0.15 / build51)
+
+- No safe owner-side archive forwarding entry has been established for the
+  current desktop integration. Web and Android remove both archive actions;
+  archived-history browsing and read-only guards remain available. This is a
+  UI fallback, not a claim that desktop-held chats can now be archived remotely.
+- Go tests/vet and Windows amd64 / macOS amd64+arm64 cross-builds pass. The
+  macOS binaries are not runtime-tested here. All 63 Node checks and isolated
+  Chromium UI regressions pass, including desktop/mobile archived reading.
+- Android: 79 tests, 78 passed and one public-updater opt-in skipped by default;
+  Lint and normal APK assembly pass. The normal APK excludes rendering probes
+  and retains the package identity and existing project signer.
+- Four isolated Android 35 emulator cases pass: active and archived lists
+  verify their actual accessibility tree has a rendered session but no archive
+  or unarchive action; rejected and unknown historical receipts still render.
+  Accessibility must connect before Compose renders to expose the test tree.
+- Historical receipts, audit fences and non-replay protection are retained.
+  No real chat is resumed, archived or unarchived by these tests. No physical
+  phone acceptance is claimed.
+
 ## Compact Android Composer (0.0.14 / build50)
 
 - Go tests and Windows amd64 / macOS amd64+arm64 cross-builds pass for the

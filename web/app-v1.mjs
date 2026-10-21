@@ -288,7 +288,7 @@ function renderControls() {
   $('apply-settings').disabled=!writable||!state.settingsBase||!Object.keys(settingsChanges()).length;
   $('compact').disabled=!writable||active;
 
-  $('chat-status').textContent=pending?'操作等待确认，不会自动重发':!state.selected?'选择一个会话，继续电脑上的工作':!bridge.connected?(state.snapshot?'离线缓存 · 等待同步':'等待重新连接 · 草稿已保留'):state.selected.archived?'已归档 · 取消归档后可继续对话':!state.desktop?'正在同步官方桌面 · 历史暂为只读':active?'正在工作 · 你可以引导或停止任务':$('send-key').value==='enter'?'Enter 发送 · Shift + Enter 换行':'Ctrl / ⌘ + Enter 发送';
+  $('chat-status').textContent=pending?'操作等待确认，不会自动重发':!state.selected?'选择一个会话，继续电脑上的工作':!bridge.connected?(state.snapshot?'离线缓存 · 等待同步':'等待重新连接 · 草稿已保留'):state.selected.archived?'已归档 · 请在官方桌面取消归档后继续对话':!state.desktop?'正在同步官方桌面 · 历史暂为只读':active?'正在工作 · 你可以引导或停止任务':$('send-key').value==='enter'?'Enter 发送 · Shift + Enter 换行':'Ctrl / ⌘ + Enter 发送';
   for(const button of $('approvals').querySelectorAll('button'))button.disabled=!writable;
   const current=state.snapshot;
   for(const id of ['model-button','permission-button','plan-button','context-button'])$(id).disabled=!current||(state.cached&&id!=='context-button');
@@ -403,10 +403,7 @@ function renderLists() {
       let time=top.querySelector('time');
       if(stamp){const date=new Date(stamp*1000);if(!time){time=text('time','');top.append(time);}time.textContent=`${date.getMonth()+1}/${String(date.getDate()).padStart(2,'0')}`;time.dateTime=date.toISOString();time.title=`${item.lastReplyAt?'最后回复':'最近活动'} · ${date.toLocaleString()}`;}else time?.remove();
       if(!top.parentNode)button.append(top);button.onclick=()=>run(()=>selectChat({id:item.id,title:item.title||item.id,archived:!!item.archived}));
-      const archive=row.querySelector('.archive-action')||text('button','','archive-action');archive.textContent=item.archived?'↥':'↧';archive.type='button';archive.title=item.archived?'取消归档':'归档';archive.setAttribute('aria-label',`${archive.title}：${item.title||item.id}`);
-      archive.disabled=!bridge.connected||!!bridge.pendingFor(item.id)||(!item.archived&&(!item.live||['running','waiting','unknown'].includes(item.status||'unknown')));
-      archive.onclick=()=>run(async()=>{if(!confirm(`${item.archived?'取消归档':'归档'}“${item.title||item.id}”？不会删除会话。`))return;const receipt=await bridge.mutate(item.archived?'sessions.unarchive':'sessions.archive',{thread:item.id});if(receipt.status==='confirmed'&&state.selected?.id===item.id)state.selected.archived=!item.archived;await refreshLists();});
-      if(!button.parentNode)row.append(button,archive);nodes.push(row);
+      if(!button.parentNode)row.append(button);nodes.push(row);
     }
   }
   if(!nodes.length)nodes.push(text('p',state.archived?'没有已归档会话':'没有匹配的会话','sidebar-note'));

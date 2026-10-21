@@ -9,6 +9,15 @@ Versions describe implemented changes, not physical-device acceptance.
   privacy checks. Keep local account and runtime state outside Git.
 - Project license and public repository publication remain pending.
 
+## 0.0.15 (build51)
+
+- Remove Web and Android archive/unarchive buttons until a safe desktop-owner
+  forwarding path is available. Keep archived history browsing and read-only guards.
+- Direct archived-chat users to the official desktop to unarchive, rather than
+  referring to a removed mobile action. Preserve historical receipt recovery.
+- Add isolated active/archived list regressions; do not steal writer leases,
+  resume main chats in another executor or rewrite official archive metadata.
+
 ## 0.0.14 (Android / build50)
 
 - Compact the composer into one row; the input grows from one to four lines.

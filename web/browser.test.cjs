@@ -404,7 +404,7 @@ async function main() {
     await page.locator('#nav-chat').click();await page.locator('#pending').waitFor({state:'visible'});
     await page.locator('#archived-chats').click();await page.locator('#session-list .session-item').getByText('归档示例').click();
     await page.locator('#pending').waitFor({state:'hidden'});
-    assert.equal(await page.locator('.archive-action').isEnabled(),true);
+    assert.equal(await page.locator('.archive-action').count(),0);
     assert.equal(await page.locator('#new-chat').isEnabled(),true);
     assert.equal(await page.locator('#rename-chat').isEnabled(),true);
     await page.locator('#rename-chat').click();await page.locator('#rename-title').fill('Independent archive title');
@@ -552,7 +552,7 @@ async function main() {
     await capture('sessions-read-colors-light.png');
     const next=sessionPage({});next.items[0].status='running';next.items[0].unread=false;
     currentSocket.send(JSON.stringify({type:'sessions.page',data:{subscription:listSubscription,page:next}}));
-    await page.locator('#session-list .session-status.running').waitFor();assert.equal(await page.locator('.archive-action').isDisabled(),true);
+    await page.locator('#session-list .session-status.running').waitFor();assert.equal(await page.locator('.archive-action').count(),0);
     await page.locator('#session-list .session-status.running').evaluate(n=>window.fixtureStatusNode=n);
     currentSocket.send(JSON.stringify({type:'sessions.page',data:{subscription:listSubscription,page:next}}));
     await page.waitForTimeout(50);assert.equal(await page.locator('#session-list .session-status.running').evaluate(n=>n===window.fixtureStatusNode),true,'live list push reset breathing node');
@@ -692,11 +692,15 @@ async function main() {
     assert.equal(await page.locator('.session-status.running').first().evaluate(n=>getComputedStyle(n,'::after').animationName),'none');
     await page.emulateMedia({reducedMotion:'no-preference'});
     await page.locator('#archived-chats').click();await page.locator('#session-list .session-item').getByText('归档示例').waitFor();
-    assert.equal(await page.locator('.archive-action').isEnabled(),true);await capture('sessions-archive-desktop.png');
+    assert.equal(await page.locator('.archive-action').count(),0);await capture('sessions-archive-desktop.png');
     await page.locator('#session-list .session-item').click();await page.getByText('归档正文可以在桌面离线时只读查看。',{exact:true}).waitFor();
     assert.equal(await page.locator('#send').isDisabled(),true);assert.equal(await page.locator('#stop').isDisabled(),true);await capture('session-archive-body-desktop.png');
-    await page.locator('.archive-action').click();await page.getByText('没有已归档会话',{exact:true}).waitFor();
-    assert(sent.some(q=>q.method==='sessions.unarchive'&&q.thread==='archive-fixture'));
+    assert.match(await page.locator('#chat-status').textContent(),/请在官方桌面取消归档/);
+    await page.setViewportSize({width:390,height:844});
+    assert.equal(await page.locator('.archive-action').count(),0);
+    assert.equal(await page.locator('#send').isDisabled(),true);await capture('session-archive-body-mobile.png');
+    await page.setViewportSize({width:1440,height:960});
+    assert(!sent.some(q=>q.method==='sessions.archive'||q.method==='sessions.unarchive'),'UI dispatched an unsupported archive mutation');
     await page.locator('#active-chats').click();await page.locator('#session-list .session-item').waitFor();
     await page.locator('#project-filter').selectOption('project-fixture');
     await page.waitForFunction(()=>document.querySelector('#project-filter').value==='project-fixture');
@@ -737,7 +741,7 @@ async function main() {
     listError='会话列表同步暂不可用，正在重试';await page.locator('#refresh').click();await page.locator('#session-sync').filter({hasText:listError}).waitFor();
     listError='';await page.locator('#refresh').click();await page.locator('#session-sync').waitFor({state:'hidden'});
     listHistorical=true;await page.locator('#refresh').click();await page.waitForFunction(()=>document.querySelector('.session-item[data-thread="main-fixture"]').title.startsWith('历史记录'));
-    assert.equal(await page.locator('.session-row').filter({has:page.locator('[data-thread="main-fixture"]')}).locator('.archive-action').isDisabled(),true,'historical completion granted live archive authority');
+    assert.equal(await page.locator('.session-row').filter({has:page.locator('[data-thread="main-fixture"]')}).locator('.archive-action').count(),0,'history exposed an unsupported archive action');
     listHistorical=false;await page.locator('#refresh').click();await page.waitForFunction(()=>!document.querySelector('.session-item[data-thread="main-fixture"]').title.startsWith('历史记录'));
     const cold=snapshot();cold.data.connected=false;cold.data.error='desktop state changed; reconnect to request a fresh snapshot';cold.data.snapshot.historySource='rollout';cold.data.snapshot.threadRuntimeStatus={type:'unknown'};delete cold.data.snapshot.latestModel;delete cold.data.snapshot.latestReasoningEffort;
     currentSocket.send(JSON.stringify(cold));

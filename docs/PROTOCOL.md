@@ -52,6 +52,10 @@ command fingerprint; persisted audit records and operation-ID fences stay intact
 The current official follower protocol has no archive forwarding API. A desktop
 writer can retain ownership even while idle; archive there rather than stealing
 its writer lease or repeatedly starting metadata processes.
+Web and Android therefore hide archive/unarchive actions as of build51. Archived
+history remains readable. The protocol methods and historical receipt inspection
+remain available for compatibility; their presence is not a desktop-owner
+archive-forwarding capability.
 
 Chat identity is checked against official history and bound to its original
 owner. No main thread is independently resumed. Native execution snapshots are

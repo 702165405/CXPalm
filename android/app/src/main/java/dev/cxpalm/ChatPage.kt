@@ -59,7 +59,6 @@ fun sessionDate(session: JSONObject): String {
     var showProjects by rememberSaveable { mutableStateOf(false) }
     var creating by rememberSaveable { mutableStateOf(false) }
     var newProject by remember(state.current?.id, creating) { mutableStateOf(state.project.takeIf { it.isNotBlank() } ?: "none") }
-    var archiveTarget by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(search) { if(search!=state.sessionSearch) { kotlinx.coroutines.delay(250); client.sessionFilter(search=search) } }
     val groups=remember(state.sessions,grouped) { state.sessions.groupBy { if(grouped) it.optString("projectId","none") else "" } }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom=16.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -99,7 +98,6 @@ fun sessionDate(session: JSONObject): String {
             if(project.isNotEmpty()) item("project:$project") {Text("${rows.first().optString("projectName").ifBlank { tr("无项目") }} · ${rows.size}",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(start=4.dp,top=14.dp,bottom=2.dp))}
             itemsIndexed(rows,key={_,session->session.getString("id")}) { _,session ->
                 val id=session.getString("id");val status=session.optString("status","unknown");val archived=session.optBoolean("archived")
-                val canArchive=state.connected && state.pendingFor(id)==null && (archived || (session.optBoolean("live") && status !in listOf("unknown","running","waiting")))
                 Surface(onClick={client.subscribe(id)},enabled=true,shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.surface,border=androidx.compose.foundation.BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant)) {
                     Column(Modifier.fillMaxWidth().padding(start=14.dp,end=6.dp,top=12.dp,bottom=4.dp),verticalArrangement=Arrangement.spacedBy(2.dp)) {
                         Row(horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
@@ -109,12 +107,7 @@ fun sessionDate(session: JSONObject): String {
                         }
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
                             Text(if(archived) tr("已归档") else (if(session.optString("statusSource")=="history") tr("历史记录")+" · " else "")+sessionStatusLabel(status),Modifier.weight(1f),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1)
-                            TextButton(onClick={archiveTarget=if(archiveTarget==id) null else id},enabled=canArchive,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp)) {Text(if(archived) tr("取消归档") else tr("归档"),style=MaterialTheme.typography.labelSmall)}
                         }
-                        if(archiveTarget==id) {Text(tr("不会删除会话。确认更改归档状态？"),style=MaterialTheme.typography.bodySmall);Row {
-                            TextButton(onClick={client.archiveChat(id,!archived);archiveTarget=null},enabled=canArchive) {Text(tr("确认"))}
-                            TextButton(onClick={archiveTarget=null}) {Text(tr("取消"))}
-                        }}
                     }
                 }
             }
@@ -218,7 +211,7 @@ fun sessionDate(session: JSONObject): String {
                 Icon(painterResource(R.drawable.ic_rename),tr("重命名会话"))
             }
         }
-        if(state.threadArchived) NoticeCard(tr("已归档 · 只读历史"),tr("这里可以查看归档正文。返回会话列表取消归档后，才能继续对话。")) {}
+        if(state.threadArchived) NoticeCard(tr("已归档 · 只读历史"),tr("这里可以查看归档正文。请在官方桌面取消归档后继续对话。")) {}
         else if (state.connected && !state.desktopConnected) NoticeCard(tr("等待官方桌面"), tr("请保持电脑上的 Codex 原会话可用。此处不会另开执行器续跑主会话。")) {
             TextButton(onClick = { state.thread?.let(client::subscribe) }) { Text(tr("重新订阅")) }
         }
