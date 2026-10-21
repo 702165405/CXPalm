@@ -1,9 +1,9 @@
 {
-  "version": "0.0.14",
-  "versionCode": 50,
+  "version": "0.0.15",
+  "versionCode": 51,
   "package": "io.github.u702165405.cxpalm.debug",
-  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.14-build50/CXPalm-0.0.14-build50-debug.apk",
-  "size": 9868291,
-  "sha256": "378f8f44e5ce623075a37f323fba4071e2769685b23380df4f860d108c15513b",
-  "notes": "CXPalm Android 0.0.14 / build50: Compact single-row composer with one-to-four-line input. Conversation notifications move to an accessible bell in the controls strip. Attachments, image paste and active-turn steering share the attachment menu; stop appears only during an active turn. Existing send/queue guards, drafts, attachments, configuration and authorizations are preserved. Web and desktop/gateway remain 0.0.13/build49 and require no restart. Emulator checks are separate from physical-device acceptance."
+  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.15-build51/CXPalm-0.0.15-build51-debug.apk",
+  "size": 10341625,
+  "sha256": "f4bf8d31e2f41b933c565255842b84e86df5acc125a0086bcde596f3285fd21c",
+  "notes": "CXPalm 0.0.15 / build51: Hide unsupported archive and unarchive actions in Web and Android. Archived conversations remain available as read-only history; use the official desktop to change archive state. Preserve historical operation receipts, non-replay protection, drafts, attachments, configuration and authorizations. No writer lease is stolen and no second executor resumes main chats. Includes the compact Android composer and current desktop fixes. Build and emulator checks are separate from physical-device acceptance."
 }
