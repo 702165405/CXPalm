@@ -4,6 +4,20 @@ This public record intentionally excludes real conversation titles, IDs,
 content, device identifiers, account counts, private paths and deployment logs.
 Private test evidence is not part of the source repository.
 
+## Compact Android Composer (0.0.14 / build50)
+
+- Go tests and Windows amd64 / macOS amd64+arm64 cross-builds pass for the
+  approved source. No Go or Web runtime logic changes in this Android release.
+- All 36 i18n and Web protocol checks pass. Android unit tests, Lint and normal
+  APK assembly pass; the default suite skips the opt-in public updater check.
+- Isolated Android 35 emulator previews cover reading and a multiline draft
+  with the keyboard open. Accessibility inspection confirms a single input,
+  a labelled notification bell and no separate notification switch row.
+- The normal APK excludes rendering probes and retains the package ID and
+  existing signer. No physical-phone acceptance is claimed.
+- Web and desktop/gateway remain 0.0.13/build49; no service restart, policy
+  change, configuration migration or real-chat mutation is needed.
+
 ## Archive Rejection Recovery (0.0.13 / build49)
 
 - Go tests and vet pass; Windows amd64 and macOS amd64/arm64 cross-builds pass.

@@ -9,6 +9,16 @@ Versions describe implemented changes, not physical-device acceptance.
   privacy checks. Keep local account and runtime state outside Git.
 - Project license and public repository publication remain pending.
 
+## 0.0.14 (Android / build50)
+
+- Compact the composer into one row; the input grows from one to four lines.
+- Move conversation notifications to an accessible bell in the horizontally
+  scrollable controls strip, without a separate full-width switch row.
+- Put attachments, image paste and active-turn steering in the attachment menu;
+  show stop only during an active turn. Preserve send/queue and safety guards.
+- Add isolated reading and keyboard composer previews, excluded from normal APKs.
+- Web and desktop/gateway remain 0.0.13/build49 and need no restart.
+
 ## 0.0.13 (build49)
 
 - Treat exact official active-writer archive refusals and known archive

@@ -20,6 +20,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import org.json.JSONObject
 import androidx.compose.ui.res.painterResource
 import io.github.u702165405.cxpalm.R
@@ -223,9 +224,10 @@ fun sessionDate(session: JSONObject): String {
         }
     }
     var queueInspection by remember(state.current?.id,state.thread) { mutableStateOf<String?>(null) }
+    var attachmentMenu by remember(state.current?.id,state.thread) { mutableStateOf(false) }
     queueInspection?.let { id -> AlertDialog(onDismissRequest={queueInspection=null},title={Text(tr("核对排队消息"))},text={Text(tr("请先在官方桌面核对。移除后继续后面的队列，不会撤回已发送的消息，也不会重发本条。"))},confirmButton={TextButton(onClick={client.mutate("chat.queue.cancel",request=id);queueInspection=null}){Text(tr("核对后移除"))}},dismissButton={TextButton(onClick={queueInspection=null}){Text(tr("取消"))}}) }
     val composer: @Composable () -> Unit = {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             state.operationNotice(state.thread)?.takeUnless { it.optBoolean("legacy") }?.let { PendingNotice(it,state.connected,client) }
             state.snapshot?.optJSONObject("threadGoal")?.let { goal ->
                 Text("${tr("目标模式")} · ${goal.optString("objective")}",maxLines=2,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodySmall)
@@ -236,11 +238,6 @@ fun sessionDate(session: JSONObject): String {
                 }
             }
             ConversationControls(state, client, allowed)
-            Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
-                val notify=state.snapshot?.optJSONObject("notificationPreference")?.optBoolean("enabled")==true
-                Text(tr("会话通知"),modifier=Modifier.weight(1f),style=MaterialTheme.typography.labelMedium)
-                Switch(checked=notify,onCheckedChange=client::notifications,enabled=state.connected&&!state.cached&&state.pending==null)
-            }
             val queued = objects(state.snapshot?.optJSONArray("queuedMessages"))
             if(queued.isNotEmpty()) Surface(shape=MaterialTheme.shapes.medium,tonalElevation=2.dp) {
                 Column(Modifier.fillMaxWidth().heightIn(max=180.dp).verticalScroll(rememberScrollState()).padding(12.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -261,25 +258,40 @@ fun sessionDate(session: JSONObject): String {
             }
             Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp,
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
-                Column(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, bottom = 6.dp)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
                     attachments.forEach {file -> Row(Modifier.fillMaxWidth().padding(horizontal=8.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
                         Text("${if(file.optBoolean("image")) "▧" else "↥"} ${file.optString("name")} · ${fileSize(file.optLong("size"))}",modifier=Modifier.weight(1f),maxLines=2,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodySmall)
                         TextButton(onClick={client.removeAttachment(file.optString("id"))},enabled=state.pending==null) {Text(tr("移除附件"))}
                     }}
-                    TextField(draft, { draft = it; client.draft(it) }, placeholder = { Text(tr("继续这个桌面会话")) }, modifier = Modifier.fillMaxWidth().contentReceiver(receiveContent), maxLines = 5,
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.Bottom) {
+                        val attachAllowed=allowed&&!state.uploadBusy&&!state.goalDraft&&attachments.size<8
+                        Box {
+                            IconButton(onClick={attachmentMenu=true},enabled=attachAllowed || allowed&&active) {
+                                Icon(painterResource(R.drawable.ic_attach),tr("附件与更多操作"),Modifier.size(22.dp))
+                            }
+                            DropdownMenu(expanded=attachmentMenu,onDismissRequest={attachmentMenu=false}) {
+                                DropdownMenuItem(text={Text(tr(if(state.uploadBusy) "正在上传…" else "图片 / 文件"))},enabled=attachAllowed,
+                                    onClick={attachmentMenu=false;attachmentPicker.launch(arrayOf("*/*"))})
+                                DropdownMenuItem(text={Text(tr("粘贴图片"))},enabled=attachAllowed,onClick={
+                                    attachmentMenu=false
+                                    val clipboard=context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    val uri=clipboard.primaryClip?.let {clip -> (0 until clip.itemCount).mapNotNull {clip.getItemAt(it).uri}.firstOrNull {it.scheme=="content"}}
+                                    if(uri!=null)client.upload(uri) else client.reportError("剪贴板没有可读取的图片，请使用图片 / 文件选择器。")
+                                })
+                                if(active) DropdownMenuItem(text={Text(tr("引导"))},enabled=allowed&&!state.uploadBusy&&(draft.isNotBlank()||attachments.isNotEmpty()),
+                                    onClick={attachmentMenu=false;client.mutate("chat.steer",draft)})
+                            }
+                        }
+                    TextField(draft, { draft = it; client.draft(it) }, placeholder = { Text(tr("继续这个桌面会话"),maxLines=1,overflow=TextOverflow.Ellipsis) }, modifier = Modifier.weight(1f).contentReceiver(receiveContent), minLines = 1, maxLines = 4,
+                        textStyle=MaterialTheme.typography.bodyMedium,
                         colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent,
                             focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent))
-                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, androidx.compose.ui.Alignment.End), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        val attachAllowed=allowed&&!state.uploadBusy&&!state.goalDraft&&attachments.size<8
-                        TextButton(onClick={attachmentPicker.launch(arrayOf("*/*"))},enabled=attachAllowed) {Text(tr(if(state.uploadBusy) "正在上传…" else "图片 / 文件"))}
-                        TextButton(onClick={
-                            val clipboard=context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                            val uri=clipboard.primaryClip?.let {clip -> (0 until clip.itemCount).mapNotNull {clip.getItemAt(it).uri}.firstOrNull {it.scheme=="content"}}
-                            if(uri!=null)client.upload(uri) else client.reportError("剪贴板没有可读取的图片，请使用图片 / 文件选择器。")
-                        },enabled=attachAllowed) {Text(tr("粘贴图片"))}
-                        TextButton(onClick = { client.mutate("chat.stop") }, enabled = allowed && active, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text(tr("停止")) }
-                        TextButton(onClick = { client.mutate("chat.steer", draft) }, enabled = allowed && active && !state.uploadBusy && (draft.isNotBlank()||attachments.isNotEmpty())) { Text(tr("引导")) }
-                        Button(onClick = { client.mutate(messageSendMethod(active,queued.isNotEmpty()), draft) }, enabled = allowed && !state.uploadBusy && !(state.goalDraft&&attachments.isNotEmpty()) && (!(active || queued.isNotEmpty()) || state.snapshot?.optBoolean("queueAvailable")==true) && !((active || queued.isNotEmpty()) && state.goalDraft) && (draft.isNotBlank()||attachments.isNotEmpty())) { Text(tr(if(active || queued.isNotEmpty()) "排队发送" else "发送消息")) }
+                        if(active) IconButton(onClick = { client.mutate("chat.stop") }, enabled = allowed) {
+                            Icon(painterResource(R.drawable.ic_stop),tr("停止"),Modifier.size(20.dp),tint=MaterialTheme.colorScheme.error)
+                        }
+                        FilledIconButton(onClick = { client.mutate(messageSendMethod(active,queued.isNotEmpty()), draft) }, enabled = allowed && !state.uploadBusy && !(state.goalDraft&&attachments.isNotEmpty()) && (!(active || queued.isNotEmpty()) || state.snapshot?.optBoolean("queueAvailable")==true) && !((active || queued.isNotEmpty()) && state.goalDraft) && (draft.isNotBlank()||attachments.isNotEmpty()),modifier=Modifier.padding(bottom=4.dp)) {
+                            Icon(painterResource(R.drawable.ic_send),tr(if(active || queued.isNotEmpty()) "排队发送" else "发送消息"),Modifier.size(22.dp))
+                        }
                     }
                 }
             }
@@ -393,7 +405,6 @@ fun sessionDate(session: JSONObject): String {
     var confirmFull by remember(state.current?.id,state.thread,panel) { mutableStateOf(false) }
     val permissionLabel=when(current["permission"]) {"read-only" -> tr("只读");"workspace" -> tr("手动批准"); "auto-review" -> tr("帮我批准");"full" -> tr("完全访问");else -> tr("自定义权限")}
     val modelLabel=current["model"].orEmpty().ifBlank { tr("模型未读取") }
-    val effortLabel=effortLabel(current["effort"].orEmpty())
     val plan=current["mode"]=="plan"
     val goal=goalDraft || snapshot?.optJSONObject("threadGoal")?.optString("status")=="active"
     val changes=changedControlSettings(base,mapOf("model" to model,"effort" to effort,"permission" to permission,"mode" to mode),panel)
@@ -401,17 +412,23 @@ fun sessionDate(session: JSONObject): String {
     val running=snapshot?.optJSONObject("threadRuntimeStatus")?.optString("type")=="active"
     var confirmCompact by remember(state.current?.id,state.thread,panel) { mutableStateOf(false) }
     val usageColor=if((usage?.percent ?: 0)>=85) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
+      Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
         FilterChip(selected = panel == "context", onClick = { panel = if (panel == "context") null else "context" }, enabled = snapshot != null,
             modifier = Modifier.semantics { contentDescription = usage?.let { tr("上下文已使用 {0}%", it.percent) } ?: tr("上下文用量尚未提供") },
             leadingIcon = { if (usage != null) CircularProgressIndicator(progress = { usage.percent / 100f }, modifier = Modifier.size(16.dp), color = usageColor, strokeWidth = 2.dp, trackColor = MaterialTheme.colorScheme.outlineVariant)
                 else Box(Modifier.size(16.dp).border(1.5.dp, MaterialTheme.colorScheme.outline, CircleShape)) },
             label = { Text(usage?.let { "${it.percent}%" } ?: "—", maxLines = 1, style = MaterialTheme.typography.labelSmall) })
-        listOf("model" to "$modelLabel / $effortLabel", "permission" to permissionLabel, "plan" to if(goal) tr("目标模式") else if (plan) tr("计划模式") else tr("默认模式"), "skill" to "Skill${if (state.skills.isEmpty()) "" else " · ${state.skills.size}"}").forEach { (id, label) ->
+        listOf("model" to modelLabel, "permission" to permissionLabel, "plan" to if(goal) tr("目标模式") else if (plan) tr("计划模式") else tr("默认模式"), "skill" to "Skill${if (state.skills.isEmpty()) "" else " · ${state.skills.size}"}").forEach { (id, label) ->
             FilterChip(selected = panel == id || (id == "plan" && (plan||goal)), onClick = { panel = if (panel == id) null else id }, enabled = snapshot != null,
                 leadingIcon = when(id) { "permission" -> ({ Icon(painterResource(R.drawable.ic_shield), null, Modifier.size(16.dp)) }); "plan" -> ({ Icon(painterResource(if(plan) R.drawable.ic_plan else R.drawable.ic_chat_mode), tr("默认 / 计划 / 目标"), Modifier.size(20.dp)) }); else -> null },
-                label = { if(id != "plan") Text(label, maxLines = 1, style = MaterialTheme.typography.labelSmall) })
+                label = { if(id != "plan") Text(label, maxLines = 1, overflow=TextOverflow.Ellipsis,modifier=Modifier.widthIn(max=120.dp),style = MaterialTheme.typography.labelSmall) })
         }
+      }
+      val notify=snapshot?.optJSONObject("notificationPreference")?.optBoolean("enabled")==true
+      IconToggleButton(checked=notify,onCheckedChange=client::notifications,enabled=state.connected&&!state.cached&&state.pending==null) {
+          Icon(painterResource(R.drawable.ic_bell),tr(if(notify) "会话通知：开" else "会话通知：关"),Modifier.size(22.dp),tint=if(notify) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+      }
     }
     if (panel != null) Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column(Modifier.fillMaxWidth().heightIn(max = 200.dp).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -23,6 +23,31 @@ class RenderingProbeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val case = intent.getStringExtra("case") ?: "long-code"
+        if(case=="composer-preview" || case=="composer-preview-long") {
+            val client=fixtureClient()
+            client.draft(if(case.endsWith("-long")) "先检查移动端的阅读空间。\n输入多行时再展开。\n保留附件、引导和排队功能。" else "")
+            val computer=Computer("preview","本地工作台","https://fixture.invalid","synthetic-only")
+            val turns=JSONArray()
+            listOf(
+                "这个页面最需要优化哪里？" to "优先把空间留给会话正文。输入区只保留最常用的操作，其余功能在需要时展开。",
+                "会话通知还需要保留。" to "通知仍按会话单独控制，不改变订阅和授权逻辑。这是一段用于界面预览的示例内容，不是真实模型执行结果。",
+                "附件和长消息也要能正常使用。" to "可以继续选择文件、粘贴图片和输入多行消息。发送、引导与排队的行为保持不变。"
+            ).forEachIndexed { i,(question,answer) ->
+                turns.put(JSONObject().put("turnId","preview-$i").put("status","completed").put("items",JSONArray()
+                    .put(JSONObject().put("id","question-$i").put("type","userMessage").put("text",question))
+                    .put(JSONObject().put("id","answer-$i").put("type","agentMessage").put("text",answer))))
+            }
+            val snapshot=JSONObject().put("turns",turns).put("threadRuntimeStatus",JSONObject().put("type","idle"))
+                .put("latestModel","gpt-5.3-codex").put("latestReasoningEffort","high")
+                .put("latestThreadSettings",JSONObject().put("activePermissionProfile",JSONObject().put("id",":workspace")))
+                .put("notificationPreference",JSONObject().put("enabled",false))
+                .put("latestTokenUsageInfo",JSONObject().put("last",JSONObject().put("inputTokens",8400)).put("modelContextWindow",200000))
+            val state=ViewState(computers=listOf(computer),current=computer,thread="preview-chat",connected=true,desktopConnected=true,
+                sessions=listOf(JSONObject().put("id","preview-chat").put("title","界面预览 · 示例会话")),snapshot=snapshot)
+            val updates=UpdateManager(this)
+            setContent { CxpalmTheme { PalmApp(state,client,UpdateState(),updates,false,{},{},{},{},{},false,{}) } }
+            return
+        }
         if(case.startsWith("archive-")) {
             check(case in listOf("archive-rejected","archive-other-chat","archive-unknown","archive-legacy"))
             val client=fixtureClient()
@@ -90,16 +115,18 @@ class RenderingProbeActivity : ComponentActivity() {
 
 class RenderingProbeRunner : Instrumentation() {
     private var case = "long-code"
+    private var holdMs = 6000L
     override fun onCreate(arguments: Bundle?) {
         super.onCreate(arguments)
         case = arguments?.getString("case") ?: case
+        if(case.startsWith("composer-preview")) holdMs=arguments?.getString("holdMs")?.toLongOrNull()?.coerceIn(6000,60000) ?: holdMs
         start()
     }
     override fun onStart() {
         val activity = startActivitySync(Intent(targetContext, RenderingProbeActivity::class.java)
             .putExtra("case", case).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         // Markdown parsing and the following Compose measure happen asynchronously.
-        Thread.sleep(6000)
+        Thread.sleep(holdMs)
         waitForIdleSync()
         runOnMainSync { activity.finish() }
         finish(Activity.RESULT_OK, Bundle().apply { putString("result", "PASS: $case rendered without process death; heap limit=${java.lang.Runtime.getRuntime().maxMemory()}") })
