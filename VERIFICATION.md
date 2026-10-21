@@ -17,6 +17,13 @@ Private test evidence is not part of the source repository.
   existing signer. No physical-phone acceptance is claimed.
 - Web and desktop/gateway remain 0.0.13/build49; no service restart, policy
   change, configuration migration or real-chat mutation is needed.
+- All three public Android release assets pass fresh size/SHA-256 checks.
+  The main Android feed matches build50; the desktop feed remains build49.
+  The Android updater's opt-in JVM check reads the public feed and verifies
+  the downloaded APK. It does not install the APK on a physical phone.
+- Merge retains the remote desktop form-input and macOS titlebar changes.
+  All 25 desktop unit tests and isolated Electron UI regression checks pass;
+  these desktop source changes are not repackaged in this Android-only release.
 
 ## Archive Rejection Recovery (0.0.13 / build49)
 
