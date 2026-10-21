@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import {SnapshotStream,Bridge, conversation, approvalDecisions, contextUsage, StateSequence, NotificationInbox, sessionSettings, changedSettings, turnElapsed, activeQuestionIndex, computerAddress, extendHistory, mergeHistoryTurns, sessionIndicator, effortLabel, ReadingCache, offlineReading} from './protocol-v1.mjs';
 
 const secret = 'a'.repeat(64);
+test('permission approvals stay turn-scoped and unsupported choices fail closed',()=>{
+  const request={method:'item/permissions/requestApproval',params:{permissions:{network:{enabled:true}}}};
+  assert.deepEqual(approvalDecisions(request),['accept','decline']);
+  assert.deepEqual(approvalDecisions({...request,params:{permissions:{future:true}}}),['decline']);
+  assert.deepEqual(approvalDecisions({...request,params:{}}),[]);
+  for(const availableDecisions of [[],null,{},[{acceptForSession:{}}]])assert.deepEqual(approvalDecisions({method:'item/commandExecution/requestApproval',params:{availableDecisions}}),[]);
+  assert.deepEqual(approvalDecisions({method:'item/fileChange/requestApproval',params:{availableDecisions:['cancel']}}),['cancel']);
+});
 test('conversation preserves text as text and approval choices fail closed', () => {
   const messages = conversation([{items:[{type:'userMessage',content:[{text:'<img onerror=alert(1)>'}]},
     {type:'agentMessage',text:'```js\ncode\n```',truncated:true},{type:'commandExecution',aggregatedOutput:'output'}]}]);

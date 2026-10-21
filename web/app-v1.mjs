@@ -621,12 +621,19 @@ function renderConversation() {
     card.append(text('strong', '需要你确认'), text('p', request.params?.command || request.params?.reason || request.method));
     const details = document.createElement('details');
     details.append(text('summary', '查看请求详情'), text('pre', JSON.stringify(request.params || {}, null, 2))); card.append(details);
+    const permissionRequest=request.method==='item/permissions/requestApproval';
+    if(permissionRequest) {
+      details.open=true;
+      card.append(text('p','仅批准请求中列出的权限，限当前轮次，不会永久授权。'));
+    }
+    const thread=state.selected.id,requestSignature=JSON.stringify(request);
     const actions = document.createElement('div'); actions.className = 'actions';
     for (const decision of approvalDecisions(request)) {
-      const button = text('button', decision === 'accept' ? '仅批准这一次' : '拒绝'); button.type = 'button';
+      const button = text('button', decision === 'accept' ? (permissionRequest?'批准本轮权限':'仅批准这一次') : decision==='cancel'?'取消请求':'拒绝'); button.type = 'button';
       button.addEventListener('click', () => run(async () => {
+        if(state.selected?.id!==thread||!state.snapshot?.requests?.some(current=>JSON.stringify(current)===requestSignature))return;
         if (decision === 'accept' && !confirm('仅批准这一次请求？请先核对操作详情。')) return;
-        await write('chat.approve', {thread: state.selected.id, requestId: String(request.id), decision});
+        await write('chat.approve', {thread, requestId: String(request.id), decision});
       })); actions.append(button);
     }
     if (!actions.children.length) actions.append(text('p', '此类型的请求请在官方 Codex 桌面处理。'));

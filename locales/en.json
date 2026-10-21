@@ -738,5 +738,10 @@
   "操作未发送，草稿已保留": "Operation not sent; draft retained",
   "附件与更多操作": "Attachments and more actions",
   "会话通知：开": "Conversation notifications: on",
-  "会话通知：关": "Conversation notifications: off"
+  "会话通知：关": "Conversation notifications: off",
+  "批准本轮权限": "Approve for this turn",
+  "仅批准请求中列出的权限，限当前轮次，不会永久授权。": "Grant only the listed permissions for this turn, never permanently.",
+  "请先核对操作详情，再批准这一次请求。": "Review the operation details before approving this request.",
+  "确认批准": "Confirm approval",
+  "取消请求": "Cancel request"
 }

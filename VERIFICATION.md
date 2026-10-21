@@ -4,6 +4,25 @@ This public record intentionally excludes real conversation titles, IDs,
 content, device identifiers, account counts, private paths and deployment logs.
 Private test evidence is not part of the source repository.
 
+## Turn-Scoped Permission Approvals (0.0.16 / build52)
+
+- Web and Android handle command, file-change and permission-request approvals.
+  Permission grants are constructed from the current owner's request and use
+  turn scope only. Unknown permission-profile fields cannot be approved.
+- Native pipe fixtures verify accept/deny routing to the original desktop
+  owner, numeric request-ID preservation and the permission-response protocol.
+  Expired or changed requests are rejected before dispatch; native transport
+  uncertainty remains non-replayable. These are fixtures, not real approvals.
+- Go tests/vet, Windows amd64 and macOS amd64/arm64 cross-builds pass. All 64
+  Node checks and isolated Chromium approval/denial/cancellation checks pass.
+- Android: 80 tests, 79 passed and one public-updater opt-in skipped by default;
+  Lint and normal APK assembly pass. The APK retains its package ID and signer
+  and excludes rendering probes.
+- Five isolated Android 35 emulator cases pass, including confirmation before
+  approval, offered-decision filtering and the fixed approval area. The normal
+  APK also survives an emulator cold start. No physical-phone or macOS runtime
+  acceptance is claimed; no real conversation request is approved by tests.
+
 ## Unsupported Archive Actions Hidden (0.0.15 / build51)
 
 - No safe owner-side archive forwarding entry has been established for the

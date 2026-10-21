@@ -1,9 +1,9 @@
 {
-  "version": "0.0.15",
-  "versionCode": 51,
+  "version": "0.0.16",
+  "versionCode": 52,
   "package": "io.github.u702165405.cxpalm.debug",
-  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.15-build51/CXPalm-0.0.15-build51-debug.apk",
-  "size": 10341625,
-  "sha256": "f4bf8d31e2f41b933c565255842b84e86df5acc125a0086bcde596f3285fd21c",
-  "notes": "CXPalm 0.0.15 / build51: Hide unsupported archive and unarchive actions in Web and Android. Archived conversations remain available as read-only history; use the official desktop to change archive state. Preserve historical operation receipts, non-replay protection, drafts, attachments, configuration and authorizations. No writer lease is stolen and no second executor resumes main chats. Includes the compact Android composer and current desktop fixes. Build and emulator checks are separate from physical-device acceptance."
+  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.16-build52/CXPalm-0.0.16-build52-debug.apk",
+  "size": 9868439,
+  "sha256": "58b034b2d1b1a4f864cf86b6a9f82ab9386fa31372d8a17c29f00be9f7cacded",
+  "notes": "CXPalm 0.0.16 / build52: Web and Android can approve or deny official permission requests through the original desktop owner. Grants contain only the permissions requested by the desktop and expire at the end of the turn; no permanent or session-wide grants are offered. Command and file approvals respect the offered decisions. Android pins pending approvals above the composer and confirms grants with full request details. Expired, changed, unknown or unsupported requests fail closed; uncertain writes are never automatically replayed. Existing settings, authorizations and IP policy are preserved. Unit, fixture and emulator checks are not physical-device acceptance."
 }

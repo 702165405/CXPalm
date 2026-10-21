@@ -7,7 +7,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import org.json.JSONArray
 import org.json.JSONObject
@@ -23,6 +26,16 @@ class RenderingProbeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val case = intent.getStringExtra("case") ?: "long-code"
+        if(case=="approval-permission" || case=="approval-decline-only") {
+            val request=if(case=="approval-permission") JSONObject("""{"id":42,"method":"item/permissions/requestApproval","params":{"reason":"Fixture only: network access","permissions":{"network":{"enabled":true}}}}""")
+                else JSONObject("""{"id":43,"method":"item/commandExecution/requestApproval","params":{"command":"fixture only - not executed","availableDecisions":["decline"]}}""")
+            setContent { CxpalmTheme { Column {
+                var choice by remember { mutableStateOf("none") }
+                ApprovalCard(request,true) {choice=it}
+                Text("fixture-decision:$choice")
+            } } }
+            return
+        }
         if(case=="sessions-active" || case=="sessions-archived") {
             val client=fixtureClient()
             val archived=case=="sessions-archived"
@@ -32,7 +45,7 @@ class RenderingProbeActivity : ComponentActivity() {
             setContent { CxpalmTheme { SessionsPage(state,client) } }
             return
         }
-        if(case=="composer-preview" || case=="composer-preview-long") {
+        if(case=="composer-preview" || case=="composer-preview-long" || case=="composer-preview-approval") {
             val client=fixtureClient()
             client.draft(if(case.endsWith("-long")) "先检查移动端的阅读空间。\n输入多行时再展开。\n保留附件、引导和排队功能。" else "")
             val computer=Computer("preview","本地工作台","https://fixture.invalid","synthetic-only")
@@ -53,6 +66,7 @@ class RenderingProbeActivity : ComponentActivity() {
                 .put("latestTokenUsageInfo",JSONObject().put("last",JSONObject().put("inputTokens",8400)).put("modelContextWindow",200000))
             val state=ViewState(computers=listOf(computer),current=computer,thread="preview-chat",connected=true,desktopConnected=true,
                 sessions=listOf(JSONObject().put("id","preview-chat").put("title","界面预览 · 示例会话")),snapshot=snapshot)
+            if(case=="composer-preview-approval") snapshot.put("requests",JSONArray("""[{"id":42,"method":"item/permissions/requestApproval","params":{"threadId":"preview-chat","reason":"Fixture network access","permissions":{"network":{"enabled":true}}}}]"""))
             val updates=UpdateManager(this)
             setContent { CxpalmTheme { PalmApp(state,client,UpdateState(),updates,false,{},{},{},{},{},false,{}) } }
             return
@@ -132,12 +146,38 @@ class RenderingProbeRunner : Instrumentation() {
         start()
     }
     override fun onStart() {
-        val automation=if(case=="sessions-active" || case=="sessions-archived") uiAutomation else null
+        val automation=if(case=="sessions-active" || case=="sessions-archived" || case.startsWith("approval-") || case=="composer-preview-approval") uiAutomation else null
         val activity = startActivitySync(Intent(targetContext, RenderingProbeActivity::class.java)
             .putExtra("case", case).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         // Markdown parsing and the following Compose measure happen asynchronously.
         Thread.sleep(holdMs)
         waitForIdleSync()
+        if(case.startsWith("approval-") || case=="composer-preview-approval") {
+            fun nodes(node: android.view.accessibility.AccessibilityNodeInfo): List<android.view.accessibility.AccessibilityNodeInfo> =
+                listOf(node)+(0 until node.childCount).flatMap { index -> node.getChild(index)?.let(::nodes).orEmpty() }
+            fun visible()=nodes(checkNotNull(automation?.rootInActiveWindow))
+            fun find(vararg text: String)=visible().firstOrNull {it.text?.toString() in text}
+            fun click(node: android.view.accessibility.AccessibilityNodeInfo) {
+                var target=node
+                while(!target.isClickable) target=checkNotNull(target.parent)
+                check(target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
+                Thread.sleep(400);waitForIdleSync()
+            }
+            if(case=="approval-decline-only") {
+                check(find("仅批准这一次","Approve once")==null)
+                click(checkNotNull(find("拒绝","Decline")))
+                check(find("fixture-decision:decline")!=null)
+            } else {
+                val approve=checkNotNull(find("批准本轮权限","Approve for this turn"))
+                check(approve.isVisibleToUser)
+                if(case=="approval-permission") {
+                    click(approve)
+                    check(find("fixture-decision:accept")==null) {"Approval skipped confirmation"}
+                    click(checkNotNull(find("确认批准","Confirm approval")))
+                    check(find("fixture-decision:accept")!=null)
+                }
+            }
+        }
         if(case=="sessions-active" || case=="sessions-archived") {
             fun labels(node: android.view.accessibility.AccessibilityNodeInfo): List<String> =
                 listOfNotNull(node.text?.toString(),node.contentDescription?.toString()) +

@@ -5,6 +5,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UiModelsTest {
+    @Test fun approvalChoicesFailClosedAndNeverGrantForSession() {
+        fun request(method: String,params: String)=JSONObject().put("method",method).put("params",JSONObject(params))
+        assertEquals(listOf("accept","decline"),approvalDecisions(request("item/permissions/requestApproval","""{"permissions":{"network":{"enabled":true}}}""")))
+        assertEquals(listOf("decline"),approvalDecisions(request("item/permissions/requestApproval","""{"permissions":{"future":true}}""")))
+        assertTrue(approvalDecisions(request("item/permissions/requestApproval","{}")).isEmpty())
+        for(choices in listOf("[]","null","{}","[{\"acceptForSession\":{}}]")) {
+            assertTrue(approvalDecisions(request("item/commandExecution/requestApproval","{\"availableDecisions\":$choices}")).isEmpty())
+        }
+        assertEquals(listOf("cancel"),approvalDecisions(request("item/fileChange/requestApproval","""{"availableDecisions":["cancel"]}""")))
+        assertTrue(approvalDecisions(request("unknown","{}")).isEmpty())
+    }
     @Test fun onlyOfficialUnreadAndActiveWorkNeedSessionIndicators() {
         for(status in listOf("idle","completed","failed","interrupted","unknown")) {
             assertNull(sessionIndicator(status,false));assertNull(sessionIndicator(status,null))

@@ -21,9 +21,10 @@ var methods = map[string]int{
 	"thread-follower-start-turn": 2, "thread-follower-steer-turn": 1,
 	"thread-follower-interrupt-turn": 4, "thread-follower-load-complete-history": 1,
 	"thread-follower-command-approval-decision": 1, "thread-follower-file-approval-decision": 1,
-	"thread-follower-submit-user-input":      1,
-	"thread-follower-update-thread-settings": 2,
-	"thread-follower-compact-thread":         1,
+	"thread-follower-permissions-request-approval-response": 1,
+	"thread-follower-submit-user-input":                     1,
+	"thread-follower-update-thread-settings":                2,
+	"thread-follower-compact-thread":                        1,
 }
 
 type Frame struct {

@@ -9,6 +9,16 @@ Versions describe implemented changes, not physical-device acceptance.
   privacy checks. Keep local account and runtime state outside Git.
 - Project license and public repository publication remain pending.
 
+## 0.0.16 (build52)
+
+- Support official permission-request approval and denial on Web and Android,
+  forwarding to the original desktop owner without a second executor.
+- Grant only the exact requested permissions for the current turn; never offer
+  permanent or session-wide permission grants.
+- Respect offered command/file decisions, including cancellation; unknown and
+  expired requests remain protected and uncertain mutations are never replayed.
+- Pin Android approvals above the composer and confirm grants with full details.
+
 ## 0.0.15 (build51)
 
 - Remove Web and Android archive/unarchive buttons until a safe desktop-owner

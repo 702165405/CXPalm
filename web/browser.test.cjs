@@ -35,6 +35,8 @@ async function main() {
   let imageFixture=false;
   let nativeGoal=null;
   let settings={model:"fixture",effort:"high",mode:"default",permission:":workspace"};
+  const commandApproval={id:'approval-fixture',method:'item/commandExecution/requestApproval',params:{command:'fixture only - not executed',availableDecisions:['accept','decline']}};
+  let approvalRequests=[commandApproval];
   const snapshot = () => ({type: 'chat.state', data: {id: 'main-fixture', sequence:++sequence,readToken:replyToken, connected: true, snapshot: {
     notificationPreference,queuedMessages,queueAvailable:true,threadGoal:nativeGoal,goalRevision:'fixture-goal-revision',goalAvailable:true,hasUnreadTurn:sharedReadToken!==replyToken,latestModel:settings.model,latestReasoningEffort:settings.effort,latestCollaborationMode:{mode:settings.mode},latestThreadSettings:{activePermissionProfile:{id:settings.permission==='auto-review'?':workspace':settings.permission},approvalsReviewer:settings.permission==='auto-review'?'auto_review':'user'},controlsRevision:'fixture-revision',latestTokenUsageInfo:{last:{inputTokens:2000},modelContextWindow:10000},threadRuntimeStatus: {type: active ? 'active' : 'idle'}, observedAtMs:Date.now(),turns: [{turnId:'t69',status:active?'inProgress':'completed',turnStartedAtMs,...(active?{}:{durationMs:764351}),items: [
       {type: 'userMessage', text: '检查这个功能的安全边界。'},
@@ -42,8 +44,7 @@ async function main() {
       {id:'tool-fixture',type:'commandExecution',command:'fixture command --not-executed',status:processRunning?'inProgress':processRevision?'completed':'inProgress',text:'',deferred:true,bodyRevision:'fixture-body-'+processRevision},
       {id:'reason-fixture',type:'reasoning',summary:[`Visible **reasoning summary** ${processRevision}`, '<img src=x onerror="window.xss=true">']},
       ...(imageFixture?[{id:'returned-image',type:'imageGeneration',text:'',images:[{id:'f'.repeat(64),name:'fixture-returned.png'}]}]:[]),
-    ]}].concat(sentTurn?[sentTurn]:[]), requests: [{id: 'approval-fixture', method: 'item/commandExecution/requestApproval',
-      params: {command: 'fixture only - not executed', availableDecisions: ['accept', 'decline']}}],
+    ]}].concat(sentTurn?[sentTurn]:[]), requests: approvalRequests,
   }}});
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
@@ -287,6 +288,25 @@ async function main() {
     await page.locator('#stop').click();
     await page.getByRole('button',{name:'仅批准这一次',exact:true}).click();
     await page.locator('#pending').waitFor({state:'hidden'});
+    const permissionApproval={id:42,method:'item/permissions/requestApproval',params:{threadId:'main-fixture',reason:'Fixture network access',permissions:{network:{enabled:true}}}};
+    approvalRequests=[permissionApproval];currentSocket.send(JSON.stringify(snapshot()));
+    await page.getByRole('button',{name:'批准本轮权限',exact:true}).waitFor();
+    assert.equal(await page.locator('#approvals details').getAttribute('open'),'');
+    const acceptedPermission=once(commands,'chat.approve');
+    await page.getByRole('button',{name:'批准本轮权限',exact:true}).click();
+    await acceptedPermission;
+    await page.locator('#pending').waitFor({state:'hidden'});
+    assert(sent.some(q=>q.method==='chat.approve'&&q.requestId==='42'&&q.decision==='accept'&&!q.permissions&&!q.response));
+    const deniedPermission=once(commands,'chat.approve');
+    await page.getByRole('button',{name:'拒绝',exact:true}).click();
+    await deniedPermission;
+    await page.locator('#pending').waitFor({state:'hidden'});
+    assert(sent.some(q=>q.method==='chat.approve'&&q.requestId==='42'&&q.decision==='decline'));
+    approvalRequests=[{...commandApproval,params:{availableDecisions:['cancel']}}];currentSocket.send(JSON.stringify(snapshot()));
+    await page.getByRole('button',{name:'取消请求',exact:true}).waitFor();
+    assert.equal(await page.locator('#approvals button').count(),1);
+    approvalRequests=[commandApproval];currentSocket.send(JSON.stringify(snapshot()));
+    await page.getByRole('button',{name:'仅批准这一次',exact:true}).waitFor();
     await capture('chat-desktop.png');
     assert.equal(await page.locator('#nav-git').count(),0);
     assert.equal(await page.locator('#create-side').count(),0);

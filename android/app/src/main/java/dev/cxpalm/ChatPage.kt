@@ -221,6 +221,12 @@ fun sessionDate(session: JSONObject): String {
     queueInspection?.let { id -> AlertDialog(onDismissRequest={queueInspection=null},title={Text(tr("核对排队消息"))},text={Text(tr("请先在官方桌面核对。移除后继续后面的队列，不会撤回已发送的消息，也不会重发本条。"))},confirmButton={TextButton(onClick={client.mutate("chat.queue.cancel",request=id);queueInspection=null}){Text(tr("核对后移除"))}},dismissButton={TextButton(onClick={queueInspection=null}){Text(tr("取消"))}}) }
     val composer: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            val requests=objects(state.snapshot?.optJSONArray("requests"))
+            if(requests.isNotEmpty()) Column(Modifier.fillMaxWidth().heightIn(max=200.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                requests.forEach { request -> androidx.compose.runtime.key(state.thread,request.toString()) {
+                    ApprovalCard(request, allowed) { decision -> client.mutate("chat.approve", request=request.optString("id"),decision=decision) }
+                } }
+            }
             state.operationNotice(state.thread)?.takeUnless { it.optBoolean("legacy") }?.let { PendingNotice(it,state.connected,client) }
             state.snapshot?.optJSONObject("threadGoal")?.let { goal ->
                 Text("${tr("目标模式")} · ${goal.optString("objective")}",maxLines=2,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodySmall)
@@ -349,9 +355,6 @@ fun sessionDate(session: JSONObject): String {
                     if(index in footerIndices) CompletedTurnTime(timings[message.turn])
                 }
             }
-            objects(state.snapshot?.optJSONArray("requests")).forEach { request -> item("approval:${request.optString("id")}") {
-                ApprovalCard(request, allowed) { decision -> client.mutate("chat.approve", request = request.optString("id"), decision = decision) }
-            } }
             if(state.historyPage?.optBoolean("hasMore")==true) item("history-next") {TextButton(enabled=!state.historyLoading,onClick={client.history(cursor=null,offset=state.historyPage.optInt("offset")+objects(state.historyPage.optJSONArray("turns")).size,extend=true)}) {Text(tr("后面的内容"))}}
         }
         if (showLatest) FilledTonalIconButton(

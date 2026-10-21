@@ -566,52 +566,29 @@ func (b *Bridge) ControlActionFiles(ctx context.Context, id, operation, action, 
 		p["mode"] = "user-stop"
 		p["expectedTurnId"] = turn
 	case "chat.approve":
-		requests, _ := raw["requests"].([]any)
-		var pending map[string]any
-		for _, r := range requests {
-			v, ok := r.(map[string]any)
-			if ok && fmtID(v["id"]) == requestID {
-				pending = v
-				break
-			}
+		var payload map[string]any
+		method, payload, e = approvalAction(raw, id, requestID, decision)
+		if e != nil {
+			return nil, &Rejected{Code: "approval_not_dispatched", Message: e.Error()}
 		}
-		if pending == nil {
-			return nil, errors.New("approval request has expired")
+		for key, value := range payload {
+			p[key] = value
 		}
-		switch pending["method"] {
-		case "item/commandExecution/requestApproval":
-			method = "thread-follower-command-approval-decision"
-		case "item/fileChange/requestApproval":
-			method = "thread-follower-file-approval-decision"
-		default:
-			return nil, errors.New("this request must be handled in official desktop")
-		}
-		var d string
-		if json.Unmarshal(decision, &d) != nil || (d != "accept" && d != "decline" && d != "cancel") {
-			return nil, errors.New("unsupported approval decision")
-		}
-		if params, ok := pending["params"].(map[string]any); ok {
-			if available, ok := params["availableDecisions"].([]any); ok && len(available) > 0 {
-				allowed := false
-				for _, item := range available {
-					if item == d {
-						allowed = true
-					}
-				}
-				if !allowed {
-					return nil, errors.New("decision is not offered by this approval")
-				}
-			}
-		}
-		p["requestId"] = pending["id"]
-		p["decision"] = d
 	default:
 		return nil, errors.New("operation is not allowlisted")
 	}
 	// Re-check ownership immediately before dispatch; desktop still arbitrates its own concurrency.
 	latest, e := b.nativeSnapshot(id)
 	if e != nil || latest.Owner != s.Owner {
+		if action == "chat.approve" {
+			return nil, &Rejected{Code: "approval_owner_changed", Message: "desktop owner changed before approval dispatch; refresh and review again"}
+		}
 		return nil, errors.New("desktop owner changed before dispatch")
+	}
+	if action == "chat.approve" {
+		if approvalFingerprint(raw, requestID) != approvalFingerprint(latest.snapshotValue(), requestID) {
+			return nil, &Rejected{Code: "approval_changed", Message: "approval request changed before dispatch; refresh and review again"}
+		}
 	}
 	callCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()

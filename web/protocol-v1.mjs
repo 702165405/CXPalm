@@ -74,9 +74,14 @@ export function conversation(turns = []) {
 }
 
 export function approvalDecisions(request) {
+  if(request.method==='item/permissions/requestApproval') {
+    const permissions=request.params?.permissions;
+    if(!permissions||typeof permissions!=='object'||Array.isArray(permissions))return [];
+    return Object.keys(permissions).every(key=>['network','fileSystem'].includes(key))?['accept','decline']:['decline'];
+  }
   if (!['item/commandExecution/requestApproval', 'item/fileChange/requestApproval'].includes(request.method)) return [];
   const available = request.params?.availableDecisions;
-  return ['accept', 'decline'].filter(value => !Array.isArray(available) || !available.length || available.includes(value));
+  return ['accept', 'decline', 'cancel'].filter(value => available === undefined ? value!=='cancel' : Array.isArray(available) && available.includes(value));
 }
 
 export function contextUsage(snapshot) {
