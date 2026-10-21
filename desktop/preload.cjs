@@ -1,5 +1,6 @@
 const {contextBridge,ipcRenderer} = require('electron');
 contextBridge.exposeInMainWorld('cxDesktop',Object.freeze({
+  platform:process.platform,
   getLanguage:()=>ipcRenderer.invoke('desktop:language-get'),
   setLanguage:value=>ipcRenderer.invoke('desktop:language-set',value),
   invoke:(method,args={})=>ipcRenderer.invoke('desktop:invoke',{method,args}),

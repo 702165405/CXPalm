@@ -24,6 +24,7 @@ html,body{font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
 .eyebrow,.tag,.nav-key,.nav-count,.version,.art-footer,.page-footer>span:last-child{font-family:var(--font)}
 button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .titlebar{background:var(--surface);border-bottom:1px solid var(--line);color:var(--muted);font:12px var(--font);letter-spacing:0}
+html[data-platform=darwin] .titlebar{padding-left:84px;padding-right:20px}
 #fixture-label{color:#9a4a14;background:#fff4e5;padding:2px 8px;border-radius:999px}
 
 /* Sidebar */

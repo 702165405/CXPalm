@@ -1,6 +1,7 @@
 (async()=>{
 const $=id=>document.getElementById(id);
 const api=window.cxDesktop;
+document.documentElement.dataset.platform=api.platform;
 const initialLanguage=await api.getLanguage();
 const languageUI=CXPalmI18n.create(initialLanguage.messages,initialLanguage.language);
 const tr=(value,...args)=>languageUI.tr(value,...args);
@@ -15,7 +16,7 @@ function localizeStatic(){
  $('desktop-language').value=languageUI.code;
 }
 localizeStatic();
-let state={state:'unconfigured'},currentPage='overview',busy=false,revoking='',lastError='',policyDirty=false;
+let state={state:'unconfigured'},currentPage='overview',busy=false,backgroundRefresh=null,revoking='',lastError='',policyDirty=false;
 let savedSettings=null,connectionDirty=false,startupDirty=false,loginSettings=null,loginDirty=false;
 let update={phase:'idle',currentVersion:'0.0.1',supported:false,release:null,message:tr('正在读取更新状态')};
 const events=[];
@@ -62,7 +63,9 @@ function render(){
  ];
  $('checks').replaceChildren(...checks.map(([name,value,color])=>{const row=text('div','','check');row.append(text('span',name),text('strong',value,color));return row;}));
 }
-async function run(fn){if(busy)return;busy=true;render();try{await fn();}catch(error){notify(errors[error.message]||error.message||tr('操作未完成，请刷新状态。'));}finally{busy=false;render();}}
+// Polling leaves forms editable; manual actions wait for an outstanding read.
+async function run(fn){if(busy)return;busy=true;render();try{await backgroundRefresh;await fn();}catch(error){notify(errors[error.message]||error.message||tr('操作未完成，请刷新状态。'));}finally{busy=false;render();}}
+function refreshInBackground(){if(busy||backgroundRefresh)return;backgroundRefresh=refresh().catch(error=>notify(errors[error.message]||error.message||tr('操作未完成，请刷新状态。'))).finally(()=>{backgroundRefresh=null;});}
 async function refresh(){setState(await api.invoke('status'));if(state.startupError&&state.startupError!==lastError){lastError=state.startupError;notify(state.startupError);}if(state.error&&state.error!==lastError){lastError=state.error;notify(state.error);}if(currentPage==='devices')await loadDevices();}
 function switchDeviceTab(logs){
  $('active-device-panel').hidden=logs;$('device-log-panel').hidden=!logs;
@@ -110,9 +113,9 @@ $('confirm-revoke').addEventListener('click',()=>run(async()=>{await api.invoke(
 $('dismiss-notice').addEventListener('click',()=>$('notice').hidden=true);
 activity(tr('控制台已就绪，尚未启动 Agent'));
 void run(refresh);
-setInterval(()=>{if(!busy)void run(refresh);},5000);
+setInterval(refreshInBackground,5000);
 
-api.onChanged(()=>{if(!busy)void run(refresh);});
+api.onChanged(refreshInBackground);
 
 $('tab-active').addEventListener('click',()=>switchDeviceTab(false));$('tab-logs').addEventListener('click',()=>switchDeviceTab(true));
 $('policy-enabled').addEventListener('change',()=>{policyDirty=true;$('policy-toggle-label').textContent=$('policy-enabled').checked?tr('开启'):tr('关闭');$('policy-status').textContent=tr('有未保存的修改，点击保存后生效');});
