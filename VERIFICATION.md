@@ -4,6 +4,51 @@ This public record intentionally excludes real conversation titles, IDs,
 content, device identifiers, account counts, private paths and deployment logs.
 Private test evidence is not part of the source repository.
 
+## Session-Scoped Approval And Read Availability (0.0.19 / build55)
+
+- Web and Android approve for the current conversation only when the original
+  owner request explicitly offers persistence. Command and file requests need
+  `acceptForSession` in `availableDecisions`; MCP tool confirmations need the
+  original request to offer the session scope and are answered with the owner's
+  scoped form response. Permission-profile requests stay turn-only, no permanent
+  `always` grant is exposed, and nothing is cached globally by the gateway.
+  Both clients confirm the scope before sending; uncertain mutations stay
+  non-replayable and the original desktop owner keeps its own safety checks.
+- Unavailable desktop identity is now an optional-feature state, not a read
+  error: Web and Android keep chatting normally, report cross-device read
+  receipt and per-chat notification features as temporarily unavailable, never
+  guess an account, never mark an unconfirmed reply read, and never replay a
+  previous account's notification journal. Saved preferences, authorization
+  and IP policy are preserved.
+- Go tests/vet, Windows amd64 and macOS amd64/arm64 cross-builds pass. All 65
+  Node checks pass and the isolated Chromium UI suite passes, covering
+  approve-once/session/decline/cancel for MCP confirmations and the
+  identity-unavailable path. The approval steps in that suite now await the
+  exact `chat.approve` frame: a preceding `confirm()` dialog can delay an
+  earlier approval, so the previous "any chat.approve" wait was a harness race
+  that also failed on the previous commit. This is a test-synchronisation fix,
+  not a product change.
+- Android: 81 unit tests, 80 passed and one public-updater opt-in skipped by
+  default; Lint and normal APK assembly pass. The normal APK excludes rendering
+  probes, keeps its package ID and existing signer, and survives an isolated
+  Android 35 emulator cold start (process alive, empty crash buffer).
+- Twenty-two isolated Android 35 emulator rendering cases pass, including the
+  new session-scoped approval probe and the identity-unavailable probe. They
+  use synthetic fixtures; no real approval is submitted and no physical-phone
+  acceptance is claimed.
+- All six public release assets and the four deployed Web entry/module files
+  pass fresh byte and SHA-256 checks. Both repository feeds match build55. The
+  actual Electron updater recognizes 0.0.19 as current, offers and downloads
+  the public upgrade, and rechecks it before installation without executing the
+  installer; the actual Android updater's opt-in JVM check reads build55 from
+  the public feed and verifies the downloaded APK.
+- Installed desktop/gateway file hashes match the package and protected
+  configuration, preferences, authorizations, IP policy, shortcuts and OS
+  startup settings are unchanged. The reopened desktop app started the agent
+  and local health reports 0.0.19; the public session route still returns 401
+  without authorization. No server, firewall, TLS, proxy or permission change
+  is part of this release.
+
 ## MCP Tool Confirmation Buttons (0.0.17 / build53)
 
 - A read-only original-owner subscription confirms the previously unsupported
