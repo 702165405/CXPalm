@@ -18,6 +18,10 @@ Private test evidence is not part of the source repository.
 - No Android device was attached for this fix. Unit/build checks do not claim
   physical-device acceptance. No live chat mutation is part of these tests.
 - Web and Android are updated; desktop/gateway remain 0.0.10/build46.
+- All three GitHub release assets and the deployed Web entry/versioned modules
+  pass fresh public size/SHA-256 checks. The Android updater's separate opt-in
+  JVM test reads build48 and verifies its downloaded APK. Both repository feeds
+  match their committed manifests; local gateway health remains 0.0.10.
 
 ## Android Question Navigation (0.0.11 / build47)
 
