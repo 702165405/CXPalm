@@ -17,7 +17,7 @@ test('shared catalogue has English values and retains numbered substitutions',()
 });
 test('desktop and Android explicit UI text keys are covered; user content is not swept',()=>{
  const root=path.resolve(__dirname,'../..');
- const files=['desktop/ui/app.js','android/app/src/main/java/dev/cxpalm/SettingsPage.kt','android/app/src/main/java/dev/cxpalm/PalmApp.kt','android/app/src/main/java/dev/cxpalm/ChatPage.kt','android/app/src/main/java/dev/cxpalm/PalmComponents.kt','android/app/src/main/java/dev/cxpalm/ConnectionService.kt','android/app/src/main/java/dev/cxpalm/UiModels.kt','android/app/src/main/java/dev/cxpalm/TaskTiming.kt'];
+ const files=['desktop/ui/app.js','android/app/src/main/java/dev/cxpalm/SettingsPage.kt','android/app/src/main/java/dev/cxpalm/PalmApp.kt','android/app/src/main/java/dev/cxpalm/ChatPage.kt','android/app/src/main/java/dev/cxpalm/PalmComponents.kt','android/app/src/main/java/dev/cxpalm/ConnectionService.kt','android/app/src/main/java/dev/cxpalm/UiModels.kt','android/app/src/main/java/dev/cxpalm/TaskTiming.kt','android/app/src/main/java/dev/cxpalm/PendingNotice.kt'];
  for(const file of files){const source=fs.readFileSync(path.join(root,file),'utf8');for(const match of source.matchAll(/tr\((['"])((?:\\.|(?!\1).)*?)\1/gs)){
    const key=match[2].replace(/\\n/g,'\n');if(/[\p{Script=Han}]/u.test(key))assert.ok(Object.hasOwn(messages,key),file+': '+key);
  }}

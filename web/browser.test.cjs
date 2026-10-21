@@ -392,6 +392,29 @@ async function main() {
     await page.locator('#messages .message').first().waitFor();
     assert.equal(sent.filter(q=>q.text==='uncertain fixture').length,1);
     await page.locator('#ack-pending').click();await page.locator('#pending').waitFor({state:'hidden'});
+    // Upgrade an existing, conversation-scoped unknown archive without a global UI lock.
+    receipts.set('scoped-archive',{id:'scoped-archive',status:'unknown',result:{error:'official metadata API: thread main-fixture already has an active writer'}});
+    await page.evaluate(()=>{
+      localStorage.setItem('cxpalm:pending:ui-fixture-device',JSON.stringify({id:'scoped-archive',thread:'main-fixture',method:'sessions.archive'}));
+      window.dispatchEvent(new Event('storage'));
+    });
+    await page.locator('#pending').waitFor({state:'visible'});
+    assert.equal(await page.locator('#send').isDisabled(),true);
+    await page.locator('#nav-settings').click();await page.locator('#pending').waitFor({state:'hidden'});
+    await page.locator('#nav-chat').click();await page.locator('#pending').waitFor({state:'visible'});
+    await page.locator('#archived-chats').click();await page.locator('#session-list .session-item').getByText('归档示例').click();
+    await page.locator('#pending').waitFor({state:'hidden'});
+    assert.equal(await page.locator('.archive-action').isEnabled(),true);
+    assert.equal(await page.locator('#new-chat').isEnabled(),true);
+    assert.equal(await page.locator('#rename-chat').isEnabled(),true);
+    await page.locator('#rename-chat').click();await page.locator('#rename-title').fill('Independent archive title');
+    await page.locator('#save-rename').click();await page.locator('#rename-panel').waitFor({state:'hidden'});
+    assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('cxpalm:pending:ui-fixture-device')).length),1);
+    await page.locator('#active-chats').click();await page.locator('#session-list .session-item').click();
+    await page.locator('#pending').waitFor({state:'visible'});await page.locator('#check-pending').click();
+    await page.locator('#pending-detail').filter({hasText:'active writer'}).waitFor();
+    await page.locator('#ack-pending').click();await page.locator('#pending').waitFor({state:'hidden'});
+    assert.equal(sent.filter(q=>q.method==='sessions.archive'&&q.id==='scoped-archive').length,0);
     await page.setViewportSize({width:390,height:844});
     await page.locator('#show-list').click();
     await page.locator('#session-list .session-item').click();

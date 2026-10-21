@@ -4,6 +4,21 @@ This public record intentionally excludes real conversation titles, IDs,
 content, device identifiers, account counts, private paths and deployment logs.
 Private test evidence is not part of the source repository.
 
+## Conversation-Scoped Receipts (0.0.12 / build48)
+
+- Go tests/vet and Windows amd64 / macOS amd64+arm64 cross-builds pass.
+- All 62 Node tests and isolated Chromium UI fixtures pass. Regressions cover
+  unknown archives, independent conversation mutations, cross-tab journals,
+  legacy Web recovery, contextual warnings and operation-ID-specific inspection.
+- Android: 78 tests, 77 passed and one opt-in public-network test skipped;
+  Lint and normal APK assembly pass. The existing package ID and signer remain
+  unchanged. Rendering probes are absent from the normal APK.
+- Old Android journals containing only an ID remain protected until inspected;
+  no conversation is guessed and no uncertain request is replayed.
+- No Android device was attached for this fix. Unit/build checks do not claim
+  physical-device acceptance. No live chat mutation is part of these tests.
+- Web and Android are updated; desktop/gateway remain 0.0.10/build46.
+
 ## Android Question Navigation (0.0.11 / build47)
 
 - A private local snapshot replay on Android 35 reproduced a main-thread
@@ -57,7 +72,7 @@ Private test evidence is not part of the source repository.
 
 ## Source Baseline
 
-- Android source: 0.0.11 / versionCode 47; Web/desktop/gateway: 0.0.10.
+- Web / Android source: 0.0.12 / versionCode 48; desktop/gateway: 0.0.10.
 - Desktop package: releaseBuild 46.
 - Previous local records report passing Go tests/vet, Windows amd64 and macOS
   amd64/arm64 cross-builds, Web and desktop tests, Android unit tests, Lint and

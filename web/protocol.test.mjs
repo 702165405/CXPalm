@@ -26,6 +26,39 @@ function fixture(existingStorage) {
   return {bridge,data,sockets,reply,hello};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+test('unknown archive locks only its conversation, including across tabs and reloads',async()=>{
+  const {bridge,data,sockets,reply}=fixture();
+  let locked=false;
+  bridge.lock=async(_key,action)=>{if(locked)return action(false);locked=true;try{return await action(true);}finally{locked=false;}};
+  const archive=bridge.mutate('sessions.archive',{thread:'a'});await tick();
+  const a=bridge.pendingFor('a').id;
+  // A network round trip must not hold the storage lock for every conversation.
+  const send=bridge.mutate('chat.send',{thread:'b',text:'independent'});await tick();
+  const b=bridge.pendingFor('b').id;
+  assert.equal(sockets[0].sent.length,2);
+  reply('result',{id:b,status:'confirmed'});await send;
+  sockets[0].onmessage({data:JSON.stringify({id:a,type:'result',data:{id:a,status:'unknown',result:{error:'active writer'}}})});await archive;
+  assert.equal(bridge.pendingFor('b'),null);
+  assert.equal(bridge.receiptFor(bridge.pendingFor('a')).result.error,'active writer');
+  const next=fixture(data);
+  await assert.rejects(next.bridge.mutate('sessions.rename',{thread:'a',text:'duplicate'}),/未确认/);
+  assert.equal(next.sockets[0].sent.length,0);
+  const create=next.bridge.mutate('sessions.create',{project:'none'});await tick();
+  next.reply('result',{id:next.bridge.pendingFor(null).id,status:'unknown'});await create;
+  const ack=next.bridge.acknowledge(a);await tick();next.reply('result',{id:a,status:'unknown'});await tick();
+  next.reply('result',{id:a,status:'acknowledged'});await ack;
+  assert.equal(next.bridge.pendingFor('a'),null);
+  assert.ok(next.bridge.pendingFor(null));
+  assert.equal(next.sockets[0].sent.filter(op=>op.method==='sessions.archive').length,0);
+});
+test('legacy web pending records keep their original thread affinity',async()=>{
+  const data=new Map([['cxpalm:pending:device',JSON.stringify({id:'old',thread:'a',method:'sessions.archive'})]]);
+  const {bridge,reply}=fixture(data);
+  assert.equal(bridge.pendingFor('a').id,'old');assert.equal(bridge.pendingFor('b'),null);
+  const operation=bridge.mutate('chat.send',{thread:'b',text:'new'});await tick();
+  reply('result',{id:bridge.pendingFor('b').id,status:'not_sent'});await operation;
+  assert.equal(bridge.pendingFor('a').id,'old');assert.equal(bridge.pendingFor('b'),null);
+});
 test('fenced not-sent receipt releases a stranded pending send without losing draft or attachments', async () => {
   const {bridge,sockets,reply}=fixture();
   const key=bridge.draftKey('thread'),files='cxpalm:attachments:device:thread';

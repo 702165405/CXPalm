@@ -64,7 +64,7 @@ fun sessionDate(session: JSONObject): String {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom=16.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
         item("heading") { Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)) {
             Column(Modifier.weight(1f)) { SectionTitle(tr("会话"),tr("按项目整理，与桌面实时同步")) }
-            TextButton(onClick={creating=!creating},enabled=state.connected && state.pending==null,modifier=Modifier.padding(top=12.dp)) {Text(tr("＋ 新建"))}
+            TextButton(onClick={creating=!creating},enabled=state.connected,modifier=Modifier.padding(top=12.dp)) {Text(tr("＋ 新建"))}
             TextButton(onClick=client::refresh,enabled=state.connected,modifier=Modifier.padding(top=12.dp)) {Text(tr("刷新"))}
         } }
         sessionSyncIssue(state.sessionSync,state.connected)?.let { issue ->
@@ -87,17 +87,18 @@ fun sessionDate(session: JSONObject): String {
                 Text(tr("可以选择无项目，使用独立工作目录。创建后自动打开官方桌面，连接成功即可发送消息。"),style=MaterialTheme.typography.bodySmall)
                 FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp)) { FilterChip(selected=newProject=="none",onClick={newProject="none"},label={Text(tr("无项目 · 独立工作目录"))});state.projects.forEach { p -> FilterChip(selected=newProject==p.optString("id"),onClick={newProject=p.optString("id")},label={Text(p.optString("name"))}) } }
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    Button(onClick={client.createChat(newProject);creating=false},enabled=state.connected && state.pending==null && newProject.isNotBlank()) {Text(tr("创建"))}
+                    Button(onClick={client.createChat(newProject);creating=false},enabled=state.connected && state.pendingFor(null)==null && newProject.isNotBlank()) {Text(tr("创建"))}
                     TextButton(onClick={creating=false}) {Text(tr("取消"))}
                 }
             }
         } }
+        state.pendingFor(null)?.let { operation -> item("pending") { PendingNotice(operation,state.connected,client) } }
         item("search") {OutlinedTextField(search,{search=it},modifier=Modifier.fillMaxWidth(),placeholder={Text(tr("搜索会话或工作目录"))},singleLine=true,shape=MaterialTheme.shapes.medium,colors=OutlinedTextFieldDefaults.colors(unfocusedContainerColor=MaterialTheme.colorScheme.surface,focusedContainerColor=MaterialTheme.colorScheme.surface,unfocusedBorderColor=MaterialTheme.colorScheme.outlineVariant))}
         groups.forEach { (project,rows) ->
             if(project.isNotEmpty()) item("project:$project") {Text("${rows.first().optString("projectName").ifBlank { tr("无项目") }} · ${rows.size}",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(start=4.dp,top=14.dp,bottom=2.dp))}
             itemsIndexed(rows,key={_,session->session.getString("id")}) { _,session ->
                 val id=session.getString("id");val status=session.optString("status","unknown");val archived=session.optBoolean("archived")
-                val canArchive=state.connected && state.pending==null && (archived || (session.optBoolean("live") && status !in listOf("unknown","running","waiting")))
+                val canArchive=state.connected && state.pendingFor(id)==null && (archived || (session.optBoolean("live") && status !in listOf("unknown","running","waiting")))
                 Surface(onClick={client.subscribe(id)},enabled=true,shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.surface,border=androidx.compose.foundation.BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant)) {
                     Column(Modifier.fillMaxWidth().padding(start=14.dp,end=6.dp,top=12.dp,bottom=4.dp),verticalArrangement=Arrangement.spacedBy(2.dp)) {
                         Row(horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
@@ -225,6 +226,7 @@ fun sessionDate(session: JSONObject): String {
     queueInspection?.let { id -> AlertDialog(onDismissRequest={queueInspection=null},title={Text(tr("核对排队消息"))},text={Text(tr("请先在官方桌面核对。移除后继续后面的队列，不会撤回已发送的消息，也不会重发本条。"))},confirmButton={TextButton(onClick={client.mutate("chat.queue.cancel",request=id);queueInspection=null}){Text(tr("核对后移除"))}},dismissButton={TextButton(onClick={queueInspection=null}){Text(tr("取消"))}}) }
     val composer: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            state.pendingFor(state.thread)?.takeUnless { it.optBoolean("legacy") }?.let { PendingNotice(it,state.connected,client) }
             state.snapshot?.optJSONObject("threadGoal")?.let { goal ->
                 Text("${tr("目标模式")} · ${goal.optString("objective")}",maxLines=2,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodySmall)
                 Row {

@@ -121,7 +121,6 @@ class UiModelsTest {
         val current = ViewState(current=first,thread="first-thread",snapshot=JSONObject("""{"id":"first"}"""),
             historyPage=JSONObject(),historyIndex=JSONObject(),historyTarget="old-target",historyLoading=true,
             readToken="first-token",sharedReadSync=true,connected=true,sequence=999,pending="unknown",project="old-project")
-        assertFalse(canSwitchComputer(current,second.id));assertTrue(canSwitchComputer(current,first.id))
         val next = computerConnectionState(current.copy(pending=null),second,"second-thread","second-pending",setOf("second-skill"))
         assertEquals(second,next.current);assertEquals("second-thread",next.thread)
         assertNull(next.snapshot);assertNull(next.historyPage);assertNull(next.historyIndex);assertNull(next.historyTarget)

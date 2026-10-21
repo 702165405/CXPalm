@@ -32,7 +32,6 @@ import io.github.u702165405.cxpalm.R
     var page by rememberSaveable { mutableStateOf("sessions") }
     val savedScreens = rememberSaveableStateHolder()
     var loginOpen by remember { mutableStateOf(false) }
-    var acknowledge by remember { mutableStateOf(false) }
     var notices by remember { mutableStateOf(false) }
     var updatePrompt by remember { mutableStateOf(false) }
     var promptedVersion by rememberSaveable { mutableIntStateOf(0) }
@@ -66,7 +65,7 @@ import io.github.u702165405.cxpalm.R
                             DropdownMenu(expanded = quickComputers && page == "sessions", onDismissRequest = { quickComputers = false }) {
                                 Text(tr("快速切换电脑"), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium)
                                 state.computers.forEach { computer ->
-                                    DropdownMenuItem(enabled = canSwitchComputer(state, computer.id), text = {
+                                    DropdownMenuItem(text = {
                                         Column {
                                             Text(computer.name + if (computer.id == state.current?.id) " · " + tr("当前电脑") else "")
                                             Text(when {
@@ -82,7 +81,6 @@ import io.github.u702165405.cxpalm.R
                                 }
                                 HorizontalDivider()
                                 DropdownMenuItem(text = { Text(tr("管理电脑")) }, onClick = { quickComputers = false; page = "computers" })
-                                if (state.pending != null) Text(tr("操作结果未知，请先核对当前电脑，再切换连接。"), Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall)
                             }
                         }
                         if (page == "sessions") IconButton(onClick = { quickComputers = true }) { Icon(painterResource(R.drawable.ic_monitor), tr("快速切换电脑")) }
@@ -97,10 +95,10 @@ import io.github.u702165405.cxpalm.R
             }
         }) { inner ->
         Column(Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner).padding(horizontal = 16.dp).padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            AnimatedVisibility(state.pending != null || state.error != null || (state.current != null && !state.connected), enter = fadeIn(), exit = fadeOut()) {
+            AnimatedVisibility(state.error != null || (state.current != null && !state.connected), enter = fadeIn(), exit = fadeOut()) {
                 Surface(onClick = { notices = true }, color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(when { state.pending != null -> tr("操作结果未知，请勿重发"); state.error != null -> tr("有一条连接或操作提示"); else -> tr("连接已断开，内容仍可查看") }, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        Text(when { state.error != null -> tr("有一条连接或操作提示"); else -> tr("连接已断开，内容仍可查看") }, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                         Text(tr("查看"), Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelLarge)
                     }
                 }
@@ -124,10 +122,6 @@ import io.github.u702165405.cxpalm.R
     }
     if (notices) AlertDialog(onDismissRequest = { notices = false }, title = { Text(tr("连接与操作状态")) }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (state.pending != null) NoticeCard(tr("操作结果尚未确认"), tr("不要重复发送。先检查电脑上的实际结果，再核对操作回执。")) {
-                TextButton(onClick = client::checkPending, enabled = state.connected) { Text(tr("核对回执")) }
-                TextButton(onClick = { notices = false; acknowledge = true }, enabled = state.connected) { Text(tr("我已检查结果")) }
-            }
             if (state.error != null) NoticeCard(tr("连接或操作提示"), tr(state.error), error = true) { TextButton(onClick = client::clearError) { Text(tr("关闭提示")) } }
             if (state.current != null && !state.connected) NoticeCard(tr("连接已断开"), tr("连接恢复前不能发送；结果未知的操作不会自动重放。")) {
                 IconButton(onClick = { client.connect(state.current); notices = false }) { Icon(painterResource(R.drawable.ic_refresh), tr("重新连接")) }
@@ -142,10 +136,6 @@ import io.github.u702165405.cxpalm.R
         }
     }, confirmButton = { TextButton(onClick = { updatePrompt = false; page = "settings"; updates.download() }) { Text(tr("下载更新")) } },
         dismissButton = { TextButton(onClick = { updatePrompt = false }) { Text(tr("稍后")) } })
-    if (acknowledge) AlertDialog(onDismissRequest = { acknowledge = false }, title = { Text(tr("确认已人工检查？")) },
-        text = { Text(tr("先在官方桌面检查实际结果。这只解除结果未知的提示，不会取消、撤销、确认成功或重新发送原操作。")) },
-        confirmButton = { TextButton(onClick = { client.acknowledgePending(); acknowledge = false }) { Text(tr("已检查，解除提示")) } },
-        dismissButton = { TextButton(onClick = { acknowledge = false }) { Text(tr("返回")) } })
     if(loginOpen) LoginDialog(client,state.current?.origin.orEmpty()) { loginOpen=false }
 }
 

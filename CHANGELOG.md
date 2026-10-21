@@ -9,6 +9,17 @@ Versions describe implemented changes, not physical-device acceptance.
   privacy checks. Keep local account and runtime state outside Git.
 - Project license and public repository publication remain pending.
 
+## 0.0.12 (Web / Android / build48)
+
+- Scope unresolved operations, receipt details and write protection to the
+  affected conversation instead of blocking the entire computer.
+- Keep other conversations, new-chat creation and computer navigation usable;
+  creation has its own pending-operation scope.
+- Correlate recovery and manual inspection by operation ID. Reconnect queries
+  receipts only and never replays uncertain writes. Retain legacy journals;
+  ID-only Android records require inspection before releasing write protection.
+- Windows/gateway remain 0.0.10/build46 and do not need a restart.
+
 ## 0.0.11 (Android / build47)
 
 - Fix a frame-order race in question navigation that could pass a negative

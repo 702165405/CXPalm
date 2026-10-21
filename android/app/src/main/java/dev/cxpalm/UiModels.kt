@@ -79,8 +79,6 @@ internal fun questionAtPosition(questions: List<JSONObject>, position: Float): S
     if (!position.isFinite() || position < 0) null
     else questions.getOrNull(position.toInt())?.optString("turn")?.takeIf { it.isNotBlank() }
 
-fun canSwitchComputer(state: ViewState, target: String): Boolean = state.current?.id == target || state.pending == null
-
 fun computerConnectionState(state: ViewState, computer: Computer, thread: String?, pending: String?, skills: Set<String>): ViewState {
     val same = state.current?.id == computer.id
     return state.copy(current = computer, sessions = if (same) state.sessions else emptyList(), projects = if (same) state.projects else emptyList(),

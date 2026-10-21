@@ -1,9 +1,9 @@
 {
-  "version": "0.0.11",
-  "versionCode": 47,
+  "version": "0.0.12",
+  "versionCode": 48,
   "package": "io.github.u702165405.cxpalm.debug",
-  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.11-build47/CXPalm-0.0.11-build47-debug.apk",
-  "size": 9865673,
-  "sha256": "870295ff476a8f14bf6aaa2772624d24c4b74e52d14ad8d7450d8840e98f38dd",
-  "notes": "CXPalm Android 0.0.11 / build47: Fix a question-navigation frame race that could pass -1 to the list and crash shortly after opening a conversation. Capture and validate the scroll target across frame suspension, and ignore stale slider positions. No message truncation, account reset or data deletion. Web and Windows/gateway remain 0.0.10 / build46 and do not need a restart."
+  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.12-build48/CXPalm-0.0.12-build48-debug.apk",
+  "size": 9865805,
+  "sha256": "70732ef2b2665a38ff89200c991fcee67e04ce731a8f2414e4fde7af06e6284b",
+  "notes": "CXPalm Web / Android 0.0.12 / build48: Scope unresolved operations and receipt warnings to their conversation. Other conversations, new-chat creation and computer navigation remain usable. Reconnect checks original receipts only; uncertain writes never auto-replay. Keep prior journals and require inspection for old Android ID-only records. Existing configuration, authorization and drafts are preserved. Windows/gateway remain 0.0.10 / build46 and need no restart."
 }

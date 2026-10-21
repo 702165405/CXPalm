@@ -133,7 +133,6 @@ import java.util.Date
 @Composable fun ComputersPage(state: ViewState, client: BridgeClient, login: () -> Unit, select: (Computer) -> Unit) {
     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { Text(tr("选择本次对话使用的电脑。其他已登录电脑的提醒监听不受切换影响。"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        if (state.pending != null) item { Text(tr("操作结果未知，请先核对当前电脑，再切换连接。"), color = MaterialTheme.colorScheme.error) }
         state.computers.forEach { computer -> item(key = computer.id) {
             val current = state.current?.id == computer.id
             Surface(shape = MaterialTheme.shapes.large, color = if (current) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
@@ -146,11 +145,11 @@ import java.util.Date
                     Text(computer.origin, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (current) Text(when { state.desktopConnected -> tr("官方桌面已连接"); state.connected -> tr("Agent 已连接"); else -> tr("已断开") }, style = MaterialTheme.typography.bodySmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton(onClick = { select(computer) }, enabled = state.pending == null) {
+                        FilledTonalButton(onClick = { select(computer) }, enabled = true) {
                             Text(if (!current) tr("使用这台电脑") else if (state.connected) tr("返回会话") else tr("重新连接"))
                         }
-                        TextButton(onClick = {client.logout(computer)},enabled=state.pending==null&&!client.loginBusy) {Text(tr("退出登录"))}
-                        if (current && state.connected) TextButton(onClick = client::disconnect, enabled = state.pending == null) { Text(tr("断开连接")) }
+                        TextButton(onClick = {client.logout(computer)},enabled=!client.hasPending(computer)&&!client.loginBusy) {Text(tr("退出登录"))}
+                        if (current && state.connected) TextButton(onClick = client::disconnect, enabled = true) { Text(tr("断开连接")) }
                     }
                 }
             }
@@ -161,7 +160,7 @@ import java.util.Date
                     Text(tr("添加电脑"), style = MaterialTheme.typography.titleSmall)
                     Text(tr("在电脑设置登录账号，再输入 HTTPS 地址、账号和密码。"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton(onClick = login, enabled = !client.loginBusy && state.pending == null) { Text(tr("账号登录")) }
+                        FilledTonalButton(onClick = login, enabled = !client.loginBusy) { Text(tr("账号登录")) }
                     }
                 }
             }

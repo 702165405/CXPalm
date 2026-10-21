@@ -100,10 +100,20 @@ export class Bridge {
     this.receipt = null;
   }
   get pendingKey() { return `cxpalm:pending:${this.device.id}`; }
-  get pending() {
+  get pendings() {
     const raw = this.device && this.storage.getItem(this.pendingKey);
-    return raw ? JSON.parse(raw) : null;
+    const saved = raw ? JSON.parse(raw) : [];
+    return Array.isArray(saved) ? saved : [saved];
   }
+  get pending() { return this.pendings[0] || null; }
+  pendingFor(thread) { return this.pendings.find(op => (op.thread || null) === (thread || null)) || null; }
+  savePending(operation, remove = false) {
+    const operations = this.pendings.filter(op => op.id !== operation.id);
+    if (!remove) operations.push(operation);
+    if (operations.length) this.storage.setItem(this.pendingKey, JSON.stringify(operations));
+    else this.storage.removeItem(this.pendingKey);
+  }
+  receiptFor(pending) { return pending?.receipt || null; }
   draftKey(thread, side = false) { return `cxpalm:draft:${this.device.id}:${side ? 'side' : 'main'}:${thread}`; }
   connect(device) {
     this.disconnect();
@@ -172,8 +182,10 @@ export class Bridge {
     });
   }
   async applyReceipt(receipt) {
-    const pending = this.pending;
-    if (!pending || receipt.id !== pending.id) throw new Error('操作回执不匹配。');
+    return this.lock(`cxpalm:write:${this.device.id}`, async acquired => {
+    if (!acquired) throw new Error('另一个标签页正在核对回执，请重试。');
+    const pending = this.pendings.find(op => op.id === receipt.id);
+    if (!pending) throw new Error('操作回执不匹配。');
     this.receipt = receipt;
     if (['confirmed', 'acknowledged', 'not_sent'].includes(receipt.status)) {
       if(receipt.status==='confirmed'&&pending.attachmentKey&&pending.attachmentIDs){
@@ -183,41 +195,50 @@ export class Bridge {
       if (receipt.status === 'confirmed' && pending.draftKey && pending.draftDigest) {
         const text = this.storage.getItem(pending.draftKey);
         if (text !== null && await this.digest(text) === pending.draftDigest &&
-            this.storage.getItem(pending.draftKey) === text && this.pending?.id === pending.id) this.storage.removeItem(pending.draftKey);
+            this.storage.getItem(pending.draftKey) === text && this.pendings.some(op => op.id === pending.id)) this.storage.removeItem(pending.draftKey);
       }
       // A late response must not clear another tab's newer pending operation.
-      if (this.pending?.id === pending.id) this.storage.removeItem(this.pendingKey);
-    }
+      if (this.pendings.some(op => op.id === pending.id)) this.savePending(pending, true);
+    } else this.savePending({...pending, receipt});
     this.changed();
     return receipt;
+    }, true);
   }
   async mutate(method, fields, draft) {
     if (!mutationMethods.has(method)) throw new Error('不支持此写操作。');
     if (['chat.send','chat.steer'].includes(method) && (typeof fields.text!=='string' || (!fields.text.trim()&&!fields.attachments?.length) || new TextEncoder().encode(fields.text).length>100000)) throw new Error('消息不能为空且 UTF-8 长度不能超过 100,000 字节。');
-    return this.lock(`cxpalm:write:${this.device.id}`, async acquired => {
-      if (!acquired || this.pending) throw new Error('此浏览器还有未确认的操作，请先查看原操作结果。');
+    const draftDigest = draft ? await this.digest(draft.text) : null;
+    // Hold the shared storage lock only while reserving an operation, not across network I/O.
+    const pending = await this.lock(`cxpalm:write:${this.device.id}`, async acquired => {
+      if (!acquired || this.pendingFor(fields.thread)) throw new Error('此会话还有未确认的操作，请先查看原操作结果。');
       if (!this.connected) throw new Error('请先连接电脑。');
       const pending = {id: crypto.randomUUID(), method, thread: fields.thread, created: Date.now()};
       if(fields.attachments?.length){pending.attachmentKey=`cxpalm:attachments:${this.device.id}:${fields.thread}`;pending.attachmentIDs=fields.attachments;}
-      if (draft) { pending.draftKey = draft.key; pending.draftDigest = await this.digest(draft.text); }
-      this.storage.setItem(this.pendingKey, JSON.stringify(pending));
+      if (draft) { pending.draftKey = draft.key; pending.draftDigest = draftDigest; }
+      this.savePending(pending);
       this.receipt = null;
       this.changed();
-      try { return await this.applyReceipt(await this.command(method, fields, pending.id)); }
-      finally { this.changed(); }
+      return pending;
     });
+    try { return await this.applyReceipt(await this.command(method, fields, pending.id)); }
+    catch (error) {
+      if (!this.pendings.some(op => op.id === pending.id)) throw error;
+      await this.applyReceipt({id:pending.id,status:'unknown',result:{error:error.message}});
+      throw Object.assign(error,{operation:pending.id});
+    } finally { this.changed(); }
   }
-  async checkPending() {
-    const pending = this.pending;
-    return pending ? this.applyReceipt(await this.command('operation.get', {requestId: pending.id})) : null;
+  async checkPending(id = this.pending?.id) {
+    const pending = this.pendings.find(op => op.id === id);
+    if (!pending) return null;
+    try { return await this.applyReceipt(await this.command('operation.get', {requestId: pending.id})); }
+    catch(error) { throw Object.assign(error,{operation:pending.id}); }
   }
-  async acknowledge() {
-    return this.lock(`cxpalm:write:${this.device.id}`, async acquired => {
-      if (!acquired) throw new Error('另一个标签页正在处理操作。');
-      const receipt = await this.checkPending();
+  async acknowledge(id = this.pending?.id) {
+    try {
+      const receipt = await this.checkPending(id);
       if (receipt?.status !== 'unknown') throw new Error('只能在人工核对后解除未知结果；正在执行的操作不能解除。');
-      return this.applyReceipt(await this.command('operation.acknowledge', {requestId: receipt.id, text: 'inspected'}));
-    });
+      return await this.applyReceipt(await this.command('operation.acknowledge', {requestId: receipt.id, text: 'inspected'}));
+    } catch(error) { throw Object.assign(error,{operation:id}); }
   }
 }
 

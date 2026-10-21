@@ -36,12 +36,12 @@ function renderAttachments() {
   $('attachment-list').replaceChildren(...files.map(file=>{
     const row=text('span','','attachment-chip');
     row.append(text('span',`${file.image?'▧':'↥'} ${file.name} · ${(file.size/1024).toFixed(0)} KB`));
-    const remove=text('button','×','quiet');remove.type='button';remove.setAttribute('aria-label',`移除附件 ${file.name}`);remove.disabled=!!bridge.pending;
+    const remove=text('button','×','quiet');remove.type='button';remove.setAttribute('aria-label',`移除附件 ${file.name}`);remove.disabled=!!currentPending();
     remove.onclick=()=>{localStorage.setItem(key,JSON.stringify(attachedFiles().filter(item=>item.id!==file.id)));renderControls();};row.append(remove);return row;
   }));
   $('attachment-status').hidden=!busy&&!files.length;
   $('attachment-status').textContent=busy?'正在上传…':files.length?`${files.length}/8 · 附件将在电脑本地保存`:'图片 / 文件 · 每个最多 20 MiB，也可粘贴图片';
-  $('attach-file').disabled=!bridge.connected||!state.desktop||!state.selected||state.cached||!!bridge.pending||busy||goalDraft||files.length>=8;
+  $('attach-file').disabled=!bridge.connected||!state.desktop||!state.selected||state.cached||!!currentPending()||busy||goalDraft||files.length>=8;
   return busy;
 }
 async function uploadFiles(input) {
@@ -76,6 +76,7 @@ function text(tag, value, className = '') {
   return node;
 }
 function report(error) {
+  if(error?.operation) { renderPending(); return; }
   $('notice-text').textContent = error instanceof Error ? error.message : String(error);
   $('notice').hidden = false;
   const panel=document.querySelector('.inline-panel:not([hidden])');
@@ -140,12 +141,12 @@ async function api(path, body = {}) {
 }
 const bridge = new Bridge({
   storage: localStorage,
-  lock: (name, action) => {
+  lock: (name, action, wait = false) => {
     if (!navigator.locks) throw new Error('此浏览器不支持跨标签页写操作锁。请更新浏览器；目前可只读查看。');
-    return navigator.locks.request(name, {ifAvailable: true}, lock => action(!!lock));
+    return navigator.locks.request(name, {ifAvailable: !wait}, lock => action(!!lock));
   },
   socket: () => new WebSocket(`wss://${location.host}/api/v1/ws`),
-  changed: () => { syncClearedDraft(); renderControls(); renderPending(); },
+  changed: () => { syncClearedDraft(); renderControls(); renderPending(); renderLists(); },
   event: event => run(async () => {
     if (event.type === 'hello') {
       state.reminderReady=false;
@@ -163,7 +164,7 @@ const bridge = new Bridge({
       if(!previous){try{previous=JSON.parse(localStorage.getItem(`cxpalm:selected:${bridge.device.id}`)||'null');}catch{}}
       if(previous?.id)run(()=>selectChat(previous,false,true));
       run(refreshLists);
-      if(bridge.pending)run(()=>bridge.checkPending());
+      for(const pending of bridge.pendings)run(()=>bridge.checkPending(pending.id));
       if(!event.data.capabilities?.includes('notifications.subscribe'))report('当前网关不支持跨会话提醒，请更新网关。');
       else run(async()=>{
         const replay=await bridge.command('notifications.subscribe',{cursor:inbox.cursor});
@@ -223,7 +224,7 @@ function showPage(page) {
   }
   if(page==='chat'&&state.savedChatTop!==undefined){$('messages').scrollTop=state.savedChatBottom&&!state.historyPage?$('messages').scrollHeight:state.savedChatTop;}
   drawer(false);
-  renderHeading();
+  renderHeading();renderPending();
 }
 function renderHeading() {
   $('view-title').textContent = state.page === 'settings' ? '设置' : state.selected?.title || '选择一个会话';
@@ -259,16 +260,16 @@ function renderQueue(writable) {
 }
 function renderControls() {
   const uploading=renderAttachments(),files=attachedFiles();
-  const pending=bridge.device && bridge.pending;
+  const pending=bridge.device && currentPending();
   const active=state.snapshot?.threadRuntimeStatus?.type==='active';
   const available=bridge.connected && !!state.selected && state.desktop;
   const writable=available && !state.cached && !!state.snapshot && !state.selected?.archived && !pending && !!navigator.locks;
   if(!bridge.connected)$('notification-sync-status').textContent=state.device?'提醒连接已断开，恢复后自动同步':'提醒尚未连接';
   else if(!state.reminderReady)$('notification-sync-status').textContent='正在恢复提醒连接…';
-  $('new-chat').disabled=!bridge.connected||!!pending;
+  $('new-chat').disabled=!bridge.connected;
   $('rename-chat').disabled=!bridge.connected||!!pending;
   $('save-rename').disabled=!bridge.connected||!!pending;
-  $('create-chat').disabled=!bridge.connected||!!pending||!$('new-project').value;
+  $('create-chat').disabled=!bridge.connected||!!bridge.pendingFor(null)||!$('new-project').value;
   const mode=$('send-mode').value;
   $('send-mode-help').textContent=({auto:'智能发送：空闲时开始新一轮；执行中引导当前任务，不中断、不另开会话。',steer:'仅引导任务：只在任务执行中补充要求，不另开一轮。',queue:'排队发送：当前任务结束后按顺序发送；关闭页面也不会丢失。结果未知时暂停，不会自动重发。'})[mode];
   $('connection').textContent=bridge.connected?'电脑已连接':state.device?'连接已断开':'尚未登录';
@@ -319,17 +320,22 @@ function renderControls() {
     $('settings-current').textContent=`当前配置：${current.latestModel||'模型未读取'} · ${current.latestReasoningEffort||'模型默认'}\n${mode} · ${permission}${current.currentPermissions?'\n当前执行权限：'+permissionName(current.currentPermissions):''}`;
   }else $('settings-current').textContent='选择会话后读取当前配置。';
 }
+function currentPending() { return bridge.device && state.selected && bridge.pendingFor(state.selected.id); }
+function displayedPending() { return bridge.device && (state.page==='chat' ? currentPending() : null); }
 function renderPending() {
-  const pending = bridge.device && bridge.pending;
-  $('pending').hidden = !pending;
-  if (!pending) return;
-  const receipt = bridge.receipt?.id === pending.id ? bridge.receipt : null;
-  $('pending-title').textContent = receipt?.status === 'unknown' ? '操作结果未知，不会自动重发' : '操作等待确认';
-  $('pending-detail').textContent = `${pending.method} · ${pending.id}。${receipt?.result?.error || '请查询这次操作的原始回执；超时或重连不代表操作失败。'}`;
-  $('check-pending').disabled = !bridge.connected;
-  $('ack-pending').hidden = receipt?.status !== 'unknown';
-  $('ack-pending').disabled = !bridge.connected;
+  for(const [prefix,pending] of [['pending',displayedPending()],['create-pending',bridge.device && bridge.pendingFor(null)]]) {
+    $(prefix).hidden = !pending;
+    $(prefix).dataset.operation=pending?.id||'';
+    if (!pending) continue;
+    const receipt = bridge.receiptFor(pending);
+    $(prefix+'-title').textContent = receipt?.status === 'unknown' ? '操作结果未知，不会自动重发' : '操作等待确认';
+    $(prefix+'-detail').textContent = `${pending.method} · ${pending.id}。${receipt?.result?.error || '请查询这次操作的原始回执；超时或重连不代表操作失败。'}`;
+    $('check-'+prefix).disabled = !bridge.connected;
+    $('ack-'+prefix).hidden = receipt?.status !== 'unknown';
+    $('ack-'+prefix).disabled = !bridge.connected;
+  }
 }
+
 function draftKey() { return state.selected && bridge.draftKey(state.selected.id); }
 function syncClearedDraft() {
   const key = draftKey();
@@ -395,7 +401,7 @@ function renderLists() {
       if(stamp){const date=new Date(stamp*1000);if(!time){time=text('time','');top.append(time);}time.textContent=`${date.getMonth()+1}/${String(date.getDate()).padStart(2,'0')}`;time.dateTime=date.toISOString();time.title=`${item.lastReplyAt?'最后回复':'最近活动'} · ${date.toLocaleString()}`;}else time?.remove();
       if(!top.parentNode)button.append(top);button.onclick=()=>run(()=>selectChat({id:item.id,title:item.title||item.id,archived:!!item.archived}));
       const archive=row.querySelector('.archive-action')||text('button','','archive-action');archive.textContent=item.archived?'↥':'↧';archive.type='button';archive.title=item.archived?'取消归档':'归档';archive.setAttribute('aria-label',`${archive.title}：${item.title||item.id}`);
-      archive.disabled=!bridge.connected||!!bridge.pending||(!item.archived&&(!item.live||['running','waiting','unknown'].includes(item.status||'unknown')));
+      archive.disabled=!bridge.connected||!!bridge.pendingFor(item.id)||(!item.archived&&(!item.live||['running','waiting','unknown'].includes(item.status||'unknown')));
       archive.onclick=()=>run(async()=>{if(!confirm(`${item.archived?'取消归档':'归档'}“${item.title||item.id}”？不会删除会话。`))return;const receipt=await bridge.mutate(item.archived?'sessions.unarchive':'sessions.archive',{thread:item.id});if(receipt.status==='confirmed'&&state.selected?.id===item.id)state.selected.archived=!item.archived;await refreshLists();});
       if(!button.parentNode)row.append(button,archive);nodes.push(row);
     }
@@ -447,7 +453,7 @@ async function selectChat(selected,navigate=true,reconnecting=false){
   $('skill-search').value='';
   $('message').value=bridge.storage.getItem(draftKey())||'';
   try{state.skills=new Set(JSON.parse(localStorage.getItem(skillStorageKey())||'[]'));}catch{state.skills=new Set();}
-  if(navigate)showPage('chat');drawer(false);renderLists();renderHeading();renderConversation();renderCatalog();renderControls();
+  if(navigate)showPage('chat');drawer(false);renderLists();renderHeading();renderConversation();renderCatalog();renderControls();renderPending();
   if(bridge.connected)await bridge.command('chat.subscribe',{thread:selected.id,stream:true});
 }
 function updateTurnTimers() {
@@ -761,7 +767,7 @@ const transcriptResize=new ResizeObserver(()=>{const box=$('messages');if(state.
 
 async function write(method, fields, draft) {
   const receipt = await bridge.mutate(method, fields, draft);
-  if (receipt.status !== 'confirmed') throw new Error('结果未确认。请查询原操作，不要重复发送。');
+  if (receipt.status !== 'confirmed') throw Object.assign(new Error('结果未确认。请查询原操作，不要重复发送。'), {operation:receipt.id});
   return receipt.result;
 }
 async function connect(reportFailure = true) {
@@ -882,6 +888,7 @@ listen('permission','change',()=>{$('confirm-full-access').checked=false;renderC
 listen('skill-search','input',renderSkills);
 listen('session-settings','submit',async()=>{
   if(!state.selected||$('apply-settings').disabled)return;
+  const ticket=selection;
   const options={expected:state.settingsBase.revision,...settingsChanges()};
   if(Object.keys(options).length===1)throw new Error('请先选择需要更改的设置。');
   if(options.permission==='full'){if(!$('confirm-full-access').checked)throw new Error('请先勾选完全访问风险确认。');options.confirmFullAccess=true;}
@@ -889,13 +896,14 @@ listen('session-settings','submit',async()=>{
   if(goalDraft&&options.mode===sessionSettings(state.snapshot||{}).mode){goalDraft=false;closePanels();renderControls();return;}
   goalDraft=false;
   const result=await write('chat.settings',{thread:state.selected.id,options});
+  if(ticket!==selection)return;
   if((result?.applied??result?.result?.applied)===false)throw new Error('官方桌面设置发生了变化，未应用；请重新打开设置后再修改。');
   state.settingsBase=null;state.editGroup=null;
   await bridge.command('chat.subscribe',{thread:state.selected.id});
   $('confirm-full-access').checked=false;
   closePanels();
 });
-for(const action of ['pause','resume','clear'])listen(`goal-${action}`,'click',async()=>{if(!state.selected)return;if(action==='clear'&&!confirm('关闭当前原生目标？不会停止当前回复。'))return;await write('chat.goal',{thread:state.selected.id,options:{goalAction:action,expectedGoal:state.snapshot.goalRevision}});await bridge.command('chat.subscribe',{thread:state.selected.id});});
+for(const action of ['pause','resume','clear'])listen(`goal-${action}`,'click',async()=>{if(!state.selected)return;const thread=state.selected.id,ticket=selection;if(action==='clear'&&!confirm('关闭当前原生目标？不会停止当前回复。'))return;await write('chat.goal',{thread,options:{goalAction:action,expectedGoal:state.snapshot.goalRevision}});if(ticket===selection)await bridge.command('chat.subscribe',{thread});});
 listen('compact','click',async()=>{if(state.selected&&!$('compact').disabled&&confirm('让官方桌面压缩当前会话上下文？这会生成上下文摘要，不是删除聊天历史。'))await write('chat.compact',{thread:state.selected.id});});
 for(const id of ['notify-complete','notify-approval','notify-sound','send-key','send-mode'])listen(id,'change',()=>{savePreferences();renderControls();});
 listen('enable-notifications','click',async()=>{
@@ -945,6 +953,7 @@ for (const button of document.querySelectorAll('[data-page]')) button.addEventLi
 listen('message', 'input', () => { if (draftKey()) bridge.storage.setItem(draftKey(), $('message').value); renderControls(); });
 async function submitMessage(forceQueue=false) {
   if (!state.selected || (forceQueue?$('queue-send').disabled:$('send').disabled)) return;
+  const ticket=selection;
   const content = $('message').value;
   const key = draftKey();
   bridge.storage.setItem(key, content);
@@ -955,7 +964,7 @@ async function submitMessage(forceQueue=false) {
   state.historyPage=null;historyScrollArmed=false;++historyRequest;state.historyLoading=false;
   state.scrollToLatest=true;pinnedToLatest=true;renderConversation();}
   try{await write(method, {thread: state.selected.id, text: content, attachments:attachedFiles().map(file=>file.id), options:method==='chat.goal'?{expectedGoal:state.snapshot?.goalRevision||''}:undefined, skills:[...state.skills]}, {key, text: content});}
-  finally{sentUserBefore=null;state.scrollToLatest=false;goalDraft=false;}
+  finally{if(ticket===selection){sentUserBefore=null;state.scrollToLatest=false;goalDraft=false;}}
   renderControls();
 }
 listen('composer','submit',()=>submitMessage());
@@ -973,8 +982,10 @@ listen('notify-chat','click',async()=>{
 listen('queue-send','click',()=>submitMessage(true));
 $('message').addEventListener('keydown',event=>{if(event.isComposing||event.key!=='Enter')return;const enter=$('send-key').value==='enter';if((enter&&!event.shiftKey)||(event.ctrlKey||event.metaKey)){event.preventDefault();$('composer').requestSubmit();}});
 listen('stop', 'click', async () => { if (state.selected && !$('stop').disabled && confirm('停止当前会话正在运行的任务？')) await write('chat.stop', {thread: state.selected.id}); });
-listen('check-pending', 'click', () => bridge.checkPending());
-listen('ack-pending', 'click', async () => { if (confirm('请先在官方桌面核对这次操作是否生效，再确认解除拦截。此操作不会重发原请求。')) await bridge.acknowledge(); });
+for(const prefix of ['pending','create-pending']) {
+  listen('check-'+prefix,'click',()=>{const id=$(prefix).dataset.operation;if(id)return bridge.checkPending(id);});
+  listen('ack-'+prefix,'click',async()=>{const id=$(prefix).dataset.operation;if(id&&confirm('请先在官方桌面核对这次操作是否生效，再确认解除拦截。此操作不会重发原请求。'))await bridge.acknowledge(id);});
+}
 listen('logout', 'click', async () => {
   if (!confirm('撤销此浏览器授权并退出？下次连接请使用账号密码登录。未确认操作仍请在电脑核对。')) return;
   ++connectAttempt;
@@ -1011,7 +1022,7 @@ for(const button of document.querySelectorAll('[data-panel]')){
 }
 for(const button of document.querySelectorAll('[data-close]'))button.addEventListener('click',closePanels);
 document.addEventListener('keydown',event=>{if(event.key==='Escape'){const trigger=document.querySelector('[data-panel][aria-expanded=true]');closePanels();trigger?.focus();}});
-window.addEventListener('storage', () => run(() => { renderPending(); renderControls(); }));
+window.addEventListener('storage', () => run(() => { renderPending(); renderControls(); renderLists(); }));
 window.addEventListener('resize', () => { const pinned=pinnedToLatest;if (!matchMedia('(max-width:760px)').matches) drawer(false);requestAnimationFrame(()=>{if(pinned&&state.page==='chat'&&!state.historyPage){$('messages').scrollTop=$('messages').scrollHeight;markVisibleRead();}}); });
 document.addEventListener('keydown', event => {
   if (!$('shell').classList.contains('list-open')) return;
@@ -1039,15 +1050,12 @@ function renderComputerShortcuts(){
   if(!rows.some(row=>row.origin===location.origin))rows.unshift({name:location.hostname,origin:location.origin});
   const current=rows.find(row=>row.origin===location.origin);
   $('computer-current').textContent=current.name;
-  const pending=!!bridge.pending;
   for(const id of ['computer-links','computer-shortcuts']){
     const list=$(id);list.replaceChildren();
     for(const row of rows){
       const item=text('div','','computer-link-row');
       const link=text('a',row.name,'computer-link');link.href=row.origin+'/cxpalm/';
-      link.addEventListener('click',event=>{if(bridge.pending&&row.origin!==location.origin){event.preventDefault();report(new Error('操作结果未知，请先核对当前电脑，再切换连接。'));}});
       if(row.origin===location.origin){link.setAttribute('aria-current','page');link.addEventListener('click',event=>event.preventDefault());}
-      if(pending&&row.origin!==location.origin){link.removeAttribute('href');link.setAttribute('aria-disabled','true');}
       const other=text('a','新标签页','computer-new-tab');other.href=row.origin+'/cxpalm/';other.target='_blank';other.rel='noopener noreferrer';
       item.append(link,other);
       if(id==='computer-shortcuts'&&row.origin!==location.origin){
@@ -1057,7 +1065,7 @@ function renderComputerShortcuts(){
       list.append(item);
     }
   }
-  $('computer-switch-note').textContent=pending?'操作结果未知，请核对后再切换；仍可在新标签页查看另一台电脑。':'每台电脑独立授权。切换不会停止原电脑的任务。';
+  $('computer-switch-note').textContent='每台电脑独立授权。切换不会停止原电脑的任务。';
 }
 $('computer-shortcut-form').addEventListener('submit',event=>{
   event.preventDefault();run(()=>{
