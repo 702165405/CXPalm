@@ -4,6 +4,29 @@ This public record intentionally excludes real conversation titles, IDs,
 content, device identifiers, account counts, private paths and deployment logs.
 Private test evidence is not part of the source repository.
 
+## Android Question Navigation (0.0.11 / build47)
+
+- A private local snapshot replay on Android 35 reproduced a main-thread
+  `IllegalArgumentException: Index should be non-negative (-1)` in question-list
+  automatic scrolling. The derived index could change during a frame wait,
+  before its effect was cancelled. This is a reproduced crash, not an inference
+  from a successful build.
+- The fix retains a validated local target across that suspension and checks
+  the list bounds after layout. Slider releases also reject stale indices.
+- Normal APKs exclude the opt-in rendering activity and instrumentation runner.
+  Replay inputs stay local and untracked; tests do not execute real chat actions.
+- Fresh Go tests/vet and Windows amd64 / macOS amd64+arm64 cross-builds pass;
+  all 60 Node tests pass. Android has 76 tests: 75 pass and one public-network
+  opt-in test is skipped in the default run. Lint and APK assembly pass.
+- Package identity and the existing Android signer are retained. Bytecode
+  inspection confirms all rendering-probe classes are absent from the normal APK.
+- Android 35 emulator replay and repeated openings of previously crashing
+  inputs pass after the fix. The normal, probe-free APK also installs and stays
+  alive through a cold-start check; its manifest has no probe instrumentation.
+- This is an Android-only patch. Web and Windows/gateway remain 0.0.10/build46;
+  no gateway restart, authorization change or data migration is required.
+- Physical-device acceptance remains separate from emulator checks.
+
 ## Pending Send Recovery (0.0.10 / build46)
 
 - Fresh Go tests and vet pass; Windows amd64 and macOS amd64/arm64 builds pass.
@@ -31,8 +54,8 @@ Private test evidence is not part of the source repository.
 
 ## Source Baseline
 
-- Source version: 0.0.10.
-- Android: versionCode 46; desktop package: releaseBuild 46.
+- Android source: 0.0.11 / versionCode 47; Web/desktop/gateway: 0.0.10.
+- Desktop package: releaseBuild 46.
 - Previous local records report passing Go tests/vet, Windows amd64 and macOS
   amd64/arm64 cross-builds, Web and desktop tests, Android unit tests, Lint and
   APK assembly for this baseline. These are historical reports, not a fresh

@@ -107,6 +107,14 @@ class UiModelsTest {
         assertEquals(69, activeQuestionIndex(questions,messages,1,true,true))
         assertEquals(-1, activeQuestionIndex(emptyList(),messages,0,true,true))
     }
+    @Test fun questionReleaseIgnoresStaleOrInvalidSliderPositions() {
+        val rows=listOf(JSONObject("""{"turn":"a"}"""),JSONObject("""{"turn":"b"}"""))
+        assertEquals("b",questionAtPosition(rows,1.5f))
+        for(position in listOf(-1f,2f,Float.NaN,Float.POSITIVE_INFINITY)) assertNull(questionAtPosition(rows,position))
+        assertNull(questionAtPosition(rows.take(1),1f))
+        assertNull(questionAtPosition(emptyList(),0f))
+        assertNull(questionAtPosition(listOf(JSONObject()),0f))
+    }
     @Test fun computerSwitchClearsOtherHostsHistoryAndProtectsUnknownWrites() {
         val first = Computer("one","First","https://first.example","fixture-one")
         val second = Computer("two","Second","https://second.example","fixture-two")

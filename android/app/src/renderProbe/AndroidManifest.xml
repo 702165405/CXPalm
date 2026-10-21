@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <instrumentation android:name="dev.cxpalm.RenderingProbeRunner" android:targetPackage="io.github.u702165405.cxpalm.debug" />
+    <application>
+        <activity android:name="dev.cxpalm.RenderingProbeActivity" android:exported="false" />
+    </application>
+</manifest>

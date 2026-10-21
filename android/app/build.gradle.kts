@@ -10,10 +10,14 @@ android {
         applicationId = "io.github.u702165405.cxpalm"
         minSdk = 26
         targetSdk = 35
-        versionCode = 46
-        versionName = "0.0.10"
+        versionCode = 47
+        versionName = "0.0.11"
     }
     sourceSets.getByName("main").assets.srcDir(rootProject.file("../locales"))
+    if (providers.gradleProperty("renderProbe").orNull == "true") {
+        sourceSets.getByName("debug").java.srcDir("src/renderProbe/java")
+        sourceSets.getByName("debug").manifest.srcFile("src/renderProbe/AndroidManifest.xml")
+    }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }

@@ -75,6 +75,10 @@ fun activeQuestionIndex(questionTurns: List<String>, messages: List<Message>, fi
     return questionTurns.indexOf(row?.value?.turn)
 }
 
+internal fun questionAtPosition(questions: List<JSONObject>, position: Float): String? =
+    if (!position.isFinite() || position < 0) null
+    else questions.getOrNull(position.toInt())?.optString("turn")?.takeIf { it.isNotBlank() }
+
 fun canSwitchComputer(state: ViewState, target: String): Boolean = state.current?.id == target || state.pending == null
 
 fun computerConnectionState(state: ViewState, computer: Computer, thread: String?, pending: String?, skills: Set<String>): ViewState {

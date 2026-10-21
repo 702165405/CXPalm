@@ -1,9 +1,9 @@
 {
-  "version": "0.0.10",
-  "versionCode": 46,
+  "version": "0.0.11",
+  "versionCode": 47,
   "package": "io.github.u702165405.cxpalm.debug",
-  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.10-build46/CXPalm-0.0.10-build46-debug.apk",
-  "size": 10312142,
-  "sha256": "f751c4ab67f8c4d99b3d061187bfc37fabdfba4eb39967bc35d57fb042bb2075",
-  "notes": "CXPalm 0.0.10 / build46: Fix stranded pending sends after connection loss. Definitely unsent messages release the pending lock while preserving drafts and attachments. Missing receipts reserve the original ID to prevent delayed execution. Uncertain operations still require inspection and are never replayed. Existing settings, authorizations and IP policy are preserved."
+  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.11-build47/CXPalm-0.0.11-build47-debug.apk",
+  "size": 9865673,
+  "sha256": "870295ff476a8f14bf6aaa2772624d24c4b74e52d14ad8d7450d8840e98f38dd",
+  "notes": "CXPalm Android 0.0.11 / build47: Fix a question-navigation frame race that could pass -1 to the list and crash shortly after opening a conversation. Capture and validate the scroll target across frame suspension, and ignore stale slider positions. No message truncation, account reset or data deletion. Web and Windows/gateway remain 0.0.10 / build46 and do not need a restart."
 }

@@ -156,12 +156,16 @@ fun sessionDate(session: JSONObject): String {
         }
     }
     LaunchedEffect(activeQuestion, questionScrubbing, questionsOpen, questionList.layoutInfo.viewportEndOffset, questionPending) {
-        if (activeQuestion >= 0 && !questionScrubbing && questionPending==null) {
-            questionPosition = activeQuestion.toFloat()
+        // derivedStateOf can change while awaiting a frame, before this effect
+        // is cancelled. Never re-read its index after validating it.
+        val target = activeQuestion
+        if (target >= 0 && !questionScrubbing && questionPending==null) {
+            questionPosition = target.toFloat()
             withFrameNanos { }
+            if (target >= questionList.layoutInfo.totalItemsCount) return@LaunchedEffect
             val height=questionList.layoutInfo.viewportEndOffset-questionList.layoutInfo.viewportStartOffset
             val rowHeight=questionList.layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 32
-            questionList.scrollToItem(activeQuestion, -((height-rowHeight)/2).coerceAtLeast(0))
+            questionList.scrollToItem(target, -((height-rowHeight)/2).coerceAtLeast(0))
         }
     }
     val replyIndex = messages.indexOfLast { it.role == "Codex" }
@@ -355,7 +359,10 @@ fun sessionDate(session: JSONObject): String {
         if(questions.isNotEmpty()) Surface(modifier=Modifier.align(androidx.compose.ui.Alignment.CenterEnd).padding(bottom=if(showLatest) 56.dp else 0.dp).width(if(questionsOpen) 260.dp else 34.dp).heightIn(max=340.dp),shape=MaterialTheme.shapes.medium,tonalElevation=3.dp,shadowElevation=2.dp) {
             Column(Modifier.padding(3.dp)) {
                 TextButton(onClick={questionsOpen=!questionsOpen},contentPadding=PaddingValues(0.dp),modifier=Modifier.fillMaxWidth()) {Text(if(questionsOpen) tr("我的问题")+" ×" else "≡")}
-                if(questionsOpen && questions.size>1) Slider(value=questionPosition.coerceIn(0f,(questions.size-1).toFloat()),onValueChange={questionScrubbing=true;questionPosition=it},onValueChangeFinished={questionPending=questions[questionPosition.toInt()].getString("turn");client.history(cursor=questionPending);questionScrubbing=false},valueRange=0f..(questions.size-1).toFloat(),modifier=Modifier.semantics {contentDescription=tr("滑动定位我的问题")})
+                if(questionsOpen && questions.size>1) Slider(value=questionPosition.coerceIn(0f,(questions.size-1).toFloat()),onValueChange={questionScrubbing=true;questionPosition=it},onValueChangeFinished={
+                    questionAtPosition(questions,questionPosition)?.let { turn -> questionPending=turn;client.history(cursor=turn) }
+                    questionScrubbing=false
+                },valueRange=0f..(questions.size-1).toFloat(),modifier=Modifier.semantics {contentDescription=tr("滑动定位我的问题")})
                 LazyColumn(state=questionList) {itemsIndexed(questions) { index,question ->
                     TextButton(onClick={questionPosition=index.toFloat();questionPending=question.getString("turn");client.history(cursor=questionPending)},contentPadding=PaddingValues(horizontal=3.dp,vertical=2.dp),modifier=Modifier.fillMaxWidth().background(if(index==activeQuestion) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent,MaterialTheme.shapes.small).semantics {contentDescription=question.optString("text");selected=index==activeQuestion}) {
                         Text(if(questionsOpen) "${index+1}  ${question.optString("text")}" else "${index+1}",maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall,modifier=Modifier.fillMaxWidth())

@@ -7,8 +7,16 @@ Versions describe implemented changes, not physical-device acceptance.
 
 - Prepare public documentation, synthetic deployment examples and repository
   privacy checks. Keep local account and runtime state outside Git.
-- Android startup crash reported by a user; root cause and fix unconfirmed.
 - Project license and public repository publication remain pending.
+
+## 0.0.11 (Android / build47)
+
+- Fix a frame-order race in question navigation that could pass a negative
+  index to the list shortly after entering a conversation.
+- Validate slider releases against the current question list rather than
+  indexing a list that may have changed during the gesture.
+- Add opt-in emulator rendering checks, excluded from normal APKs. No message
+  content is truncated or deleted. Web and Windows/gateway remain 0.0.10/build46.
 
 ## 0.0.10
 
