@@ -26,6 +26,13 @@ Private test evidence is not part of the source repository.
   request. While an official desktop holds the writer lease, archiving must be
   done there. No writer lock is stolen, no second executor is started, and the
   original failed operation is never replayed or removed from the audit log.
+- All six public GitHub assets and the deployed Web entry/versioned modules
+  pass fresh size/SHA-256 checks. Both repository feeds match build49. The real
+  Android and Electron updaters verify their public downloads; the installer
+  is not executed by the updater test.
+- Local desktop/gateway health reports 0.0.13, owned by the desktop UI. Public
+  session lookup still requires authentication. Deployment preserves config,
+  preferences, authorizations, IP policy and OS startup settings.
 
 ## Conversation-Scoped Receipts (0.0.12 / build48)
 
