@@ -26,9 +26,13 @@ class RenderingProbeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val case = intent.getStringExtra("case") ?: "long-code"
-        if(case=="approval-permission" || case=="approval-decline-only") {
+        if(case in listOf("approval-permission","approval-decline-only","approval-mcp","approval-mcp-identity")) {
             val request=if(case=="approval-permission") JSONObject("""{"id":42,"method":"item/permissions/requestApproval","params":{"reason":"Fixture only: network access","permissions":{"network":{"enabled":true}}}}""")
                 else JSONObject("""{"id":43,"method":"item/commandExecution/requestApproval","params":{"command":"fixture only - not executed","availableDecisions":["decline"]}}""")
+            if(case.startsWith("approval-mcp")) {
+                request.put("method","mcpServer/elicitation/request").put("params",JSONObject("""{"threadId":"synthetic","mode":"form","message":"Fixture only: confirm this tool call","_meta":{"codex_approval_kind":"mcp_tool_call","persist":["session","always"]},"requestedSchema":{"type":"object","properties":{}}}"""))
+                if(case.endsWith("identity")) request.getJSONObject("params").put("mode","openai/userVerification")
+            }
             setContent { CxpalmTheme { Column {
                 var choice by remember { mutableStateOf("none") }
                 ApprovalCard(request,true) {choice=it}
@@ -45,7 +49,7 @@ class RenderingProbeActivity : ComponentActivity() {
             setContent { CxpalmTheme { SessionsPage(state,client) } }
             return
         }
-        if(case=="composer-preview" || case=="composer-preview-long" || case=="composer-preview-approval") {
+        if(case=="composer-preview" || case=="composer-preview-long" || case=="composer-preview-approval" || case=="composer-preview-mcp") {
             val client=fixtureClient()
             client.draft(if(case.endsWith("-long")) "先检查移动端的阅读空间。\n输入多行时再展开。\n保留附件、引导和排队功能。" else "")
             val computer=Computer("preview","本地工作台","https://fixture.invalid","synthetic-only")
@@ -67,6 +71,7 @@ class RenderingProbeActivity : ComponentActivity() {
             val state=ViewState(computers=listOf(computer),current=computer,thread="preview-chat",connected=true,desktopConnected=true,
                 sessions=listOf(JSONObject().put("id","preview-chat").put("title","界面预览 · 示例会话")),snapshot=snapshot)
             if(case=="composer-preview-approval") snapshot.put("requests",JSONArray("""[{"id":42,"method":"item/permissions/requestApproval","params":{"threadId":"preview-chat","reason":"Fixture network access","permissions":{"network":{"enabled":true}}}}]"""))
+            if(case=="composer-preview-mcp") snapshot.put("requests",JSONArray("""[{"id":"mcp-fixture","method":"mcpServer/elicitation/request","params":{"threadId":"preview-chat","mode":"form","message":"Fixture only: confirm this tool call","_meta":{"codex_approval_kind":"mcp_tool_call"},"requestedSchema":{"type":"object","properties":{}}}}]"""))
             val updates=UpdateManager(this)
             setContent { CxpalmTheme { PalmApp(state,client,UpdateState(),updates,false,{},{},{},{},{},false,{}) } }
             return
@@ -146,13 +151,13 @@ class RenderingProbeRunner : Instrumentation() {
         start()
     }
     override fun onStart() {
-        val automation=if(case=="sessions-active" || case=="sessions-archived" || case.startsWith("approval-") || case=="composer-preview-approval") uiAutomation else null
+        val automation=if(case=="sessions-active" || case=="sessions-archived" || case.startsWith("approval-") || case=="composer-preview-approval" || case=="composer-preview-mcp") uiAutomation else null
         val activity = startActivitySync(Intent(targetContext, RenderingProbeActivity::class.java)
             .putExtra("case", case).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         // Markdown parsing and the following Compose measure happen asynchronously.
         Thread.sleep(holdMs)
         waitForIdleSync()
-        if(case.startsWith("approval-") || case=="composer-preview-approval") {
+        if(case.startsWith("approval-") || case=="composer-preview-approval" || case=="composer-preview-mcp") {
             fun nodes(node: android.view.accessibility.AccessibilityNodeInfo): List<android.view.accessibility.AccessibilityNodeInfo> =
                 listOf(node)+(0 until node.childCount).flatMap { index -> node.getChild(index)?.let(::nodes).orEmpty() }
             fun visible()=nodes(checkNotNull(automation?.rootInActiveWindow))
@@ -163,7 +168,16 @@ class RenderingProbeRunner : Instrumentation() {
                 check(target.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
                 Thread.sleep(400);waitForIdleSync()
             }
-            if(case=="approval-decline-only") {
+            if(case=="composer-preview-mcp") {
+                check(checkNotNull(find("仅批准这一次","Approve once")).isVisibleToUser)
+            } else if(case=="approval-mcp-identity") {
+                check(find("仅批准这一次","Approve once")==null)
+            } else if(case=="approval-mcp") {
+                click(checkNotNull(find("仅批准这一次","Approve once")))
+                check(find("fixture-decision:accept")==null)
+                click(checkNotNull(find("确认批准","Confirm approval")))
+                check(find("fixture-decision:accept")!=null)
+            } else if(case=="approval-decline-only") {
                 check(find("仅批准这一次","Approve once")==null)
                 click(checkNotNull(find("拒绝","Decline")))
                 check(find("fixture-decision:decline")!=null)

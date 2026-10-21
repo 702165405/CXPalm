@@ -30,20 +30,28 @@ fun fileSize(bytes: Long): String = when {
 }
 
 fun approvalDecisions(request: JSONObject): List<String> {
+    if(request.optString("method")=="mcpServer/elicitation/request") {
+        val params=request.optJSONObject("params") ?: return emptyList()
+        val schema=params.optJSONObject("requestedSchema") ?: return emptyList()
+        if(params.optString("mode")!="form" || params.optJSONObject("_meta")?.optString("codex_approval_kind")!="mcp_tool_call" || schema.optString("type")!="object" || schema.optJSONObject("properties")?.length()!=0) return emptyList()
+        if(schema.keys().asSequence().any {it !in listOf("type","properties","required","title","description")}) return emptyList()
+        if(schema.has("required") && schema.optJSONArray("required")?.length()!=0) return emptyList()
+        return listOf("accept","decline","cancel")
+    }
     if(request.optString("method")=="item/permissions/requestApproval") {
         val permissions=request.optJSONObject("params")?.optJSONObject("permissions") ?: return emptyList()
         return if(permissions.keys().asSequence().all {it in listOf("network","fileSystem")}) listOf("accept","decline") else listOf("decline")
     }
     if(request.optString("method") !in listOf("item/commandExecution/requestApproval","item/fileChange/requestApproval")) return emptyList()
     val params=request.optJSONObject("params")
-    if(params?.has("availableDecisions")!=true) return listOf("accept","decline")
+    if(params?.has("availableDecisions")!=true || params.isNull("availableDecisions")) return listOf("accept","decline")
     val available=params.optJSONArray("availableDecisions") ?: return emptyList()
     return listOf("accept","decline","cancel").filter { choice -> (0 until available.length()).any {available.opt(it)==choice} }
 }
 
 fun approvalSummary(request: JSONObject, missing: String = "请在官方 Codex 桌面查看完整请求。", empty: String = "文件变更或工具请求，请展开详情并核对后再批准。"): String {
     val params = request.optJSONObject("params") ?: return missing
-    return listOf("command", "reason", "cwd").mapNotNull { key -> params.opt(key)?.toString()?.takeIf { it.isNotBlank() && it != "null" } }
+    return listOf("message", "command", "reason", "cwd").mapNotNull { key -> params.opt(key)?.toString()?.takeIf { it.isNotBlank() && it != "null" } }
         .joinToString("\n").take(3000).ifBlank { empty }
 }
 

@@ -74,6 +74,12 @@ export function conversation(turns = []) {
 }
 
 export function approvalDecisions(request) {
+  if(request.method==='mcpServer/elicitation/request') {
+    const p=request.params,s=p?.requestedSchema;
+    if(p?.mode!=='form'||p?._meta?.codex_approval_kind!=='mcp_tool_call'||s?.type!=='object'||!s.properties||typeof s.properties!=='object'||Array.isArray(s.properties)||Object.keys(s.properties).length)return [];
+    if(Object.keys(s).some(key=>!['type','properties','required','title','description'].includes(key))||('required' in s&&(!Array.isArray(s.required)||s.required.length)))return [];
+    return ['accept','decline','cancel'];
+  }
   if(request.method==='item/permissions/requestApproval') {
     const permissions=request.params?.permissions;
     if(!permissions||typeof permissions!=='object'||Array.isArray(permissions))return [];
@@ -81,7 +87,7 @@ export function approvalDecisions(request) {
   }
   if (!['item/commandExecution/requestApproval', 'item/fileChange/requestApproval'].includes(request.method)) return [];
   const available = request.params?.availableDecisions;
-  return ['accept', 'decline', 'cancel'].filter(value => available === undefined ? value!=='cancel' : Array.isArray(available) && available.includes(value));
+  return ['accept', 'decline', 'cancel'].filter(value => available == null ? value!=='cancel' : Array.isArray(available) && available.includes(value));
 }
 
 export function contextUsage(snapshot) {

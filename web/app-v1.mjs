@@ -618,7 +618,7 @@ function renderConversation() {
   approvalSignature=nextApprovalSignature;
   $('approvals').replaceChildren(...approvals.map(request => {
     const card = document.createElement('article'); card.className = 'approval';
-    card.append(text('strong', '需要你确认'), text('p', request.params?.command || request.params?.reason || request.method));
+    card.append(text('strong', '需要你确认'), text('p', request.params?.message || request.params?.command || request.params?.reason || request.method));
     const details = document.createElement('details');
     details.append(text('summary', '查看请求详情'), text('pre', JSON.stringify(request.params || {}, null, 2))); card.append(details);
     const permissionRequest=request.method==='item/permissions/requestApproval';
@@ -637,7 +637,7 @@ function renderConversation() {
       })); actions.append(button);
     }
     if (!actions.children.length) actions.append(text('p', '此类型的请求请在官方 Codex 桌面处理。'));
-    card.append(actions); return card;
+    card.insertBefore(actions,details); return card;
   }));
   renderControls();
 }

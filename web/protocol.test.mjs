@@ -8,8 +8,15 @@ test('permission approvals stay turn-scoped and unsupported choices fail closed'
   assert.deepEqual(approvalDecisions(request),['accept','decline']);
   assert.deepEqual(approvalDecisions({...request,params:{permissions:{future:true}}}),['decline']);
   assert.deepEqual(approvalDecisions({...request,params:{}}),[]);
-  for(const availableDecisions of [[],null,{},[{acceptForSession:{}}]])assert.deepEqual(approvalDecisions({method:'item/commandExecution/requestApproval',params:{availableDecisions}}),[]);
+  for(const availableDecisions of [[],{},[{acceptForSession:{}}]])assert.deepEqual(approvalDecisions({method:'item/commandExecution/requestApproval',params:{availableDecisions}}),[]);
+  assert.deepEqual(approvalDecisions({method:'item/commandExecution/requestApproval',params:{availableDecisions:null}}),['accept','decline']);
   assert.deepEqual(approvalDecisions({method:'item/fileChange/requestApproval',params:{availableDecisions:['cancel']}}),['cancel']);
+});
+test('MCP tool confirmation accepts only an empty typed form and never auth challenges',()=>{
+ const params={threadId:'synthetic',mode:'form',_meta:{codex_approval_kind:'mcp_tool_call',persist:['session','always']},requestedSchema:{type:'object',properties:{}}};
+ const choices=p=>approvalDecisions({method:'mcpServer/elicitation/request',params:p});
+ assert.deepEqual(choices(params),['accept','decline','cancel']);
+ for(const changed of [{mode:'url'},{mode:'openai/userVerification'},{_meta:{codex_approval_kind:'browser_auth'}},{_meta:{}},{requestedSchema:{type:'object',properties:{answer:{type:'string'}}}},{requestedSchema:{type:'object',properties:{},required:['answer']}},{requestedSchema:{type:'object',properties:{},allOf:[]}}])assert.deepEqual(choices({...params,...changed}),[]);
 });
 test('conversation preserves text as text and approval choices fail closed', () => {
   const messages = conversation([{items:[{type:'userMessage',content:[{text:'<img onerror=alert(1)>'}]},

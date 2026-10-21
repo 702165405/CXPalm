@@ -9,6 +9,16 @@ Versions describe implemented changes, not physical-device acceptance.
   privacy checks. Keep local account and runtime state outside Git.
 - Project license and public repository publication remain pending.
 
+## 0.0.17 (build53)
+
+- Match MCP tool-call confirmations using the observed empty form schema and
+  mcp_tool_call metadata; offer approve once, decline and cancel via the owner.
+- Do not forward persistence metadata or handle auth, identity, URL or nonempty
+  forms as plain approval. The official desktop retains its own safety checks.
+- Treat null command availableDecisions as the protocol default, not no choices.
+- Place actions before expandable details and bound the Android summary so
+  long request descriptions do not hide the approval controls.
+
 ## 0.0.16 (build52)
 
 - Support official permission-request approval and denial on Web and Android,

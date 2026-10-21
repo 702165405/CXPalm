@@ -10,11 +10,20 @@ class UiModelsTest {
         assertEquals(listOf("accept","decline"),approvalDecisions(request("item/permissions/requestApproval","""{"permissions":{"network":{"enabled":true}}}""")))
         assertEquals(listOf("decline"),approvalDecisions(request("item/permissions/requestApproval","""{"permissions":{"future":true}}""")))
         assertTrue(approvalDecisions(request("item/permissions/requestApproval","{}")).isEmpty())
-        for(choices in listOf("[]","null","{}","[{\"acceptForSession\":{}}]")) {
+        for(choices in listOf("[]","{}","[{\"acceptForSession\":{}}]")) {
             assertTrue(approvalDecisions(request("item/commandExecution/requestApproval","{\"availableDecisions\":$choices}")).isEmpty())
         }
         assertEquals(listOf("cancel"),approvalDecisions(request("item/fileChange/requestApproval","""{"availableDecisions":["cancel"]}""")))
         assertTrue(approvalDecisions(request("unknown","{}")).isEmpty())
+    }
+    @Test fun mcpToolApprovalsExcludeFormsAndIdentityChallenges() {
+        val params=JSONObject("""{"mode":"form","_meta":{"codex_approval_kind":"mcp_tool_call","persist":["session","always"]},"requestedSchema":{"type":"object","properties":{}}}""")
+        fun choices(p: JSONObject)=approvalDecisions(JSONObject().put("method","mcpServer/elicitation/request").put("params",p))
+        assertEquals(listOf("accept","decline","cancel"),choices(params))
+        for(changed in listOf("""{"mode":"url"}""","""{"mode":"openai/userVerification"}""","""{"_meta":{"codex_approval_kind":"browser_auth"}}""","""{"requestedSchema":{"type":"object","properties":{"answer":{"type":"string"}}}}""","""{"requestedSchema":{"type":"object","properties":{},"required":["answer"]}}""")) {
+            val p=JSONObject(params.toString());val patch=JSONObject(changed);patch.keys().forEach {p.put(it,patch.get(it))};assertTrue(choices(p).isEmpty())
+        }
+        assertEquals(listOf("accept","decline"),approvalDecisions(JSONObject("""{"method":"item/commandExecution/requestApproval","params":{"availableDecisions":null}}""")))
     }
     @Test fun onlyOfficialUnreadAndActiveWorkNeedSessionIndicators() {
         for(status in listOf("idle","completed","failed","interrupted","unknown")) {

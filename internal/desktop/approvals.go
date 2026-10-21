@@ -5,6 +5,25 @@ import (
 	"errors"
 )
 
+func simpleToolApproval(params map[string]any) bool {
+	meta, _ := params["_meta"].(map[string]any)
+	schema, _ := params["requestedSchema"].(map[string]any)
+	properties, hasProperties := schema["properties"].(map[string]any)
+	if params["mode"] != "form" || meta["codex_approval_kind"] != "mcp_tool_call" || schema["type"] != "object" || !hasProperties || len(properties) != 0 {
+		return false
+	}
+	for key := range schema {
+		if key != "type" && key != "properties" && key != "required" && key != "title" && key != "description" {
+			return false
+		}
+	}
+	if required, exists := schema["required"]; exists {
+		rows, ok := required.([]any)
+		return ok && len(rows) == 0
+	}
+	return true
+}
+
 func approvalFingerprint(raw map[string]any, requestID string) string {
 	requests, _ := raw["requests"].([]any)
 	for _, entry := range requests {
@@ -34,6 +53,17 @@ func approvalAction(raw map[string]any, thread, requestID string, decision json.
 		}
 		payload := map[string]any{"requestId": request["id"]}
 		switch request["method"] {
+		case "mcpServer/elicitation/request":
+			if !simpleToolApproval(params) || params["threadId"] != thread {
+				return "", nil, errors.New("this MCP request requires official desktop handling")
+			}
+			var content any
+			if choice == "accept" {
+				content = map[string]any{}
+			}
+			// No persist metadata: approval is for this tool call, not future calls.
+			payload["response"] = map[string]any{"action": choice, "content": content}
+			return "thread-follower-submit-mcp-server-elicitation-response", payload, nil
 		case "item/permissions/requestApproval":
 			if choice == "cancel" {
 				return "", nil, errors.New("unsupported approval decision")
@@ -55,7 +85,7 @@ func approvalAction(raw map[string]any, thread, requestID string, decision json.
 			payload["response"] = map[string]any{"permissions": granted, "scope": "turn"}
 			return "thread-follower-permissions-request-approval-response", payload, nil
 		case "item/commandExecution/requestApproval", "item/fileChange/requestApproval":
-			if available, exists := params["availableDecisions"]; exists {
+			if available, exists := params["availableDecisions"]; exists && available != nil {
 				choices, ok := available.([]any)
 				allowed := false
 				for _, candidate := range choices {

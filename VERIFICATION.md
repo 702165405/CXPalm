@@ -4,6 +4,27 @@ This public record intentionally excludes real conversation titles, IDs,
 content, device identifiers, account counts, private paths and deployment logs.
 Private test evidence is not part of the source repository.
 
+## MCP Tool Confirmation Buttons (0.0.17 / build53)
+
+- A read-only original-owner subscription confirms the previously unsupported
+  request shape: mcpServer/elicitation/request, form mode, an empty object
+  schema and mcp_tool_call metadata. No real request is approved by diagnosis.
+- Web and Android now expose approve-once, decline and cancel for that shape.
+  The gateway forwards only the action and form content to the original owner,
+  without persistence metadata. Official owner-side safety checks still apply.
+- URL, identity/authentication and nonempty or unsupported forms fail closed.
+  Null command availableDecisions uses the protocol default; empty arrays and
+  unsupported choices remain excluded. Actions precede expandable details.
+- Go tests/vet, Windows amd64 and macOS amd64/arm64 cross-builds pass. All 65
+  Node checks and isolated Chromium MCP accept/deny/cancel regressions pass.
+- Android: 81 tests, 80 passed and one public-updater opt-in skipped by default;
+  Lint and normal APK assembly pass. Package identity and signer are retained;
+  the normal APK excludes rendering probes. Physical-phone acceptance remains
+  separate from fixtures and emulator checks.
+- Five isolated Android 35 cases pass, including MCP confirmation, identity
+  exclusion and an actually visible button in the full conversation composer.
+  The screenshot uses synthetic text and does not represent a real approval.
+
 ## Turn-Scoped Permission Approvals (0.0.16 / build52)
 
 - Web and Android handle command, file-change and permission-request approvals.

@@ -305,6 +305,19 @@ async function main() {
     approvalRequests=[{...commandApproval,params:{availableDecisions:['cancel']}}];currentSocket.send(JSON.stringify(snapshot()));
     await page.getByRole('button',{name:'取消请求',exact:true}).waitFor();
     assert.equal(await page.locator('#approvals button').count(),1);
+    const mcpApproval={id:'mcp-pending',method:'mcpServer/elicitation/request',params:{threadId:'main-fixture',mode:'form',message:'Fixture only: confirm this tool call',_meta:{codex_approval_kind:'mcp_tool_call',persist:['session','always']},requestedSchema:{type:'object',properties:{}}}};
+    approvalRequests=[mcpApproval];currentSocket.send(JSON.stringify(snapshot()));
+    await page.getByText('Fixture only: confirm this tool call',{exact:true}).waitFor();
+    await page.setViewportSize({width:390,height:844});
+    for(const [name,decision] of [['仅批准这一次','accept'],['拒绝','decline'],['取消请求','cancel']]) {
+      const response=once(commands,'chat.approve');await page.getByRole('button',{name,exact:true}).click();await response;
+      await page.locator('#pending').waitFor({state:'hidden'});
+      assert(sent.some(q=>q.method==='chat.approve'&&q.requestId==='mcp-pending'&&q.decision===decision&&!q._meta&&!q.response));
+    }
+    approvalRequests=[{...mcpApproval,params:{...mcpApproval.params,mode:'openai/userVerification'}}];currentSocket.send(JSON.stringify(snapshot()));
+    await page.waitForFunction(()=>document.querySelector('#approvals').textContent.includes('此类型的请求'));
+    assert.equal(await page.locator('#approvals button').count(),0);
+    await page.setViewportSize({width:1440,height:960});
     approvalRequests=[commandApproval];currentSocket.send(JSON.stringify(snapshot()));
     await page.getByRole('button',{name:'仅批准这一次',exact:true}).waitFor();
     await capture('chat-desktop.png');
