@@ -22,6 +22,13 @@ Private test evidence is not part of the source repository.
   approval, offered-decision filtering and the fixed approval area. The normal
   APK also survives an emulator cold start. No physical-phone or macOS runtime
   acceptance is claimed; no real conversation request is approved by tests.
+- All six public release assets and four deployed Web files pass fresh byte
+  and SHA-256 checks. The Android public updater test passes for build52.
+  Both committed repository manifests point to build52; desktop raw-CDN
+  propagation and its native public-download recheck remain separate checks.
+- Installed desktop/gateway file hashes match the package and protected local
+  settings and authorizations remain unchanged. This does not assert that a
+  stopped gateway was started or that live approval acceptance was performed.
 
 ## Unsupported Archive Actions Hidden (0.0.15 / build51)
 
