@@ -24,6 +24,12 @@ Private test evidence is not part of the source repository.
 - Five isolated Android 35 cases pass, including MCP confirmation, identity
   exclusion and an actually visible button in the full conversation composer.
   The screenshot uses synthetic text and does not represent a real approval.
+- The probe-free APK survives an emulator cold start. All six public assets
+  and four deployed Web files pass byte/hash verification; both public feeds
+  match build53. Android and Electron native download/hash checks pass.
+- Installed desktop/gateway hashes match build53 and protected configuration
+  and authorizations remain unchanged. Gateway startup and real-request
+  acceptance still require runtime verification; no real approval is automated.
 
 ## Turn-Scoped Permission Approvals (0.0.16 / build52)
 
