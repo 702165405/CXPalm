@@ -3,6 +3,9 @@ process.env.CXPALM_DESKTOP_FIXTURE='1';process.env.CXPALM_DESKTOP_SMOKE='1';
 const {app}=require('electron');const path=require('node:path');const fs=require('node:fs/promises');const assert=require('node:assert/strict');
 const output=path.resolve(__dirname,'../../.local/desktop-ui-tests');
 app.setPath('userData',path.resolve(__dirname,'../../.local/desktop-ui-profile-'+process.pid));app.disableHardwareAcceleration();
+const fixture=require('./fixture.cjs'),createFixture=fixture.create;
+let statusDelay=null,statusReads=0;
+fixture.create=()=>{const client=createFixture(),request=client.request.bind(client);client.request=async(method,args)=>{if(method==='status'){statusReads++;if(statusDelay)await statusDelay;}return request(method,args);};return client;};
 const desktop=require('../main.cjs');
 async function evaluate(win,script){try{return await win.webContents.executeJavaScript(script,true);}catch(error){console.error('Failed renderer expression: '+script);throw error;}}
 async function wait(win,predicate){const until=Date.now()+10000;while(Date.now()<until){if(await evaluate(win,predicate))return;await new Promise(resolve=>setTimeout(resolve,80));}throw new Error('UI condition timed out: '+predicate);}
@@ -13,6 +16,10 @@ async function capture(win,name){await new Promise(resolve=>setTimeout(resolve,2
  assert.equal(await evaluate(win,"(()=>{const ids=[...document.querySelectorAll('[id]')].map(n=>n.id);return ids.length===new Set(ids).size})()"),true);
  const problems=[];win.webContents.on('console-message',details=>{if(details.level==='error')problems.push(details.message);});win.webContents.on('preload-error',(_event,_path,error)=>problems.push(String(error)));win.webContents.on('render-process-gone',()=>problems.push('renderer exited'));
  await wait(win,"document.getElementById('active-count').textContent==='13'");
+ if(process.platform==='darwin')assert.ok(await evaluate(win,"document.querySelector('.titlebar > span').getBoundingClientRect().left>=84"),'Mac title must leave space for native window buttons');
+ assert.equal(await evaluate(win,"document.documentElement.dataset.platform"),process.platform);
+ assert.equal(await evaluate(win,"getComputedStyle(document.querySelector('.titlebar')).webkitAppRegion"),'drag');
+ assert.deepEqual(await evaluate(win,"(()=>{const root=document.documentElement,before=root.dataset.platform;root.dataset.platform='win32';const style=getComputedStyle(document.querySelector('.titlebar')),padding=[style.paddingLeft,style.paddingRight];root.dataset.platform=before;return padding;})()"),['20px','150px']);
  assert.equal(await evaluate(win,"typeof require"),'undefined');assert.equal(await evaluate(win,"typeof process"),'undefined');
  assert.equal(await evaluate(win,"document.getElementById('fixture-label').hidden"),false);
  await click(win,'start');await wait(win,"document.getElementById('global-status').textContent.includes('运行中')");await capture(win,'overview');
@@ -41,11 +48,21 @@ async function capture(win,name){await new Promise(resolve=>setTimeout(resolve,2
  assert.equal(await evaluate(win,"window.cxDesktop.saveConnection({}).then(()=>false,()=>true)"),true);
  await evaluate(win,"window.cxDesktop.invoke('stop')");await click(win,'refresh');await wait(win,"!document.getElementById('save-connection').disabled");
  await wait(win,"!document.getElementById('save-account').disabled");
- await evaluate(win,"document.getElementById('account-username').value='owner';document.getElementById('account-password').value='fixture-password-only';document.getElementById('account-confirm').value='fixture-password-only'");
- await click(win,'save-account');await wait(win,"document.getElementById('account-status').textContent.includes('登录账号已保存')");
+ await evaluate(win,"document.getElementById('account-username').value='owner';document.getElementById('account-password').value='fixture-password-only';document.getElementById('account-confirm').value='fixture-password-only';document.getElementById('account-confirm').focus();window.accountInputBlurred=false;document.getElementById('account-confirm').addEventListener('blur',()=>{window.accountInputBlurred=true;},{once:true})");
+ await new Promise(resolve=>setTimeout(resolve,5500));
+ assert.equal(await evaluate(win,"window.accountInputBlurred"),false,'periodic status polling must not blur the password input');
+ assert.equal(await evaluate(win,"document.activeElement.id"),'account-confirm');
+ assert.equal(await evaluate(win,"document.getElementById('account-password').value"),'fixture-password-only');
+ let releaseStatus;statusDelay=new Promise(resolve=>{releaseStatus=resolve;});const previousReads=statusReads;
+ win.webContents.send('desktop:changed');
+ for(let attempt=0;attempt<100&&statusReads===previousReads;attempt++)await new Promise(resolve=>setTimeout(resolve,20));
+ assert.ok(statusReads>previousReads,'background status request started');
+ assert.equal(await evaluate(win,"document.getElementById('save-account').disabled"),false,'background polling must not block saving');
+ await click(win,'save-account');statusDelay=null;releaseStatus();
+ await wait(win,"document.getElementById('account-status').textContent.includes('登录账号已保存')");
  assert.equal(await evaluate(win,"document.getElementById('account-password').value"),'');assert.equal(await evaluate(win,"document.getElementById('account-confirm').value"),'');
  win.setSize(1280,860);await capture(win,'settings');win.setSize(900,740);await capture(win,'settings-compact');
  assert.equal(await evaluate(win,'document.documentElement.scrollWidth<=window.innerWidth'),true);
- assert.deepEqual(problems,[]);console.log('PASS: isolated Electron window, sandbox, start/stop UI, account login, safe device names, confirmed revocation, diagnostics and 900px layout');
- console.log('Screenshots: '+output);await fs.writeFile(path.join(output,'result.json'),JSON.stringify({passed:true,isolated:true,scenarios:['sandbox','start-stop','account-login','device-text-safety','device-revocation','authorization-log-separation','ip-policy-enable-disable','diagnostic-refresh','diagnostics','compact-layout','connection-settings','independent-startup-switches','save-without-start','running-config-guard','settings-compact']}));await desktop.closeForTest();
+ assert.deepEqual(problems,[]);console.log('PASS: isolated Electron window, sandbox, start/stop UI, account login, nonblocking status polling, safe device names, confirmed revocation, diagnostics and 900px layout');
+ console.log('Screenshots: '+output);await fs.writeFile(path.join(output,'result.json'),JSON.stringify({passed:true,isolated:true,scenarios:['sandbox','start-stop','account-login','account-input-during-polling','account-save-during-polling','device-text-safety','device-revocation','authorization-log-separation','ip-policy-enable-disable','diagnostic-refresh','diagnostics','compact-layout','connection-settings','independent-startup-switches','save-without-start','running-config-guard','settings-compact']}));await desktop.closeForTest();
 })().catch(error=>{console.error(error);app.exit(1);});
