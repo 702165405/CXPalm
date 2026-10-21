@@ -281,9 +281,11 @@ function renderControls() {
   $('send').textContent=mode==='queue'&&active?'加入队列 ≡':mode==='steer'||(mode==='auto'&&active)?'引导 ↗':'发送 ↗';
   renderQueue(writable);
   $('queue-send').hidden=!active||mode==='queue';$('queue-send').disabled=!writable||uploading||!state.snapshot?.queueAvailable||(!$('message').value.trim()&&!files.length)||goalDraft;
-  $('notify-chat').disabled=!bridge.connected||!state.selected||!!pending||state.cached;
+  const notifyUnavailable=state.snapshot?.notificationPreference?.available===false;
+  $('notify-chat').disabled=!bridge.connected||!state.selected||!!pending||state.cached||notifyUnavailable;
   const notify=state.snapshot?.notificationPreference?.enabled===true;
-  $('notify-chat').textContent=notify?'通知：开':'通知：关';$('notify-chat').setAttribute('aria-pressed',String(notify));
+  $('notify-chat').textContent=notifyUnavailable?'通知：暂不可用':notify?'通知：开':'通知：关';$('notify-chat').setAttribute('aria-pressed',String(notify));
+  $('notify-chat').title=notifyUnavailable?state.snapshot.notificationPreference.reason||'桌面身份暂不可用，正常聊天不受影响':'';
   $('stop').disabled=!writable||!active;
   $('apply-settings').disabled=!writable||!state.settingsBase||!Object.keys(settingsChanges()).length;
   $('compact').disabled=!writable||active;
@@ -346,7 +348,7 @@ function syncClearedDraft() {
 }
 function markVisibleRead() {
   const container=$('messages');
-  if(state.cached || (state.historyPage?.hasMore) || !readSyncSupported || !bridge.connected || !state.desktop || !state.selected || !state.snapshot || state.page!=='chat' || document.visibilityState!=='visible' || $('shell').classList.contains('list-open'))return;
+  if(state.cached || (state.historyPage?.hasMore) || !readSyncSupported || state.snapshot?.readSyncAvailable===false || !bridge.connected || !state.desktop || !state.selected || !state.snapshot || state.page!=='chat' || document.visibilityState!=='visible' || $('shell').classList.contains('list-open'))return;
   const latest=[...container.querySelectorAll('.message[data-role="Codex"]')].at(-1);
   if(!latest)return;
   const viewport=container.getBoundingClientRect(),reply=latest.getBoundingClientRect();
@@ -356,7 +358,11 @@ function markVisibleRead() {
   if(readAttempt===key)return;
   readAttempt=key;
   // The server owns the read state. Do not optimistically hide unread on this device.
-  run(()=>bridge.command('chat.read',{thread:state.selected.id,readToken}).then(result=>{if(result.accepted!==true&&readAttempt===key)readAttempt=null;}).catch(error=>{if(readAttempt===key)readAttempt=null;throw error;}));
+  run(()=>bridge.command('chat.read',{thread:state.selected.id,readToken}).then(result=>{
+    if(readAttempt!==key)return;
+    if(result.available===false){state.snapshot={...state.snapshot,readSyncAvailable:false};renderControls();}
+    if(result.accepted!==true)readAttempt=null;
+  }).catch(error=>{if(readAttempt===key)readAttempt=null;throw error;}));
 }
 document.addEventListener('visibilitychange',()=>run(()=>markVisibleRead()));
 $('messages').addEventListener('scroll',()=>run(()=>markVisibleRead()),{passive:true});
@@ -629,9 +635,10 @@ function renderConversation() {
     const thread=state.selected.id,requestSignature=JSON.stringify(request);
     const actions = document.createElement('div'); actions.className = 'actions';
     for (const decision of approvalDecisions(request)) {
-      const button = text('button', decision === 'accept' ? (permissionRequest?'批准本轮权限':'仅批准这一次') : decision==='cancel'?'取消请求':'拒绝'); button.type = 'button';
+      const button = text('button', decision === 'acceptForSession' ? '本会话内始终批准' : decision === 'accept' ? (permissionRequest?'批准本轮权限':'仅批准这一次') : decision==='cancel'?'取消请求':'拒绝'); button.type = 'button';
       button.addEventListener('click', () => run(async () => {
         if(state.selected?.id!==thread||!state.snapshot?.requests?.some(current=>JSON.stringify(current)===requestSignature))return;
+        if(decision==='acceptForSession'&&!confirm('允许官方桌面在本会话内记住此请求对应的批准？后续匹配操作可能不再逐次询问；不会永久批准。'))return;
         if (decision === 'accept' && !confirm('仅批准这一次请求？请先核对操作详情。')) return;
         await write('chat.approve', {thread, requestId: String(request.id), decision});
       })); actions.append(button);

@@ -86,7 +86,7 @@ fun synchronizedChatState(current: ViewState, data: JSONObject): ViewState {
 fun readReceiptEligible(state: ViewState, foreground: Boolean, latestReplyVisible: Boolean): Boolean =
     foreground && !state.cached && latestReplyVisible && state.sharedReadSync && state.connected && state.desktopConnected &&
     state.thread != null && (state.historyPage == null || state.historyPage.opt("hasMore") == false) && Regex("[a-f0-9]{64}").matches(state.readToken) &&
-    state.snapshot?.optBoolean("hasUnreadTurn") == true
+    state.snapshot?.optBoolean("hasUnreadTurn") == true && state.snapshot.optBoolean("readSyncAvailable",true)
 
 fun sessionSyncIssue(sync: JSONObject?, connected: Boolean): String? =
     if(connected) sync?.optString("error")?.trim()?.takeIf { it.isNotBlank() } else null

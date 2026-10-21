@@ -104,6 +104,11 @@ func (f *notificationFeed) syncJournal(s *Server) error {
 	}
 	scope, err := s.Bridge.NotificationScope()
 	if err != nil {
+		f.mu.Lock()
+		// Invalidate only the in-memory view. Never replay a previous account's
+		// journal while the current identity cannot be verified.
+		f.journal, f.scope, f.recent, f.checkpoints = nil, "", nil, nil
+		f.mu.Unlock()
 		return err
 	}
 	f.mu.Lock()
@@ -286,6 +291,10 @@ func (f *notificationFeed) run(s *Server) {
 	}()
 	refresh := func() {
 		if err := f.syncJournal(s); err != nil {
+			for id, entry := range watchers {
+				entry.stop()
+				delete(watchers, id)
+			}
 			f.status("提醒记录同步暂不可用，正在重试")
 			return
 		}

@@ -78,7 +78,9 @@ export function approvalDecisions(request) {
     const p=request.params,s=p?.requestedSchema;
     if(p?.mode!=='form'||p?._meta?.codex_approval_kind!=='mcp_tool_call'||s?.type!=='object'||!s.properties||typeof s.properties!=='object'||Array.isArray(s.properties)||Object.keys(s.properties).length)return [];
     if(Object.keys(s).some(key=>!['type','properties','required','title','description'].includes(key))||('required' in s&&(!Array.isArray(s.required)||s.required.length)))return [];
-    return ['accept','decline','cancel'];
+    const persist=p._meta.persist;
+    const session=persist==='session'||Array.isArray(persist)&&persist.includes('session');
+    return ['accept',...(session?['acceptForSession']:[]),'decline','cancel'];
   }
   if(request.method==='item/permissions/requestApproval') {
     const permissions=request.params?.permissions;
@@ -87,7 +89,7 @@ export function approvalDecisions(request) {
   }
   if (!['item/commandExecution/requestApproval', 'item/fileChange/requestApproval'].includes(request.method)) return [];
   const available = request.params?.availableDecisions;
-  return ['accept', 'decline', 'cancel'].filter(value => available == null ? value!=='cancel' : Array.isArray(available) && available.includes(value));
+  return ['accept', 'acceptForSession', 'decline', 'cancel'].filter(value => available == null ? ['accept','decline'].includes(value) : Array.isArray(available) && available.includes(value));
 }
 
 export function contextUsage(snapshot) {

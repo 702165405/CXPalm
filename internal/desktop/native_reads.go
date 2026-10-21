@@ -29,6 +29,14 @@ type nativeReadCache struct {
 // Decode only identity claims; bearer and refresh tokens never leave this function.
 // The desktop validates this context again before accepting the IPC broadcast.
 func (b *Bridge) nativeReads() (*nativeReads, error) {
+	value, err := b.loadNativeReads()
+	if err != nil {
+		return nil, errors.Join(ErrReadSyncUnavailable, err)
+	}
+	return value, nil
+}
+
+func (b *Bridge) loadNativeReads() (*nativeReads, error) {
 	c := &b.nativeReadCache
 	c.Lock()
 	defer c.Unlock()

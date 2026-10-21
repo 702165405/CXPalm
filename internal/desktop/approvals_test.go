@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"strings"
 	"testing"
 	"time"
 )
@@ -77,7 +78,11 @@ func TestMCPApprovalRejectsAuthAndNonemptyForms(t *testing.T) {
 
 func TestApprovalUsesOriginalOwnerIPC(t *testing.T) {
 	for _, method := range []string{"item/permissions/requestApproval", "mcpServer/elicitation/request"} {
-		for _, choice := range []string{"accept", "decline"} {
+		choices := []string{"accept", "decline"}
+		if method == "mcpServer/elicitation/request" {
+			choices = append(choices, "acceptForSession")
+		}
+		for _, choice := range choices {
 			t.Run(method+choice, func(t *testing.T) {
 				b, raw, _ := controlFixture(t)
 				defer b.Close()
@@ -132,10 +137,20 @@ func TestApprovalUsesOriginalOwnerIPC(t *testing.T) {
 				json.Unmarshal(f.Params, &p)
 				response := p["response"].(map[string]any)
 				if method == "mcpServer/elicitation/request" {
-					if response["action"] != choice || response["_meta"] != nil {
-						t.Fatal("wrong MCP action or persistent grant")
+					expectedAction := choice
+					if choice == "acceptForSession" {
+						expectedAction = "accept"
+						meta, ok := response["_meta"].(map[string]any)
+						if !ok || len(meta) != 1 || meta["persist"] != "session" {
+							t.Fatal("session grant widened or lost")
+						}
+					} else if response["_meta"] != nil {
+						t.Fatal("single-use approval persisted")
 					}
-					if choice == "accept" {
+					if response["action"] != expectedAction {
+						t.Fatal("wrong MCP action")
+					}
+					if choice == "accept" || choice == "acceptForSession" {
 						if content, ok := response["content"].(map[string]any); !ok || len(content) != 0 {
 							t.Fatal("wrong MCP form content")
 						}
@@ -151,5 +166,48 @@ func TestApprovalUsesOriginalOwnerIPC(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestSessionApprovalRequiresExplicitOffer(t *testing.T) {
+	for _, tc := range []struct {
+		persist string
+		offered bool
+	}{
+		{`"session"`, true}, {`["session","always"]`, true}, {`["session"]`, true},
+		{`"always"`, false}, {`["always"]`, false}, {`null`, false}, {`true`, false}, {`{"session":true}`, false}, {`[{}]`, false},
+	} {
+		var requests []any
+		json.Unmarshal([]byte(`[{"id":"pending","method":"mcpServer/elicitation/request","params":{"threadId":"thread","mode":"form","requestedSchema":{"type":"object","properties":{}},"_meta":{"codex_approval_kind":"mcp_tool_call","persist":`+tc.persist+`}}}]`), &requests)
+		_, payload, err := approvalAction(map[string]any{"requests": requests}, "thread", "pending", json.RawMessage(`"acceptForSession"`))
+		if (err == nil) != tc.offered {
+			t.Fatalf("persist %s: %v", tc.persist, err)
+		}
+		if err == nil {
+			encoded, _ := json.Marshal(payload)
+			if strings.Contains(string(encoded), "always") {
+				t.Fatal("permanent approval leaked")
+			}
+		}
+	}
+	for _, method := range []string{"item/commandExecution/requestApproval", "item/fileChange/requestApproval"} {
+		for _, offered := range []bool{true, false} {
+			params := map[string]any{}
+			if offered {
+				params["availableDecisions"] = []any{"accept", "acceptForSession", "decline"}
+			}
+			raw := map[string]any{"requests": []any{map[string]any{"id": "pending", "method": method, "params": params}}}
+			_, payload, err := approvalAction(raw, "thread", "pending", json.RawMessage(`"acceptForSession"`))
+			if (err == nil) != offered {
+				t.Fatalf("session decision %s offered=%v: %v", method, offered, err)
+			}
+			if err == nil && payload["decision"] != "acceptForSession" {
+				t.Fatal("session choice became single-use")
+			}
+		}
+	}
+	raw := map[string]any{"requests": []any{map[string]any{"id": "pending", "method": "item/permissions/requestApproval", "params": map[string]any{"threadId": "thread", "permissions": map[string]any{}}}}}
+	if _, _, err := approvalAction(raw, "thread", "pending", json.RawMessage(`"acceptForSession"`)); err == nil {
+		t.Fatal("turn permission implicitly escalated to session")
 	}
 }

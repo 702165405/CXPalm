@@ -422,8 +422,9 @@ fun sessionDate(session: JSONObject): String {
         }
       }
       val notify=snapshot?.optJSONObject("notificationPreference")?.optBoolean("enabled")==true
-      IconToggleButton(checked=notify,onCheckedChange=client::notifications,enabled=state.connected&&!state.cached&&state.pending==null) {
-          Icon(painterResource(R.drawable.ic_bell),tr(if(notify) "会话通知：开" else "会话通知：关"),Modifier.size(22.dp),tint=if(notify) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+      val notifyAvailable=snapshot?.optJSONObject("notificationPreference")?.optBoolean("available",true)!=false
+      IconToggleButton(checked=notify,onCheckedChange=client::notifications,enabled=state.connected&&!state.cached&&state.pending==null&&notifyAvailable) {
+          Icon(painterResource(R.drawable.ic_bell),tr(if(!notifyAvailable) "会话通知：暂不可用，正常聊天不受影响" else if(notify) "会话通知：开" else "会话通知：关"),Modifier.size(22.dp),tint=if(notify) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
       }
     }
     if (panel != null) Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {

@@ -743,5 +743,7 @@
   "仅批准请求中列出的权限，限当前轮次，不会永久授权。": "Grant only the listed permissions for this turn, never permanently.",
   "请先核对操作详情，再批准这一次请求。": "Review the operation details before approving this request.",
   "确认批准": "Confirm approval",
-  "取消请求": "Cancel request"
+  "取消请求": "Cancel request",
+  "本会话内始终批准": "Always approve in this conversation",
+  "由官方桌面按本会话的授权范围记住批准；不是永久授权，后续匹配操作可能不再逐次询问。": "The official desktop remembers approval within this conversation scope, not permanently. Later matching operations may run without another prompt."
 }

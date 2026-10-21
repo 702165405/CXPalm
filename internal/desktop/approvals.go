@@ -5,6 +5,20 @@ import (
 	"errors"
 )
 
+func sessionApprovalOffered(value any) bool {
+	if mode, ok := value.(string); ok {
+		return mode == "session"
+	}
+	if modes, ok := value.([]any); ok {
+		for _, mode := range modes {
+			if text, ok := mode.(string); ok && text == "session" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func simpleToolApproval(params map[string]any) bool {
 	meta, _ := params["_meta"].(map[string]any)
 	schema, _ := params["requestedSchema"].(map[string]any)
@@ -38,7 +52,7 @@ func approvalFingerprint(raw map[string]any, requestID string) string {
 // Resolve decisions against the owner's current request, never client-supplied grants.
 func approvalAction(raw map[string]any, thread, requestID string, decision json.RawMessage) (string, map[string]any, error) {
 	var choice string
-	if json.Unmarshal(decision, &choice) != nil || (choice != "accept" && choice != "decline" && choice != "cancel") {
+	if json.Unmarshal(decision, &choice) != nil || (choice != "accept" && choice != "acceptForSession" && choice != "decline" && choice != "cancel") {
 		return "", nil, errors.New("unsupported approval decision")
 	}
 	requests, _ := raw["requests"].([]any)
@@ -58,14 +72,24 @@ func approvalAction(raw map[string]any, thread, requestID string, decision json.
 				return "", nil, errors.New("this MCP request requires official desktop handling")
 			}
 			var content any
-			if choice == "accept" {
+			response := map[string]any{"action": choice}
+			if choice == "acceptForSession" {
+				meta, _ := params["_meta"].(map[string]any)
+				if !sessionApprovalOffered(meta["persist"]) {
+					return "", nil, errors.New("session approval is not offered by this request")
+				}
+				response["action"] = "accept"
+				response["_meta"] = map[string]any{"persist": "session"}
+			}
+			if choice == "accept" || choice == "acceptForSession" {
 				content = map[string]any{}
 			}
-			// No persist metadata: approval is for this tool call, not future calls.
-			payload["response"] = map[string]any{"action": choice, "content": content}
+			// Only the explicit session choice adds persistence; never forward "always".
+			response["content"] = content
+			payload["response"] = response
 			return "thread-follower-submit-mcp-server-elicitation-response", payload, nil
 		case "item/permissions/requestApproval":
-			if choice == "cancel" {
+			if choice != "accept" && choice != "decline" {
 				return "", nil, errors.New("unsupported approval decision")
 			}
 			permissions, ok := params["permissions"].(map[string]any)
@@ -85,6 +109,9 @@ func approvalAction(raw map[string]any, thread, requestID string, decision json.
 			payload["response"] = map[string]any{"permissions": granted, "scope": "turn"}
 			return "thread-follower-permissions-request-approval-response", payload, nil
 		case "item/commandExecution/requestApproval", "item/fileChange/requestApproval":
+			if choice == "acceptForSession" && params["availableDecisions"] == nil {
+				return "", nil, errors.New("session approval is not offered by this request")
+			}
 			if available, exists := params["availableDecisions"]; exists && available != nil {
 				choices, ok := available.([]any)
 				allowed := false

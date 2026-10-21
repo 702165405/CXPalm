@@ -17,6 +17,15 @@ async function main() {
   const secret = 'a'.repeat(64);
   const device = {id: 'ui-fixture-device', expires: Math.floor(Date.now() / 1000) + 86400};
   const sent = [], receipts = new Map(), commands = new EventEmitter();
+  // Await the exact approval frame: a preceding confirm() dialog can delay an earlier
+  // chat.approve, so "any chat.approve" is not a reliable synchronisation point.
+  const waitApprove = async (requestId, decision) => {
+    for (let attempt = 0; attempt < 400; attempt++) {
+      if (sent.some(q => q.method === 'chat.approve' && q.requestId === requestId && q.decision === decision)) return;
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    throw new Error(`chat.approve not observed: ${requestId}/${decision}`);
+  };
   let authorized = false;
   let active = false;
   let processRevision=0;let processRunning=false;
@@ -25,6 +34,7 @@ async function main() {
   let sequence=0;
   let replyToken='a'.repeat(64);
   let sharedReadToken='';
+  let readSyncAvailable=true;
   let listError='';let listHistorical=false;let listSubscription='';let restored=false;
   let holdHistory=false;const heldHistory=[];let sentTurn=null;let offlineSession=false;
   let sessionStatus=0;let holdSelected=false;let holdStartup=false;const heldStartup=[];
@@ -38,7 +48,7 @@ async function main() {
   const commandApproval={id:'approval-fixture',method:'item/commandExecution/requestApproval',params:{command:'fixture only - not executed',availableDecisions:['accept','decline']}};
   let approvalRequests=[commandApproval];
   const snapshot = () => ({type: 'chat.state', data: {id: 'main-fixture', sequence:++sequence,readToken:replyToken, connected: true, snapshot: {
-    notificationPreference,queuedMessages,queueAvailable:true,threadGoal:nativeGoal,goalRevision:'fixture-goal-revision',goalAvailable:true,hasUnreadTurn:sharedReadToken!==replyToken,latestModel:settings.model,latestReasoningEffort:settings.effort,latestCollaborationMode:{mode:settings.mode},latestThreadSettings:{activePermissionProfile:{id:settings.permission==='auto-review'?':workspace':settings.permission},approvalsReviewer:settings.permission==='auto-review'?'auto_review':'user'},controlsRevision:'fixture-revision',latestTokenUsageInfo:{last:{inputTokens:2000},modelContextWindow:10000},threadRuntimeStatus: {type: active ? 'active' : 'idle'}, observedAtMs:Date.now(),turns: [{turnId:'t69',status:active?'inProgress':'completed',turnStartedAtMs,...(active?{}:{durationMs:764351}),items: [
+    readSyncAvailable,notificationPreference,queuedMessages,queueAvailable:true,threadGoal:nativeGoal,goalRevision:'fixture-goal-revision',goalAvailable:true,hasUnreadTurn:sharedReadToken!==replyToken,latestModel:settings.model,latestReasoningEffort:settings.effort,latestCollaborationMode:{mode:settings.mode},latestThreadSettings:{activePermissionProfile:{id:settings.permission==='auto-review'?':workspace':settings.permission},approvalsReviewer:settings.permission==='auto-review'?'auto_review':'user'},controlsRevision:'fixture-revision',latestTokenUsageInfo:{last:{inputTokens:2000},modelContextWindow:10000},threadRuntimeStatus: {type: active ? 'active' : 'idle'}, observedAtMs:Date.now(),turns: [{turnId:'t69',status:active?'inProgress':'completed',turnStartedAtMs,...(active?{}:{durationMs:764351}),items: [
       {type: 'userMessage', text: '检查这个功能的安全边界。'},
       {type: 'agentMessage', text: '这是隔离的 UI 测试会话，不是真实模型输出。\n\n```js\nconst safe = true;\n```\n\n<img src=x onerror="window.xss=true">'},
       {id:'tool-fixture',type:'commandExecution',command:'fixture command --not-executed',status:processRunning?'inProgress':processRevision?'completed':'inProgress',text:'',deferred:true,bodyRevision:'fixture-body-'+processRevision},
@@ -292,14 +302,12 @@ async function main() {
     approvalRequests=[permissionApproval];currentSocket.send(JSON.stringify(snapshot()));
     await page.getByRole('button',{name:'批准本轮权限',exact:true}).waitFor();
     assert.equal(await page.locator('#approvals details').getAttribute('open'),'');
-    const acceptedPermission=once(commands,'chat.approve');
     await page.getByRole('button',{name:'批准本轮权限',exact:true}).click();
-    await acceptedPermission;
+    await waitApprove('42','accept');
     await page.locator('#pending').waitFor({state:'hidden'});
     assert(sent.some(q=>q.method==='chat.approve'&&q.requestId==='42'&&q.decision==='accept'&&!q.permissions&&!q.response));
-    const deniedPermission=once(commands,'chat.approve');
     await page.getByRole('button',{name:'拒绝',exact:true}).click();
-    await deniedPermission;
+    await waitApprove('42','decline');
     await page.locator('#pending').waitFor({state:'hidden'});
     assert(sent.some(q=>q.method==='chat.approve'&&q.requestId==='42'&&q.decision==='decline'));
     approvalRequests=[{...commandApproval,params:{availableDecisions:['cancel']}}];currentSocket.send(JSON.stringify(snapshot()));
@@ -309,8 +317,8 @@ async function main() {
     approvalRequests=[mcpApproval];currentSocket.send(JSON.stringify(snapshot()));
     await page.getByText('Fixture only: confirm this tool call',{exact:true}).waitFor();
     await page.setViewportSize({width:390,height:844});
-    for(const [name,decision] of [['仅批准这一次','accept'],['拒绝','decline'],['取消请求','cancel']]) {
-      const response=once(commands,'chat.approve');await page.getByRole('button',{name,exact:true}).click();await response;
+    for(const [name,decision] of [['仅批准这一次','accept'],['本会话内始终批准','acceptForSession'],['拒绝','decline'],['取消请求','cancel']]) {
+      await page.getByRole('button',{name,exact:true}).click();await waitApprove('mcp-pending',decision);
       await page.locator('#pending').waitFor({state:'hidden'});
       assert(sent.some(q=>q.method==='chat.approve'&&q.requestId==='mcp-pending'&&q.decision===decision&&!q._meta&&!q.response));
     }
@@ -824,6 +832,24 @@ async function main() {
     await page.locator('#notify-chat').click();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='true');
     await page.reload();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='true');
     await page.locator('#notify-chat').click();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='false');
+    // Missing desktop identity disables optional sync, not reading or sending.
+    readSyncAvailable=false;notificationPreference={enabled:false,available:false,reason:'桌面身份暂不可用，正常聊天不受影响'};
+    sharedReadToken='';replyToken='e'.repeat(64);currentSocket.send(JSON.stringify(snapshot()));
+    await page.waitForFunction(()=>document.querySelector('#notify-chat').disabled);
+    const readsWithoutIdentity=sent.filter(q=>q.method==='chat.read').length;
+    await page.locator('#message').fill('identity unavailable must not block this draft');
+    assert.equal(await page.locator('#send').isDisabled(),false);
+    await page.locator('#messages').evaluate(n=>{n.scrollTop=n.scrollHeight;n.dispatchEvent(new Event('scroll'));});
+    await page.waitForTimeout(150);
+    assert.equal(sent.filter(q=>q.method==='chat.read').length,readsWithoutIdentity);
+    assert.equal(sharedReadToken,'','missing identity was falsely marked read');
+    assert.match(await page.locator('#notify-chat').innerText(),/暂不可用/);
+    assert.match(await page.locator('#notify-chat').getAttribute('title'),/正常聊天不受影响/);
+    readSyncAvailable=true;notificationPreference={enabled:false,available:true};currentSocket.send(JSON.stringify(snapshot()));
+    await page.waitForFunction(()=>!document.querySelector('#notify-chat').disabled);
+    await page.locator('#messages').evaluate(n=>{n.scrollTop=n.scrollHeight;n.dispatchEvent(new Event('scroll'));});
+    await page.waitForTimeout(150);assert.equal(sharedReadToken,replyToken,'read sync did not recover');
+    await page.locator('#message').fill('');
     rejectUpload=true;
     await page.locator('#message').evaluate(node=>{const data=new DataTransfer();data.items.add(new File(['small clipboard fixture'],'small.png',{type:'image/png'}));node.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));});
     await page.locator('#notice').filter({hasText:'HTTP 413'}).waitFor();

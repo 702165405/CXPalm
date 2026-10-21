@@ -31,6 +31,14 @@ chat subscribe/history/item/catalog/read and operation lookup. Mutation methods:
 - `chat.queue`, `chat.queue.cancel`;
 - `chat.settings`, `chat.goal`, `chat.compact`, `chat.notifications`.
 
+`chat.approve` accepts `decision: acceptForSession` only when the current owner
+request explicitly offers session approval. MCP tool confirmations require
+`_meta.persist` to offer `session`; the gateway sends `action: accept` with only
+`_meta: {persist: session}`. Command/file approvals require `acceptForSession`
+in `availableDecisions`. The owner stores the scoped approval; the gateway does
+not cache approvals globally or expose permanent `always` grants. Both clients
+confirm the scope before sending. Permission-profile requests remain turn-only.
+
 IDs are durable device-scoped operation IDs. Save before transmission; query
 `operation.get {requestId}` after timeout or disconnect instead of resending.
 A matching duplicate returns its original receipt. Changed content under the

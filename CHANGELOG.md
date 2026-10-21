@@ -9,6 +9,23 @@ Versions describe implemented changes, not physical-device acceptance.
   privacy checks. Keep local account and runtime state outside Git.
 - Project license and public repository publication remain pending.
 
+## 0.0.19 (build55)
+
+- Offer session-scoped approval when the original owner request explicitly
+  persists for the current conversation: Web and Android show a distinct
+  "approve for this session" choice and confirm the scope before sending.
+- Require the owner to offer session approval; command and file requests need
+  `acceptForSession` in `availableDecisions`, MCP tool confirmations need
+  `_meta.persist` to offer `session`, and permission-profile requests stay
+  turn-only. Never expose a permanent `always` grant or cache one globally.
+- Treat unavailable desktop identity as an optional-feature availability state,
+  not an automatic read error that interrupts Web or Android conversations.
+- Disable cross-device read receipts and per-chat notification controls until
+  the current account and execution host can be verified. Never guess an account,
+  create auth files or report unconfirmed reads as accepted.
+- Invalidate only the in-memory notification view when identity is lost; do not
+  replay an old account's journal. Preserve saved preferences for recovery.
+
 ## 0.0.17 (build53)
 
 - Match MCP tool-call confirmations using the observed empty form schema and

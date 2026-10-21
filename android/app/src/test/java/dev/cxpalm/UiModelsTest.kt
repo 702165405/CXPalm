@@ -19,7 +19,14 @@ class UiModelsTest {
     @Test fun mcpToolApprovalsExcludeFormsAndIdentityChallenges() {
         val params=JSONObject("""{"mode":"form","_meta":{"codex_approval_kind":"mcp_tool_call","persist":["session","always"]},"requestedSchema":{"type":"object","properties":{}}}""")
         fun choices(p: JSONObject)=approvalDecisions(JSONObject().put("method","mcpServer/elicitation/request").put("params",p))
-        assertEquals(listOf("accept","decline","cancel"),choices(params))
+        assertEquals(listOf("accept","acceptForSession","decline","cancel"),choices(params))
+        for(persist in listOf("\"session\"","[\"session\"]")) {
+            val p=JSONObject(params.toString());p.getJSONObject("_meta").put("persist",org.json.JSONTokener(persist).nextValue());assertTrue("acceptForSession" in choices(p))
+        }
+        for(persist in listOf("null","\"always\"","[\"always\"]","true","{}","[{}]")) {
+            val p=JSONObject(params.toString());p.getJSONObject("_meta").put("persist",org.json.JSONTokener(persist).nextValue());assertFalse("acceptForSession" in choices(p))
+        }
+        assertEquals(listOf("acceptForSession","decline"),approvalDecisions(JSONObject("""{"method":"item/commandExecution/requestApproval","params":{"availableDecisions":["acceptForSession","decline"]}}""")))
         for(changed in listOf("""{"mode":"url"}""","""{"mode":"openai/userVerification"}""","""{"_meta":{"codex_approval_kind":"browser_auth"}}""","""{"requestedSchema":{"type":"object","properties":{"answer":{"type":"string"}}}}""","""{"requestedSchema":{"type":"object","properties":{},"required":["answer"]}}""")) {
             val p=JSONObject(params.toString());val patch=JSONObject(changed);patch.keys().forEach {p.put(it,patch.get(it))};assertTrue(choices(p).isEmpty())
         }

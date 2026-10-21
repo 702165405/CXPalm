@@ -122,11 +122,7 @@ func (b *Bridge) projectNotifications(s State) State {
 	if b.ReadStore == nil || len(s.Snapshot) == 0 {
 		return s
 	}
-	scope, err := b.NotificationScope()
-	if err != nil {
-		return s
-	}
-	pref, err := b.ReadStore.NotificationPreference(scope, s.ID)
+	pref, err := b.NotificationPreference(s.ID)
 	if err != nil {
 		return s
 	}
@@ -135,6 +131,7 @@ func (b *Bridge) projectNotifications(s State) State {
 		return s
 	}
 	raw["notificationPreference"] = pref
+	raw["readSyncAvailable"] = pref.Available
 	s.Snapshot = mustJSON(raw)
 	return s
 }

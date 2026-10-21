@@ -160,18 +160,19 @@ import io.github.u702165405.cxpalm.R
     val method = request.optString("method")
     val choices=approvalDecisions(request)
     val permissions=method=="item/permissions/requestApproval"
-    var confirm by remember(request.toString()) { mutableStateOf(false) }
-    if(confirm) AlertDialog(onDismissRequest={confirm=false},title={Text(tr(if(permissions) "批准本轮权限" else "仅批准这一次"))},
+    var confirm by remember(request.toString()) { mutableStateOf<String?>(null) }
+    confirm?.let { decision -> AlertDialog(onDismissRequest={confirm=null},title={Text(tr(if(decision=="acceptForSession") "本会话内始终批准" else if(permissions) "批准本轮权限" else "仅批准这一次"))},
         text={Column(Modifier.heightIn(max=300.dp).verticalScroll(rememberScrollState())) {
-            Text(tr(if(permissions) "仅批准请求中列出的权限，限当前轮次，不会永久授权。" else "请先核对操作详情，再批准这一次请求。"))
+            Text(tr(if(decision=="acceptForSession") "由官方桌面按本会话的授权范围记住批准；不是永久授权，后续匹配操作可能不再逐次询问。" else if(permissions) "仅批准请求中列出的权限，限当前轮次，不会永久授权。" else "请先核对操作详情，再批准这一次请求。"))
             Text(request.optJSONObject("params")?.toString(2).orEmpty(),style=MaterialTheme.typography.bodySmall)
-        }},confirmButton={TextButton(onClick={confirm=false;decide("accept")},enabled=enabled&&"accept" in choices){Text(tr("确认批准"))}},
-        dismissButton={TextButton(onClick={confirm=false}){Text(tr("取消"))}})
+        }},confirmButton={TextButton(onClick={confirm=null;decide(decision)},enabled=enabled&&decision in choices){Text(tr("确认批准"))}},
+        dismissButton={TextButton(onClick={confirm=null}){Text(tr("取消"))}}) }
     NoticeCard(tr("需要审批"), approvalSummary(request, tr("请在官方 Codex 桌面查看完整请求。"), tr("文件变更或工具请求，请展开详情并核对后再批准。")).lineSequence().take(2).joinToString("\n").take(240)) {
         Text(method, style = MaterialTheme.typography.labelSmall)
         if(permissions) Text(tr("仅批准请求中列出的权限，限当前轮次，不会永久授权。"),style=MaterialTheme.typography.bodySmall)
         if (choices.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if("accept" in choices) FilledTonalButton(onClick = { confirm=true }, enabled = enabled) { Text(tr(if(permissions) "批准本轮权限" else "仅批准这一次")) }
+            if("accept" in choices) FilledTonalButton(onClick = { confirm="accept" }, enabled = enabled) { Text(tr(if(permissions) "批准本轮权限" else "仅批准这一次")) }
+            if("acceptForSession" in choices) OutlinedButton(onClick = { confirm="acceptForSession" }, enabled = enabled) { Text(tr("本会话内始终批准")) }
             if("decline" in choices) OutlinedButton(onClick = { decide("decline") }, enabled = enabled) { Text(tr("拒绝")) }
             if("cancel" in choices) OutlinedButton(onClick = { decide("cancel") }, enabled = enabled) { Text(tr("取消请求")) }
         } else Text(tr("此请求请在官方 Codex 桌面处理。"))

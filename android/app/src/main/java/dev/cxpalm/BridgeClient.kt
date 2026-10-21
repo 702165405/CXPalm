@@ -260,7 +260,11 @@ class BridgeClient(context: Context) {
         if(readAttempt==key) return
         readAttempt=key
         command("chat.read",JSONObject().put("thread",s.thread).put("readToken",s.readToken)) { event ->
-            if(event.optJSONObject("data")?.optBoolean("accepted")!=true && readAttempt==key) readAttempt=""
+            val result=event.optJSONObject("data")
+            if(readAttempt==key) {
+                if(result?.optBoolean("available",true)==false) update { it.copy(snapshot=it.snapshot?.let { raw -> jsonCopy(raw).put("readSyncAvailable",false) }) }
+                if(result?.optBoolean("accepted")!=true) readAttempt=""
+            }
         }
     }
     fun refresh() {

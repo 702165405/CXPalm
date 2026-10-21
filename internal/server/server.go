@@ -405,11 +405,7 @@ func (s *Server) execute(ctx context.Context, device string, q Command) (any, er
 		if _, err := s.Bridge.History.Get(ctx, q.Thread); err != nil {
 			return nil, err
 		}
-		scope, err := s.Bridge.NotificationScope()
-		if err != nil {
-			return nil, err
-		}
-		return s.Store.NotificationPreference(scope, q.Thread)
+		return s.Bridge.NotificationPreference(q.Thread)
 	case "sessions.browse":
 		s.Bridge.StartSessionSync()
 		limit := q.Limit
@@ -429,9 +425,12 @@ func (s *Server) execute(ctx context.Context, device string, q Command) (any, er
 	case "chat.read":
 		accepted, err := s.Bridge.MarkRead(ctx, q.Thread, q.ReadToken)
 		if err != nil {
+			if errors.Is(err, desktop.ErrReadSyncUnavailable) {
+				return map[string]any{"accepted": false, "available": false, "reason": desktop.ReadSyncUnavailableReason, "thread": q.Thread, "readToken": q.ReadToken}, nil
+			}
 			return nil, err
 		}
-		return map[string]any{"accepted": accepted, "thread": q.Thread, "readToken": q.ReadToken}, nil
+		return map[string]any{"accepted": accepted, "available": true, "thread": q.Thread, "readToken": q.ReadToken}, nil
 	case "chat.item":
 		return s.Bridge.Item(ctx, q.Thread, q.Turn, q.Item)
 	case "chat.history":
@@ -483,6 +482,8 @@ func (s *Server) execute(ctx context.Context, device string, q Command) (any, er
 			if scope, err = s.Bridge.NotificationScope(); err == nil {
 				result, err = s.Store.SetNotificationPreference(scope, q.Thread, *q.Enabled)
 				s.Bridge.NotifyChanged(q.Thread)
+			} else {
+				err = errors.New(desktop.ReadSyncUnavailableReason)
 			}
 		}
 	} else if q.Method == "chat.queue" {

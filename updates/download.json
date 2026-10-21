@@ -1,9 +1,9 @@
 {
-  "version": "0.0.17",
-  "versionCode": 53,
+  "version": "0.0.19",
+  "versionCode": 55,
   "package": "io.github.u702165405.cxpalm.debug",
-  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.17-build53/CXPalm-0.0.17-build53-debug.apk",
-  "size": 9868439,
-  "sha256": "e0bf2b8142f5e4f91bfdf86fea7dbfe796d829aa6da6937857e0dbb11aa252b7",
-  "notes": "CXPalm 0.0.17 / build53: Fix missing approval buttons for MCP tool-call confirmations, matching the observed form-mode request with an empty object schema and mcp_tool_call metadata. Web and Android offer approve once, decline and cancel, forwarding to the original desktop owner without persistence metadata. Authentication, URL flows, identity verification, nonempty and unsupported forms remain on the official desktop. Restore command decisions when availableDecisions is null. Keep actions before expandable details and preserve uncertain-operation non-replay protection, settings, authorization and IP policy."
+  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.19-build55/CXPalm-0.0.19-build55-debug.apk",
+  "size": 9884967,
+  "sha256": "19193c564a81a5e6e1d855613b94d0c5143261c9848030aa3a7669f3b9ffe637",
+  "notes": "CXPalm 0.0.19 / build55: Add session-scoped approval. When the original owner request explicitly offers persistence for the current conversation, Web and Android can approve for this session and the owner stores the scoped grant; command and file approvals require acceptForSession in availableDecisions, MCP tool confirmations require _meta.persist to offer session, permission-profile requests stay turn-only, and permanent always grants are never exposed. Both clients confirm the scope before sending and the gateway caches nothing globally. Also keep normal Web and Android conversations usable when the desktop does not expose a verifiable identity: report cross-device read synchronization and per-chat notifications as temporarily unavailable instead of repeatedly surfacing read identity errors, never guess historical accounts, create auth files, mark unconfirmed replies read or replay a previous account's notifications, and restore optional features when identity returns while preserving saved settings, authorization and IP policy. Safe degradation only, not a replacement desktop login or physical-device acceptance."
 }

@@ -26,7 +26,7 @@ class RenderingProbeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val case = intent.getStringExtra("case") ?: "long-code"
-        if(case in listOf("approval-permission","approval-decline-only","approval-mcp","approval-mcp-identity")) {
+        if(case in listOf("approval-permission","approval-decline-only","approval-mcp","approval-mcp-session","approval-mcp-identity")) {
             val request=if(case=="approval-permission") JSONObject("""{"id":42,"method":"item/permissions/requestApproval","params":{"reason":"Fixture only: network access","permissions":{"network":{"enabled":true}}}}""")
                 else JSONObject("""{"id":43,"method":"item/commandExecution/requestApproval","params":{"command":"fixture only - not executed","availableDecisions":["decline"]}}""")
             if(case.startsWith("approval-mcp")) {
@@ -172,6 +172,11 @@ class RenderingProbeRunner : Instrumentation() {
                 check(checkNotNull(find("仅批准这一次","Approve once")).isVisibleToUser)
             } else if(case=="approval-mcp-identity") {
                 check(find("仅批准这一次","Approve once")==null)
+            } else if(case=="approval-mcp-session") {
+                click(checkNotNull(find("本会话内始终批准","Always approve in this conversation")))
+                check(find("fixture-decision:acceptForSession")==null)
+                click(checkNotNull(find("确认批准","Confirm approval")))
+                check(find("fixture-decision:acceptForSession")!=null)
             } else if(case=="approval-mcp") {
                 click(checkNotNull(find("仅批准这一次","Approve once")))
                 check(find("fixture-decision:accept")==null)
