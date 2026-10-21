@@ -23,6 +23,9 @@ Private test evidence is not part of the source repository.
 - Android 35 emulator replay and repeated openings of previously crashing
   inputs pass after the fix. The normal, probe-free APK also installs and stays
   alive through a cold-start check; its manifest has no probe instrumentation.
+- All three Android release assets pass fresh public byte/hash checks. The
+  actual Android updater's opt-in JVM feed/download test passes for build47.
+  The desktop feed is unchanged and the existing gateway remains running.
 - This is an Android-only patch. Web and Windows/gateway remain 0.0.10/build46;
   no gateway restart, authorization change or data migration is required.
 - Physical-device acceptance remains separate from emulator checks.
