@@ -733,5 +733,7 @@
   "操作结果未知，不会自动重发": "Operation outcome unknown; it will not be retried automatically",
   "操作等待确认": "Waiting for operation confirmation",
   "旧版本未记录所属会话。请先在桌面核对这项操作；核对前保留写入保护。": "The previous version did not record the conversation. Inspect this operation on the desktop before releasing write protection.",
-  "先在官方桌面检查实际结果。这只解除这项操作的提示，不会取消、撤销、确认成功或重新发送原操作。": "Inspect the actual result on the official desktop first. This only clears this operation warning; it does not cancel, undo, confirm success, or resend the operation."
+  "先在官方桌面检查实际结果。这只解除这项操作的提示，不会取消、撤销、确认成功或重新发送原操作。": "Inspect the actual result on the official desktop first. This only clears this operation warning; it does not cancel, undo, confirm success, or resend the operation.",
+  "操作未执行": "Operation not executed",
+  "操作未发送，草稿已保留": "Operation not sent; draft retained"
 }

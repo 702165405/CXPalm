@@ -4,6 +4,36 @@ This public record intentionally excludes real conversation titles, IDs,
 content, device identifiers, account counts, private paths and deployment logs.
 Private test evidence is not part of the source repository.
 
+## Archive Rejection Recovery (0.0.13 / build49)
+
+- Go tests and vet pass; Windows amd64 and macOS amd64/arm64 cross-builds pass.
+  The macOS binaries are not runtime-tested here.
+- Both opt-in official CLI integration tests pass in fresh, credential-free
+  CODEX_HOME directories: ownerless metadata lifecycle and a living writer's
+  explicit refusal. No real chat is resumed or archived by these tests.
+- All 63 Node checks and isolated Chromium/Electron UI fixtures pass. Historical
+  error recovery requires the original archive command fingerprint; transport
+  uncertainty and unrelated multi-step operations remain protected.
+- Android: 79 tests, 78 passed and one public-network opt-in skipped by default;
+  Lint and normal APK assembly pass. Eleven isolated emulator rendering cases
+  pass, including rejection, other-chat, unknown and legacy operation states.
+  The normal APK excludes probes, retains the existing signer and survives an
+  emulator cold start. No physical phone acceptance is claimed.
+- Known rejection releases only its matching client lock, retains drafts and
+  attachments, and displays a dismissible conversation-local failure notice.
+  The original archived-state flag is not optimistically changed.
+- Limitation: the current official follower protocol has no archive forwarding
+  request. While an official desktop holds the writer lease, archiving must be
+  done there. No writer lock is stolen, no second executor is started, and the
+  original failed operation is never replayed or removed from the audit log.
+- All six public GitHub assets and the deployed Web entry/versioned modules
+  pass fresh size/SHA-256 checks. Both repository feeds match build49. The real
+  Android and Electron updaters verify their public downloads; the installer
+  is not executed by the updater test.
+- Local desktop/gateway health reports 0.0.13, owned by the desktop UI. Public
+  session lookup still requires authentication. Deployment preserves config,
+  preferences, authorizations, IP policy and OS startup settings.
+
 ## Conversation-Scoped Receipts (0.0.12 / build48)
 
 - Go tests/vet and Windows amd64 / macOS amd64+arm64 cross-builds pass.
@@ -76,8 +106,8 @@ Private test evidence is not part of the source repository.
 
 ## Source Baseline
 
-- Web / Android source: 0.0.12 / versionCode 48; desktop/gateway: 0.0.10.
-- Desktop package: releaseBuild 46.
+- Web / Android / desktop / gateway source: 0.0.13 / versionCode 49.
+- Desktop package: releaseBuild 49.
 - Previous local records report passing Go tests/vet, Windows amd64 and macOS
   amd64/arm64 cross-builds, Web and desktop tests, Android unit tests, Lint and
   APK assembly for this baseline. These are historical reports, not a fresh

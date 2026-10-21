@@ -321,15 +321,18 @@ function renderControls() {
   }else $('settings-current').textContent='选择会话后读取当前配置。';
 }
 function currentPending() { return bridge.device && state.selected && bridge.pendingFor(state.selected.id); }
-function displayedPending() { return bridge.device && (state.page==='chat' ? currentPending() : null); }
+function displayedPending() { return bridge.device && (state.page==='chat' && state.selected ? bridge.noticeFor(state.selected.id) : null); }
 function renderPending() {
-  for(const [prefix,pending] of [['pending',displayedPending()],['create-pending',bridge.device && bridge.pendingFor(null)]]) {
+  for(const [prefix,pending] of [['pending',displayedPending()],['create-pending',bridge.device && bridge.noticeFor(null)]]) {
     $(prefix).hidden = !pending;
     $(prefix).dataset.operation=pending?.id||'';
     if (!pending) continue;
     const receipt = bridge.receiptFor(pending);
-    $(prefix+'-title').textContent = receipt?.status === 'unknown' ? '操作结果未知，不会自动重发' : '操作等待确认';
+    const terminal=['rejected','not_sent'].includes(receipt?.status);
+    $(prefix+'-title').textContent = receipt?.status==='rejected'?'操作未执行':receipt?.status==='not_sent'?'操作未发送，草稿已保留':receipt?.status === 'unknown' ? '操作结果未知，不会自动重发' : '操作等待确认';
     $(prefix+'-detail').textContent = `${pending.method} · ${pending.id}。${receipt?.result?.error || '请查询这次操作的原始回执；超时或重连不代表操作失败。'}`;
+    $('check-'+prefix).hidden=terminal;
+    $('dismiss-'+prefix).hidden=!terminal;
     $('check-'+prefix).disabled = !bridge.connected;
     $('ack-'+prefix).hidden = receipt?.status !== 'unknown';
     $('ack-'+prefix).disabled = !bridge.connected;
@@ -983,6 +986,7 @@ listen('queue-send','click',()=>submitMessage(true));
 $('message').addEventListener('keydown',event=>{if(event.isComposing||event.key!=='Enter')return;const enter=$('send-key').value==='enter';if((enter&&!event.shiftKey)||(event.ctrlKey||event.metaKey)){event.preventDefault();$('composer').requestSubmit();}});
 listen('stop', 'click', async () => { if (state.selected && !$('stop').disabled && confirm('停止当前会话正在运行的任务？')) await write('chat.stop', {thread: state.selected.id}); });
 for(const prefix of ['pending','create-pending']) {
+  listen('dismiss-'+prefix,'click',()=>bridge.dismissFailure($(prefix).dataset.operation));
   listen('check-'+prefix,'click',()=>{const id=$(prefix).dataset.operation;if(id)return bridge.checkPending(id);});
   listen('ack-'+prefix,'click',async()=>{const id=$(prefix).dataset.operation;if(id&&confirm('请先在官方桌面核对这次操作是否生效，再确认解除拦截。此操作不会重发原请求。'))await bridge.acknowledge(id);});
 }

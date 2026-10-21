@@ -7,7 +7,7 @@ import org.junit.Test
 class ProtocolTest {
     @Test fun onlyMatchingTerminalReceiptsReleasePendingSend() {
         val receipt=org.json.JSONObject().put("id","original")
-        for(status in listOf("confirmed","acknowledged","not_sent")) {
+        for(status in listOf("confirmed","acknowledged","not_sent","rejected")) {
             receipt.put("status",status)
             org.junit.Assert.assertTrue(settlesPending("original",receipt))
             org.junit.Assert.assertFalse(settlesPending("newer",receipt))

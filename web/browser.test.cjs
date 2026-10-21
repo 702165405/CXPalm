@@ -413,7 +413,13 @@ async function main() {
     await page.locator('#active-chats').click();await page.locator('#session-list .session-item').click();
     await page.locator('#pending').waitFor({state:'visible'});await page.locator('#check-pending').click();
     await page.locator('#pending-detail').filter({hasText:'active writer'}).waitFor();
-    await page.locator('#ack-pending').click();await page.locator('#pending').waitFor({state:'hidden'});
+    receipts.set('scoped-archive',{id:'scoped-archive',status:'rejected',result:{code:'active_writer',method:'sessions.archive',thread:'main-fixture',error:'Archive not executed; the official desktop retains write ownership'}});
+    await page.locator('#check-pending').click();await page.locator('#pending-title').filter({hasText:'操作未执行'}).waitFor();
+    assert.equal(await page.locator('#send').isEnabled(),true);
+    assert.equal(await page.locator('#check-pending').isVisible(),false);
+    assert.equal(await page.locator('#ack-pending').isVisible(),false);
+    await page.locator('#nav-settings').click();await page.locator('#pending').waitFor({state:'hidden'});
+    await page.locator('#nav-chat').click();await page.locator('#dismiss-pending').click();await page.locator('#pending').waitFor({state:'hidden'});
     assert.equal(sent.filter(q=>q.method==='sessions.archive'&&q.id==='scoped-archive').length,0);
     await page.setViewportSize({width:390,height:844});
     await page.locator('#show-list').click();

@@ -9,6 +9,20 @@ Versions describe implemented changes, not physical-device acceptance.
   privacy checks. Keep local account and runtime state outside Git.
 - Project license and public repository publication remain pending.
 
+## 0.0.13 (build49)
+
+- Treat exact official active-writer archive refusals and known archive
+  precondition failures as rejected, not indefinitely unknown or successful.
+- Verify original command fingerprints before releasing legacy client archive
+  locks. Keep the historical journal and never replay the old request.
+- Add contextual dismissible Web/Android failure notices; rejected operations
+  preserve drafts and attachments and do not block unrelated conversations.
+- Bound Android notice height and add isolated archive-state rendering checks.
+- Online archive forwarding is not available in the current official follower
+  protocol. While the original desktop retains the writer lease, archiving
+  still requires that desktop; no lease theft or second executor is used.
+- Limit Windows agent resources to its executable, excluding cross-build outputs.
+
 ## 0.0.12 (Web / Android / build48)
 
 - Scope unresolved operations, receipt details and write protection to the

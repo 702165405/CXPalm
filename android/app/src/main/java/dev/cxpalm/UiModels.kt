@@ -81,7 +81,7 @@ internal fun questionAtPosition(questions: List<JSONObject>, position: Float): S
 
 fun computerConnectionState(state: ViewState, computer: Computer, thread: String?, pending: String?, skills: Set<String>): ViewState {
     val same = state.current?.id == computer.id
-    return state.copy(current = computer, sessions = if (same) state.sessions else emptyList(), projects = if (same) state.projects else emptyList(),
+    return state.copy(operationFailures=if(same) state.operationFailures else emptyMap(), current = computer, sessions = if (same) state.sessions else emptyList(), projects = if (same) state.projects else emptyList(),
         archived = same && state.archived, project = if (same) state.project else "", sessionSearch = if (same) state.sessionSearch else "", sessionLimit = if (same) state.sessionLimit else 100,
         threadArchived = same && state.threadArchived, thread = thread, snapshot = if (same) state.snapshot else null, pending = pending, connected = false, desktopConnected = false,
         historyPage = if (same) state.historyPage else null, historyIndex = if (same) state.historyIndex else null, historyLoading = false, historyTarget = if (same) state.historyTarget else null,

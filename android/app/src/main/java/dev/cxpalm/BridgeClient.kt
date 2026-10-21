@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit
 data class Computer(val id: String, val name: String, val origin: String, val token: String, val remember: Boolean = true, val expires: Long = Long.MAX_VALUE) {
     override fun toString() = "Computer(id=$id, origin=$origin, token=<redacted>)"
 }
-data class ViewState(val pendingOperations: Map<String, JSONObject> = emptyMap(), val sessionSync: JSONObject? = null, val uploadBusy: Boolean = false, val goalDraft: Boolean = false, val cached: Boolean = false, val readToken: String = "", val sharedReadSync: Boolean = false, val computers: List<Computer> = emptyList(), val current: Computer? = null, val status: String = "Disconnected", val sessions: List<JSONObject> = emptyList(), val projects: List<JSONObject> = emptyList(), val archived: Boolean = false, val project: String = "", val sessionSearch: String = "", val sessionLimit: Int = 100, val hasMore: Boolean = false, val threadArchived: Boolean = false, val thread: String? = null, val snapshot: JSONObject? = null, val historyPage: JSONObject? = null, val historyIndex: JSONObject? = null, val historyLoading: Boolean = false, val historyTarget: String? = null, val connected: Boolean = false, val error: String? = null, val pending: String? = null, val desktopConnected: Boolean = false, val catalog: JSONObject? = null, val skills: Set<String> = emptySet(), val draftRevision: Long = 0, val sendScrollRevision: Long = 0, val sendUserBefore: String? = null, val sequence: Long = -1, val notificationStatus: Map<String, String?> = emptyMap(), val notificationNavigation: Long = 0)
+data class ViewState(val operationFailures: Map<String, JSONObject> = emptyMap(), val pendingOperations: Map<String, JSONObject> = emptyMap(), val sessionSync: JSONObject? = null, val uploadBusy: Boolean = false, val goalDraft: Boolean = false, val cached: Boolean = false, val readToken: String = "", val sharedReadSync: Boolean = false, val computers: List<Computer> = emptyList(), val current: Computer? = null, val status: String = "Disconnected", val sessions: List<JSONObject> = emptyList(), val projects: List<JSONObject> = emptyList(), val archived: Boolean = false, val project: String = "", val sessionSearch: String = "", val sessionLimit: Int = 100, val hasMore: Boolean = false, val threadArchived: Boolean = false, val thread: String? = null, val snapshot: JSONObject? = null, val historyPage: JSONObject? = null, val historyIndex: JSONObject? = null, val historyLoading: Boolean = false, val historyTarget: String? = null, val connected: Boolean = false, val error: String? = null, val pending: String? = null, val desktopConnected: Boolean = false, val catalog: JSONObject? = null, val skills: Set<String> = emptySet(), val draftRevision: Long = 0, val sendScrollRevision: Long = 0, val sendUserBefore: String? = null, val sequence: Long = -1, val notificationStatus: Map<String, String?> = emptyMap(), val notificationNavigation: Long = 0)
 
 class BridgeClient(context: Context) {
     private val store = SecureStore(context.applicationContext)
@@ -450,6 +450,7 @@ class BridgeClient(context: Context) {
         val id = UUID.randomUUID().toString()
         val operation=JSONObject().put("id",id).put("method",method).put("thread",fields.optString("thread")).put("status","dispatched")
         savePending(s.pendingOperations + (id to operation))
+        update { it.copy(operationFailures=it.operationFailures-fields.optString("thread")) }
         if(fields.optJSONArray("attachments")?.length()?.let {it>0}==true)store.put("pending-files:${c.id}:$id",JSONObject().put("id",id).put("key","attachments:${c.id}:${s.thread}").put("ids",fields.getJSONArray("attachments")).toString())
         if(method in listOf("chat.send","chat.steer")) {
             historyCall=UUID.randomUUID().toString()
@@ -492,8 +493,10 @@ class BridgeClient(context: Context) {
         if(settlesPending(id,data)) {
             savePending(mutable.value.pendingOperations-id)
             store.put(filesKey,null)
+            operationFailure(operation,data)?.let { notice -> update { it.copy(operationFailures=it.operationFailures + (notice.optString("thread") to notice)) } }
         } else savePending(mutable.value.pendingOperations + (id to jsonCopy(operation).put("status",data.optString("status")).put("error",data.optJSONObject("result")?.optString("error").orEmpty())))
     }
+    fun dismissOperation(id: String) { update { it.copy(operationFailures=it.operationFailures.filterValues { notice -> notice.optString("id")!=id }) } }
     private fun queryReceipt(method: String, id: String?) {
         if(id == null || id !in mutable.value.pendingOperations)return
         val call=UUID.randomUUID().toString();receiptQueries[call]=id

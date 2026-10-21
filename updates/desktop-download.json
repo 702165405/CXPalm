@@ -1,13 +1,13 @@
 {
   "schema": 1,
   "releaseLine": "initial-001",
-  "build": 46,
+  "build": 49,
   "appId": "dev.cxpalm.desktop",
   "platform": "win32",
   "arch": "x64",
-  "version": "0.0.10",
-  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.10-build46/CXPalm-Setup-0.0.10-build46-x64.exe",
-  "size": 137980815,
-  "sha256": "e334354b54c03a12ff817dbcbf07a89c807af0d93b0e96419741737f8e9b8ff2",
-  "notes": "CXPalm 0.0.10 / build46: Fix stranded pending sends after connection loss. Definitely unsent messages release the pending lock while preserving drafts and attachments. Missing receipts reserve the original ID to prevent delayed execution. Uncertain operations still require inspection and are never replayed. Existing settings, authorizations and IP policy are preserved."
+  "version": "0.0.13",
+  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.13-build49/CXPalm-Setup-0.0.13-build49-x64.exe",
+  "size": 120378614,
+  "sha256": "47df7da78f137358e7ef3cdd9b79fe36f7631b91059e9d720144450759ae8a30",
+  "notes": "CXPalm 0.0.13 / build49: Distinguish known archive rejections from uncertain operations. Active-writer refusals do not keep a conversation locked or pretend to be successful. Verify legacy archive fingerprints before releasing old client locks; never replay mutations or rewrite historical receipts. Web and Android show contextual dismissible failure notices and preserve drafts and attachments. Archiving while the official desktop retains write ownership still requires the official desktop; its current follower protocol has no archive forwarding API. Existing configuration, authorizations and IP policy are preserved."
 }

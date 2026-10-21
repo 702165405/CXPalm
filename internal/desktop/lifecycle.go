@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -121,6 +120,7 @@ func metadataCall(ctx context.Context, c config.Config, method string, params an
 				ID     *int            `json:"id"`
 				Result json.RawMessage `json:"result"`
 				Error  *struct {
+					Code    int    `json:"code"`
 					Message string `json:"message"`
 				} `json:"error"`
 			}
@@ -131,7 +131,7 @@ func metadataCall(ctx context.Context, c config.Config, method string, params an
 				continue
 			}
 			if f.Error != nil {
-				return nil, fmt.Errorf("official metadata API: %s", f.Error.Message)
+				return nil, &metadataError{Code: f.Error.Code, Message: f.Error.Message}
 			}
 			if len(f.Result) == 0 {
 				return nil, errors.New("missing official API result")
@@ -222,12 +222,12 @@ func (b *Bridge) Lifecycle(ctx context.Context, method, id, project string) (any
 	if archive {
 		snapshot, e := b.nativeSnapshot(id)
 		if e != nil {
-			return nil, e
+			return nil, &Rejected{Code: "archive_state_unavailable", Message: "归档操作未执行：官方会话状态尚未同步，请连接官方桌面后再手动操作。"}
 		}
 		state := Session{Status: "unknown"}
 		enrichSession(&state, snapshot)
 		if state.Status == "unknown" || state.Status == "running" || state.Status == "waiting" {
-			return nil, errors.New("chat must be connected and idle before archiving")
+			return nil, &Rejected{Code: "archive_busy", Message: "归档操作未执行：请等待会话空闲且状态同步后再手动归档。"}
 		}
 	}
 	api := "thread/archive"
@@ -235,7 +235,7 @@ func (b *Bridge) Lifecycle(ctx context.Context, method, id, project string) (any
 		api = "thread/unarchive"
 	}
 	if _, e = metadataCall(ctx, b.config, api, map[string]any{"threadId": id}); e != nil {
-		return nil, e
+		return nil, archiveFailure(e, id)
 	}
 	// Confirmation is the official persisted result, not a synthetic UI toggle.
 	fresh, e := b.History.Get(ctx, id)
