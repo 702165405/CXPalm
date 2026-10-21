@@ -23,6 +23,23 @@ class RenderingProbeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val case = intent.getStringExtra("case") ?: "long-code"
+        if(case.startsWith("archive-")) {
+            check(case in listOf("archive-rejected","archive-other-chat","archive-unknown","archive-legacy"))
+            val client=fixtureClient()
+            val operation=JSONObject().put("id","synthetic-archive").put("thread","synthetic").put("method","sessions.archive")
+                .put("status",if(case=="archive-rejected" || case=="archive-other-chat") "rejected" else "unknown")
+                .put("error","Official desktop retains write ownership. Archive was not executed. ".repeat(12))
+            if(case=="archive-legacy")operation.remove("thread").also {operation.put("legacy",true)}
+            val terminal=operation.optString("status")=="rejected"
+            val thread=if(case=="archive-other-chat") "another" else "synthetic"
+            val state=ViewState(current=Computer("synthetic","synthetic","https://fixture.invalid","synthetic-only"),thread=thread,
+                connected=true,desktopConnected=true,snapshot=JSONObject().put("turns",JSONArray()),
+                pending=if(!terminal) "synthetic-archive" else null,
+                pendingOperations=if(terminal) emptyMap() else mapOf("synthetic-archive" to operation),
+                operationFailures=if(terminal) mapOf("synthetic" to operation) else emptyMap())
+            setContent { CxpalmTheme { ChatPage(state,client) } }
+            return
+        }
         if(case.matches(Regex("capture-[0-9]+"))) {
             val root=getExternalFilesDir("captures")!!
             val file=java.io.File(root,"$case.json")

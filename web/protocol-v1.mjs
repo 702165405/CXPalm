@@ -98,6 +98,7 @@ export class Bridge {
     this.device = null;
     this.socket = null;
     this.receipt = null;
+    this.failures = new Map();
   }
   get pendingKey() { return `cxpalm:pending:${this.device.id}`; }
   get pendings() {
@@ -107,6 +108,11 @@ export class Bridge {
   }
   get pending() { return this.pendings[0] || null; }
   pendingFor(thread) { return this.pendings.find(op => (op.thread || null) === (thread || null)) || null; }
+  noticeFor(thread) { return this.pendingFor(thread) || this.failures.get(thread || null) || null; }
+  dismissFailure(id) {
+    for(const [scope,operation] of this.failures)if(operation.id===id)this.failures.delete(scope);
+    this.changed();
+  }
   savePending(operation, remove = false) {
     const operations = this.pendings.filter(op => op.id !== operation.id);
     if (!remove) operations.push(operation);
@@ -119,6 +125,7 @@ export class Bridge {
     this.disconnect();
     this.stream.reset();
     this.lastMessageAt=Date.now();
+    if(this.device?.id!==device.id)this.failures.clear();
     this.device = device;
     this.receipt = null;
     const socket = this.socket = this.socketFactory();
@@ -187,7 +194,7 @@ export class Bridge {
     const pending = this.pendings.find(op => op.id === receipt.id);
     if (!pending) throw new Error('操作回执不匹配。');
     this.receipt = receipt;
-    if (['confirmed', 'acknowledged', 'not_sent'].includes(receipt.status)) {
+    if (['confirmed', 'acknowledged', 'not_sent', 'rejected'].includes(receipt.status)) {
       if(receipt.status==='confirmed'&&pending.attachmentKey&&pending.attachmentIDs){
         const files=JSON.parse(this.storage.getItem(pending.attachmentKey)||'[]');
         this.storage.setItem(pending.attachmentKey,JSON.stringify(files.filter(file=>!pending.attachmentIDs.includes(file.id))));
@@ -199,6 +206,7 @@ export class Bridge {
       }
       // A late response must not clear another tab's newer pending operation.
       if (this.pendings.some(op => op.id === pending.id)) this.savePending(pending, true);
+      if(['rejected','not_sent'].includes(receipt.status))this.failures.set(pending.thread||null,{...pending,receipt});
     } else this.savePending({...pending, receipt});
     this.changed();
     return receipt;
@@ -216,6 +224,7 @@ export class Bridge {
       if(fields.attachments?.length){pending.attachmentKey=`cxpalm:attachments:${this.device.id}:${fields.thread}`;pending.attachmentIDs=fields.attachments;}
       if (draft) { pending.draftKey = draft.key; pending.draftDigest = draftDigest; }
       this.savePending(pending);
+      this.failures.delete(fields.thread||null);
       this.receipt = null;
       this.changed();
       return pending;

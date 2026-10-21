@@ -175,6 +175,13 @@ func (s *Store) Receipt(device, id string) (Receipt, error) {
 	return r, e
 }
 
+// Used only to verify a legacy receipt's original command without rewriting it.
+func (s *Store) MatchesOperation(device, id, fingerprint string) (bool, error) {
+	var matches bool
+	err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM operations WHERE device=? AND id=? AND fingerprint=?)", device, id, fingerprint).Scan(&matches)
+	return matches, err
+}
+
 // Reserve absent IDs before reporting not_sent: a delayed command on another
 // connection must never execute after a client has released its pending lock.
 func (s *Store) ResolveReceipt(device, id string) (Receipt, error) {

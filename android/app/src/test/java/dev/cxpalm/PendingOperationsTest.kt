@@ -6,6 +6,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PendingOperationsTest {
+    @Test fun rejectionIsNotUnknownAndDoesNotBlockAnotherConversation() {
+        val original=JSONObject("""{"id":"archive","method":"sessions.archive","thread":"a"}""")
+        val receipt=JSONObject("""{"id":"archive","status":"rejected","result":{"code":"active_writer","error":"not executed"}}""")
+        assertTrue(settlesPending("archive",receipt))
+        val notice=operationFailure(original,receipt)!!
+        val state=ViewState(thread="a",operationFailures=mapOf("a" to notice))
+        assertNull(state.pendingFor("a"));assertNull(state.pendingFor("b"))
+        assertEquals("not executed",state.operationNotice("a")?.getString("error"))
+        assertNull(state.operationNotice("b"))
+        assertNull(operationFailure(original,JSONObject("""{"id":"another","status":"rejected"}""")))
+        assertNull(operationFailure(original,JSONObject("""{"id":"archive","status":"unknown"}""")))
+        val legacy=JSONObject("""{"id":"archive","legacy":true}""")
+        receipt.getJSONObject("result").put("thread","a").put("method","sessions.archive")
+        val recovered=operationFailure(legacy,receipt)!!
+        assertEquals("a",recovered.getString("thread"));assertFalse(recovered.getBoolean("legacy"))
+    }
     @Test fun unknownArchiveIsScopedAndSurvivesReloadAlongsideOtherOperations() {
         val saved="""[{"id":"archive","thread":"a","method":"sessions.archive","status":"unknown","error":"active writer"},{"id":"send","thread":"b","method":"chat.send","status":"dispatched"},{"id":"create","method":"sessions.create","status":"unknown"}]"""
         val operations=pendingOperations(saved,null)

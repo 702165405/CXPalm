@@ -26,6 +26,19 @@ function fixture(existingStorage) {
   return {bridge,data,sockets,reply,hello};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+test('explicit rejection releases only the matching scope and keeps a local failure notice and drafts',async()=>{
+  const {bridge,sockets,reply}=fixture();
+  const key=bridge.draftKey('a');bridge.storage.setItem(key,'retained');
+  const archive=bridge.mutate('sessions.archive',{thread:'a'});await tick();const id=bridge.pendingFor('a').id;
+  reply('result',{id,status:'rejected',result:{code:'active_writer',error:'Archive not executed; use the official desktop'}});await archive;
+  assert.equal(bridge.pendingFor('a'),null);assert.equal(bridge.noticeFor('a').receipt.status,'rejected');
+  assert.equal(bridge.noticeFor('b'),null);assert.equal(bridge.storage.getItem(key),'retained');
+  assert.equal(sockets[0].sent.filter(q=>q.method==='sessions.archive').length,1);
+  bridge.dismissFailure(id);assert.equal(bridge.noticeFor('a'),null);
+  const send=bridge.mutate('chat.send',{thread:'a',text:'retained'},{key,text:'retained'});await tick();
+  reply('result',{id:bridge.pendingFor('a').id,status:'not_sent'});await send;
+  assert.equal(bridge.storage.getItem(key),'retained');assert.equal(bridge.noticeFor('a').receipt.status,'not_sent');
+});
 test('unknown archive locks only its conversation, including across tabs and reloads',async()=>{
   const {bridge,data,sockets,reply}=fixture();
   let locked=false;

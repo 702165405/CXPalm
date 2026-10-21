@@ -455,7 +455,7 @@ func (s *Server) execute(ctx context.Context, device string, q Command) (any, er
 		}
 		return s.Bridge.Catalog(session.CWD)
 	case "operation.get":
-		return s.Store.ResolveReceipt(device, q.RequestID)
+		return s.resolveOperation(device, q.RequestID)
 	case "operation.acknowledge":
 		if q.Text != "inspected" {
 			return nil, errors.New("explicit inspection confirmation is required")
@@ -505,6 +505,10 @@ func (s *Server) execute(ctx context.Context, device string, q Command) (any, er
 		}
 	}
 	if err != nil {
+		var rejected *desktop.Rejected
+		if errors.As(err, &rejected) {
+			return s.Store.Finish(device, q.ID, "rejected", map[string]string{"error": rejected.Message, "code": rejected.Code, "method": q.Method, "thread": q.Thread})
+		}
 		return s.Store.Finish(device, q.ID, "unknown", map[string]string{"error": err.Error()})
 	}
 	return s.Store.Finish(device, q.ID, "confirmed", result)

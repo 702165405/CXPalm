@@ -92,7 +92,7 @@ fun sessionDate(session: JSONObject): String {
                 }
             }
         } }
-        state.pendingFor(null)?.let { operation -> item("pending") { PendingNotice(operation,state.connected,client) } }
+        state.operationNotice(null)?.let { operation -> item("pending") { PendingNotice(operation,state.connected,client) } }
         item("search") {OutlinedTextField(search,{search=it},modifier=Modifier.fillMaxWidth(),placeholder={Text(tr("搜索会话或工作目录"))},singleLine=true,shape=MaterialTheme.shapes.medium,colors=OutlinedTextFieldDefaults.colors(unfocusedContainerColor=MaterialTheme.colorScheme.surface,focusedContainerColor=MaterialTheme.colorScheme.surface,unfocusedBorderColor=MaterialTheme.colorScheme.outlineVariant))}
         groups.forEach { (project,rows) ->
             if(project.isNotEmpty()) item("project:$project") {Text("${rows.first().optString("projectName").ifBlank { tr("无项目") }} · ${rows.size}",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant,modifier=Modifier.padding(start=4.dp,top=14.dp,bottom=2.dp))}
@@ -226,7 +226,7 @@ fun sessionDate(session: JSONObject): String {
     queueInspection?.let { id -> AlertDialog(onDismissRequest={queueInspection=null},title={Text(tr("核对排队消息"))},text={Text(tr("请先在官方桌面核对。移除后继续后面的队列，不会撤回已发送的消息，也不会重发本条。"))},confirmButton={TextButton(onClick={client.mutate("chat.queue.cancel",request=id);queueInspection=null}){Text(tr("核对后移除"))}},dismissButton={TextButton(onClick={queueInspection=null}){Text(tr("取消"))}}) }
     val composer: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            state.pendingFor(state.thread)?.takeUnless { it.optBoolean("legacy") }?.let { PendingNotice(it,state.connected,client) }
+            state.operationNotice(state.thread)?.takeUnless { it.optBoolean("legacy") }?.let { PendingNotice(it,state.connected,client) }
             state.snapshot?.optJSONObject("threadGoal")?.let { goal ->
                 Text("${tr("目标模式")} · ${goal.optString("objective")}",maxLines=2,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodySmall)
                 Row {

@@ -44,6 +44,15 @@ the draft and attachments. The reserved ID cannot execute even if a delayed
 request arrives later. Existing `dispatched` or `unknown` receipts are never
 converted to `not_sent`; no pending mutation is automatically replayed.
 
+`rejected` is a terminal, definitely unexecuted archive precondition failure, not
+a successful archive. Clients release only its matching lock and show a scoped
+failure notice. Unknown transport failures remain protected. Legacy active-writer
+receipts are projected as rejected only after matching the original archive
+command fingerprint; persisted audit records and operation-ID fences stay intact.
+The current official follower protocol has no archive forwarding API. A desktop
+writer can retain ownership even while idle; archive there rather than stealing
+its writer lease or repeatedly starting metadata processes.
+
 Chat identity is checked against official history and bound to its original
 owner. No main thread is independently resumed. Native execution snapshots are
 separate from phone projections, lazy history and versioned delta streams.
