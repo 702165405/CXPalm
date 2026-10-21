@@ -23,9 +23,9 @@ Private test evidence is not part of the source repository.
   APK also survives an emulator cold start. No physical-phone or macOS runtime
   acceptance is claimed; no real conversation request is approved by tests.
 - All six public release assets and four deployed Web files pass fresh byte
-  and SHA-256 checks. The Android public updater test passes for build52.
-  Both committed repository manifests point to build52; desktop raw-CDN
-  propagation and its native public-download recheck remain separate checks.
+  and SHA-256 checks. Both public repository feeds match build52. Android and
+  Electron native public-download/hash checks pass; the Electron installer is
+  rechecked before installation but is not executed by that test.
 - Installed desktop/gateway file hashes match the package and protected local
   settings and authorizations remain unchanged. This does not assert that a
   stopped gateway was started or that live approval acceptance was performed.
