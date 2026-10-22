@@ -39,9 +39,16 @@ Private test evidence is not part of the source repository.
   older version, downloads the public installer and passes its pre-install
   recheck without executing it. The opt-in Android public-update test passes
   against build58 (one test, none skipped). No physical device is updated.
-- Local Windows runtime replacement is deferred because the desktop is locked
-  and its Agent auto-start setting is disabled. The healthy build57 gateway is
-  left running; no local installation or post-restart acceptance is claimed.
+- Local Windows replacement was initially deferred while the desktop was locked.
+  After the user unlocked it, all 76 runtime files were replaced and hash-checked
+  against the staged build58 package, with the previous installation backed up.
+  The reopened desktop and gateway report 0.0.22, the Agent is running, and
+  read-only diagnosis confirms connection to the original official desktop IPC.
+- Post-start configuration, preferences, device authorizations, IP settings,
+  login startup registration, shortcut and historical-link records match the
+  pre-install snapshots. The public session API still requires authorization
+  (401 without credentials). No real message or approval is submitted; these
+  checks are not physical-phone or complete end-to-end acceptance.
 
 ## System Node Security Update (2026-10-22)
 
