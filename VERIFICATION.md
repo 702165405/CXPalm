@@ -4,6 +4,65 @@ This public record intentionally excludes real conversation titles, IDs,
 content, device identifiers, account counts, private paths and deployment logs.
 Private test evidence is not part of the source repository.
 
+## System Node Security Update (2026-10-22)
+
+- The Mac system Node command is upgraded from 22.13.1 to official 22.23.4,
+  after archive SHA-256, extracted binary hash and signature verification.
+  The prior executable is backed up. npm and global packages remain unchanged.
+- All 70 Web/desktop/repository/runtime tests pass using the upgraded system
+  Node. The Node HTTPS fallback regression verifies pooling is disabled and
+  Connection is close, while redirects/compressed bodies remain rejected and
+  no credentials are sent. A valid Brotli round-trip smoke check also passes;
+  that smoke check alone is not a vulnerability regression or exploit test.
+- Nine pre-update Node processes remain in the current client/tool ancestry;
+  no such process is killed. Their owning clients must be restarted separately
+  before those in-memory runtimes can be considered updated.
+- CXPalm health still reports 0.0.21. No Electron replacement, remote service
+  change, source push or new public release is performed in this follow-up.
+  The transport change is source-only; embedded Node repair remains unconfirmed.
+
+## Mac Local Installation Verification (2026-10-22)
+
+- The complete Mac Intel application is updated from build55 to 0.0.21/build57,
+  not just app.asar. All 532 packaged file/directory/symlink entries match the
+  verified staged bundle. The installed gateway reports Go 1.27.3; the installed
+  Electron runtime reports Electron 44.9.3 and Node 24.22.0.
+- After restart, local health reports 0.0.21 and the desktop owns its gateway.
+  Read-only diagnosis connects to official desktop IPC. The configured SSH
+  process has an established TCP connection; no public-phone or remote Web
+  end-to-end acceptance is inferred from that check.
+- Connection configuration and desktop preferences match the pre-restart
+  backup hashes. Existing gateway settings and device authorization fields
+  match the database snapshot. The previous application and full profile
+  backup are retained in ignored private storage.
+- Existing IP policy rejects a direct local probe with 403. A local test using
+  the configured trusted-proxy header and an allowed IP still receives 401
+  without device credentials. No access-control setting is relaxed.
+- No real chat message, global Node replacement, remote deployment change,
+  source push or public release occurs. This is installation/health/IPC
+  verification, not complete UI or physical-phone acceptance. The outstanding
+  Electron embedded-Node fixes remain unconfirmed.
+
+## Build Runtime Guard Recheck (2026-10-22)
+
+- Rechecked the build57 source baseline. Official Node 22.23.4 and Go 1.27.3
+  archives for the Mac build host match the official SHA-256 metadata. They
+  are project-local build tools, not replacements for the system installation.
+- All 70 Web/desktop/repository/runtime Node tests pass, including five new
+  runtime-guard checks. The old Node 22.13.1 CLI is rejected; an offline npm ci
+  dry-run on that runtime fails with EBADENGINE before dependency installation.
+- Go default tests and vet pass with Go 1.27.3; live opt-in variables are unset.
+  Windows amd64 and macOS amd64/arm64 gateway builds succeed and report embedded
+  Go 1.27.3. Cross-build success is not runtime acceptance on those platforms.
+- An unsigned local Mac Intel desktop bundle is generated with Electron 44.9.3
+  and the new gateway; the packaged gateway matches the verified binary hash.
+  The Electron runtime reports Node 24.22.0, so the outstanding upstream Node
+  fixes remain open as described in docs/RUNTIME-SECURITY.md. No application UI
+  acceptance, installed-app replacement, service restart or publication occurs.
+- Working-tree repository checks and diff whitespace checks pass. Existing
+  system tools, installed applications and remote deployment state are not
+  upgraded by these local build and source changes.
+
 ## Independent Read Receipts And Runtime Refresh (0.0.21 / build57)
 
 - CXPalm commits exact visible-reply read receipts in its own database before

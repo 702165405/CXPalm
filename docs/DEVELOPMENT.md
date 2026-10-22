@@ -16,10 +16,17 @@
 
 ## Build and Test
 
-Use Go 1.24+, Node.js, JDK 17+ and an Android SDK for API 35. Android uses
+Use Go 1.27.3+, patched Node.js (22.23.4+, 24.22.1+ or 26.12.1+ on those
+release lines), JDK 17+ and an Android SDK for API 35. Android uses
 Gradle 8.11.1. Local tool caches may be placed in ignored `.tools/`.
+The root `.node-version` selects the 22.x baseline for compatible version
+managers; it does not install Node or change PATH by itself. Both npm projects
+reject unsupported build runtimes with `engine-strict`. The build scripts and
+npm packaging/vendor entry points also check the runtime before proceeding.
 
 ```powershell
+node scripts/check-runtime.cjs
+node --test scripts/check-runtime.test.cjs
 go test ./...
 go vet ./...
 node --test web/protocol.test.mjs

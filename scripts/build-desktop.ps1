@@ -1,6 +1,8 @@
 param([switch]$InstallDependencies, [switch]$Installer)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+& node (Join-Path $PSScriptRoot 'check-runtime.cjs')
+if ($LASTEXITCODE -ne 0) { throw 'Update build Node.js before installing or packaging dependencies' }
 $go = Join-Path $root '.tools\go\bin\go.exe'
 if (-not (Test-Path -LiteralPath $go)) { $go = 'go' }
 Push-Location -LiteralPath $root

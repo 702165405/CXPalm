@@ -5,6 +5,11 @@ Versions describe implemented changes, not physical-device acceptance.
 
 ## Unreleased
 
+- Disable socket pooling in the standalone Node HTTPS update transport while
+  preserving compressed-response rejection and credential-free requests.
+- Reject unpatched Node.js build tools before dependency installation and at
+  packaging/vendor entry points. Keep embedded Electron runtime and installed
+  application upgrades separate from source and compiler updates.
 - Prepare public documentation, synthetic deployment examples and repository
   privacy checks. Keep local account and runtime state outside Git.
 - Project license and public repository publication remain pending.

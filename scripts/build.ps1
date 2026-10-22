@@ -1,6 +1,8 @@
 param([switch]$Android)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+& node (Join-Path $PSScriptRoot 'check-runtime.cjs')
+if ($LASTEXITCODE -ne 0) { throw 'Update build Node.js before building release artifacts' }
 Set-Location -LiteralPath $root
 $localGo = Join-Path $root '.tools\go\bin\go.exe'
 $go = if (Test-Path -LiteralPath $localGo) { $localGo } else { 'go' }

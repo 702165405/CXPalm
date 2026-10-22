@@ -50,3 +50,65 @@ and Go version; local Go or gateway metadata is not evidence about Caddy.
 
 Raw machine identifiers, service inventories, update logs and configuration
 stay in ignored local evidence, not the public repository.
+
+## Build Guards And Deployment (2026-10-22)
+
+The build57 machine and server observations above describe a separate Windows
+build/deployment audit, not every checkout or Mac installation. Pulling source
+does not update installed applications, system Node, existing node_modules or
+running processes. A locally installed build55 remains old until it is replaced.
+
+Both npm projects now require Node 22.23.4+, 24.22.1+ or 26.12.1+ on those
+supported release lines, with strict engine checks before dependency install.
+PowerShell build scripts and npm packaging/vendor entry points fail early on
+older runtimes. `.node-version` records the default build version; `go.mod`
+already requires Go 1.27.3. These guards concern build tools, not Electron's
+embedded Node, and are not a substitute for checking packaged build metadata.
+
+At this recheck the official Electron stable feed still reports Node 24.22.0
+for 44.9.3 and 45.0.0. The 44.9.3 Node patch list includes the blocked-public-key
+patch, but does not establish that CVE-2026-111497 and CVE-2026-105481 are fixed.
+Keep these embedded-runtime items open pending upstream confirmation. Do not
+claim an Electron major upgrade, an Accept-Encoding header or an application
+source update alone fixes them.
+
+For deployment, rebuild with the patched tools and replace the complete desktop
+bundle and bundled gateway, then restart with user approval and verify actual
+runtime versions. Updating only Web assets, app.asar or the compiler leaves old
+native runtime files intact. Preserve private configuration and state; publish
+changed installer bytes under a new build/version, never overwrite an existing
+release artifact or change a manifest to hashes of unpublished local output.
+
+The subsequent Mac Intel installation check replaces the complete build55
+application with the verified build57 bundle and confirms Go 1.27.3, Electron
+44.9.3 and embedded Node 24.22.0 in the installed files. Local health and
+read-only official IPC checks pass, and protected configuration/authorization
+state is preserved. This deployment does not resolve the unconfirmed upstream
+Node fixes or update system Node. See VERIFICATION.md for the acceptance scope.
+
+## System Node Follow-Up (2026-10-22)
+
+The Mac system executable at `/usr/local/bin/node` is subsequently updated
+from 22.13.1 to the official 22.23.4 binary. The official archive SHA-256,
+extracted binary hash and macOS code signature are checked before replacement.
+The old executable is backed up and replacement is atomic. npm and existing
+global packages are not replaced. The system command now reports 22.23.4 and
+passes the build guard and all 70 Node regression tests.
+
+Nine Node processes were already running before replacement and still existed
+at verification. Their ancestry includes the current Codex/ChatGPT client;
+they are not terminated automatically. Restart those owning clients/processes
+before considering their in-memory runtimes updated. Replacing a file does
+not patch an already running process, and this is not a host-wide runtime audit.
+
+The standalone Node HTTPS update fallback now uses `agent: false` and
+`Connection: close` to avoid pooled response confusion. Its existing identity
+encoding request and compressed-response rejection remain enforced; it does
+not invoke a Brotli decoder. This source-level defense is not a native Node
+patch. The installed Electron build uses its existing Chromium network path;
+this fallback change has not been repackaged into a new application release.
+
+A fresh official Electron feed check still finds no stable release reporting
+Node 24.22.1 or later on the 24.x line. No complete upstream Node security-fix
+backport is confirmed for the installed 44.9.3. The embedded-runtime items
+remain open; the system update and one-shot transport do not prove them fixed.

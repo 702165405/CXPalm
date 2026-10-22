@@ -49,11 +49,12 @@ test('download cancellation and overlap do not leave runnable files',async t=>{
  await assert.rejects(updater.download());await assert.rejects(updater.check());assert.equal((await updater.check(true)).phase,'downloading');
  updater.cancel();await pending;assert.equal(updater.status().phase,'available');assert.equal(fs.readdirSync(root).filter(name=>name.endsWith('.part')||name.endsWith('.exe')).length,0);await assert.rejects(updater.installer());
 });
-test('native HTTPS rejects redirects, non-200 and compression; no cookies or tokens',async t=>{
+test('native HTTPS uses one-shot connections and rejects redirects, non-200 and compression; no credentials',async t=>{
  const https=require('node:https');let calls=0,options;
  t.mock.method(https,'get',(_url,input,callback)=>{calls++;options=input;const req=new EventEmitter();req.setTimeout=()=>req;queueMicrotask(()=>{const response=Readable.from([]);response.statusCode=calls===1?302:calls===2?404:200;response.headers=calls===3?{'content-encoding':'gzip'}:{};callback(response);});return req;});
  for(let i=0;i<3;i++)await assert.rejects(request(FEED,new AbortController().signal));
  assert.equal(calls,3);assert.equal(options.headers.Cookie,undefined);assert.equal(options.headers.Authorization,undefined);assert.equal(options.headers['Accept-Encoding'],'identity');
+ assert.equal(options.agent,false);assert.equal(options.headers.Connection,'close');
 });
 
 test('corrected 0.0.x release line rejects legacy feed without allowing a downgrade',async t=>{

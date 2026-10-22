@@ -6,9 +6,13 @@
   "description": "CXPalm local desktop control center",
   "author": "CXPalm",
   "main": "main.cjs",
+  "engines": {
+    "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
+  },
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.cjs",
+    "prepack": "node ../scripts/check-runtime.cjs",
     "pack": "electron-builder --win --x64 --dir",
     "smoke": "electron test/smoke.cjs"
   },

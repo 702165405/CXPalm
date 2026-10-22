@@ -42,8 +42,8 @@ function cdnAsset(url){
 }
 function nodeResponse(url,signal){
   return new Promise((resolve,reject)=>{
-    // Node HTTPS sends neither browser cookies nor signed-in device credentials.
-    const req=https.get(url,{signal,headers:{Accept:'application/json, application/octet-stream','Accept-Encoding':'identity','User-Agent':'CXPalm-Desktop-Updater'}},response=>{
+    // A one-shot connection avoids pooled-response confusion; no credentials or decompression.
+    const req=https.get(url,{signal,agent:false,headers:{Accept:'application/json, application/octet-stream','Accept-Encoding':'identity',Connection:'close','User-Agent':'CXPalm-Desktop-Updater'}},response=>{
       resolve(response);
     });
     req.setTimeout(15000,()=>req.destroy(new Error('更新请求超时，请检查网络。')));
