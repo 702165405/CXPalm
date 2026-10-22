@@ -26,6 +26,17 @@ Private test evidence is not part of the source repository.
   Lint and normal APK assembly pass. The normal APK excludes rendering probes
   and retains its package and signer. This release does not claim a fresh
   emulator, physical-phone notification-delivery or macOS runtime acceptance.
+- All six public release assets and four deployed Web files match staged sizes
+  and SHA-256 values; both stable repository feeds match build56. The actual
+  Electron updater passes current/upgrade detection, public download and
+  pre-install recheck without executing an installer. Android's opt-in public
+  updater download/hash test passes separately.
+- Installed desktop/gateway hashes match the package. The desktop UI restores
+  its owned Agent and local health reports 0.0.20 while auth.json remains absent.
+  Protected configuration, authorizations, preferences, IP policy, shortcuts
+  and OS startup settings remain unchanged; the public session route requires
+  authorization (401). No real task is sent or real alert triggered for this
+  check. No server configuration, permission or database migration is performed.
 
 ## Session-Scoped Approval And Read Availability (0.0.19 / build55)
 
