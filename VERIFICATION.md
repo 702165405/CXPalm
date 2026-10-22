@@ -25,6 +25,17 @@ Private test evidence is not part of the source repository.
   and its standalone Windows gateway. Packaged desktop sources/identity match;
   selected-pattern privacy checks find no credentials or private runtime files.
   The normal APK retains the expected signer and excludes rendering probes.
+- All ten public release assets are downloaded again and match their recorded
+  sizes and hashes. Both update feeds match the manifests after cache refresh.
+  The deployed Web entry and three assets match staged bytes; the public API
+  requires authorization. Actual Electron updater check/download/pre-install
+  verification passes without executing the installer. The Android public-update
+  opt-in passes on retry after an initial TLS handshake interruption.
+- Local desktop replacement remains pending: the existing application window
+  cannot be activated for safe Agent restoration. The healthy 0.0.22 gateway is
+  left running; installing a new phone package or refreshing the Web page alone
+  does not activate the gateway-side change. No local build59 runtime acceptance
+  or real three-client read mutation is claimed.
 
 ## Startup Window Preference And Privacy Review (0.0.22 / build58)
 
