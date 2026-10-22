@@ -31,6 +31,17 @@ Private test evidence is not part of the source repository.
 - Packaged desktop sources match the tested inputs, and the packaged source
   privacy scan finds no matching credentials or private runtime files. These
   checks do not constitute physical Android or macOS runtime acceptance.
+- Published build58 assets (10 files) are downloaded again and match their
+  recorded sizes and SHA-256 values. Both main-branch update feeds match the
+  release manifests. The deployed Web entry and three versioned assets match
+  their staged bytes; an unauthenticated session API request returns 401.
+- The actual Electron updater recognizes the current release, offers it to an
+  older version, downloads the public installer and passes its pre-install
+  recheck without executing it. The opt-in Android public-update test passes
+  against build58 (one test, none skipped). No physical device is updated.
+- Local Windows runtime replacement is deferred because the desktop is locked
+  and its Agent auto-start setting is disabled. The healthy build57 gateway is
+  left running; no local installation or post-restart acceptance is claimed.
 
 ## System Node Security Update (2026-10-22)
 
