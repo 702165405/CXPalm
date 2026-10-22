@@ -27,6 +27,18 @@ Private test evidence is not part of the source repository.
   passed, one opt-in check skipped, with Lint and normal APK build passing.
   Packaged sources match tested inputs, APK signing identity is retained, and
   selected privacy checks find no credentials or private runtime files.
+- Ten public release assets and both update feeds match their recorded bytes.
+  The deployed Web entry and three versioned assets match staged hashes. Actual
+  Electron check/download/pre-install verification passes without executing an
+  installer; Android public update/download verification passes without skips.
+- All 76 installed local runtime files match the staged package. The gateway
+  automatically restores using the user's existing app-open startup preference
+  and reports 0.0.24. Process ownership confirms the installed desktop owns its
+  gateway and established SSH tunnel. Read-only diagnosis connects to official
+  desktop IPC; reverse health returns 200 and unauthenticated public API returns
+  401. Configuration, preferences, authorizations and IP/startup settings match
+  the pre-install snapshot. No physical-phone latency or real read mutation is
+  inferred from these installation and connectivity checks.
 
 ## Desktop-Authoritative Read State (0.0.23 / build59)
 
