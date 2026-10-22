@@ -4,6 +4,28 @@ This public record intentionally excludes real conversation titles, IDs,
 content, device identifiers, account counts, private paths and deployment logs.
 Private test evidence is not part of the source repository.
 
+## Desktop-Authoritative Read State (0.0.23 / build59)
+
+- Read synchronization no longer reads or checks auth.json or the official
+  global-state file. Historical gateway receipts are preserved but no longer
+  override original-owner read/unread flags on Web, Android or session lists.
+- Live native context hints are connection-bound and include the desktop's
+  execution-storage identity mode. Hints and reflected broadcasts never confirm
+  a read; only a matching original-owner snapshot/patch does. Uncertain writes
+  are not automatically replayed, and notifications retain their separate scope.
+- A passive real-desktop probe confirms that original-owner snapshots include
+  read flags. It does not mark any chat read. No context is observed during that
+  bounded probe; the first usable native context remains a prerequisite for a
+  write. No three-UI transactional or physical-device acceptance is claimed.
+- Go tests and vet pass, with Windows amd64 and macOS amd64/arm64 gateway builds.
+  All 72 Node checks and the isolated Chromium UI suite pass, including pending
+  desktop confirmation without optimistic unread clearing. Android reports
+  80 unit checks passed and one public-update opt-in skipped; Lint/build pass.
+- The staged desktop gateway matches a deterministic rebuild of final sources
+  and its standalone Windows gateway. Packaged desktop sources/identity match;
+  selected-pattern privacy checks find no credentials or private runtime files.
+  The normal APK retains the expected signer and excludes rendering probes.
+
 ## Startup Window Preference And Privacy Review (0.0.22 / build58)
 
 - The requested pull retains the strict Node build guards and isolated updater

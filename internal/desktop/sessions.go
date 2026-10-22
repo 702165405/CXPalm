@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 )
 
 var errPaging = errors.New("limit must be 1-5000 and offset must be non-negative")
@@ -164,21 +163,6 @@ func (b *Bridge) Browse(ctx context.Context, query string, archived bool, projec
 			enrichSession(&out.Items[i], state)
 		}
 	}
-	if b.ReadStore != nil {
-		reads, err := b.ReadStore.ReadTokens()
-		for i := range out.Items {
-			row := &out.Items[i]
-			if !row.Live || row.ReadToken == "" {
-				continue
-			}
-			if err != nil {
-				row.Unread = nil
-				continue
-			}
-			unread := reads[row.ID] != row.ReadToken
-			row.Unread = &unread
-		}
-	}
 	for _, p := range projects {
 		out.Projects = append(out.Projects, p)
 	}
@@ -217,10 +201,6 @@ func enrichSession(row *Session, s State) {
 		return
 	}
 	if unread, ok := raw["hasUnreadTurn"].(bool); ok {
-		row.Unread = &unread
-	}
-	if s.Unread != nil && s.UnreadToken == row.ReadToken && (s.UnreadUntil.IsZero() || time.Now().Before(s.UnreadUntil)) {
-		unread := *s.Unread
 		row.Unread = &unread
 	}
 	runtime, _ := raw["threadRuntimeStatus"].(map[string]any)

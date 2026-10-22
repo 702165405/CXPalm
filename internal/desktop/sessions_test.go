@@ -272,43 +272,6 @@ func TestLiveSessionCatalogueReadOnly(t *testing.T) {
 	t.Logf("read-only catalogue: active=%d archived=%d projects=%d actual-reply-dates=%d; no writes", len(page.Items), len(archived.Items), len(page.Projects), dates)
 }
 
-func TestReadFlagAcceptsOnlyCurrentAccountHostAndProtocol(t *testing.T) {
-	root := t.TempDir()
-	nativeContext, write := nativeReadFixture(t, root, "id")
-	b := NewBridge(config.Config{CodexHome: root})
-	defer b.Close()
-	b.sessions["id"] = &State{ID: "id", Owner: "official-owner", Connected: true, Snapshot: json.RawMessage(`{"hasUnreadTurn":true,"turns":[{"turnId":"t","status":"completed","items":[{"type":"agentMessage","text":"reply"}]}]}`)}
-	c := &IPC{events: make(chan Frame, 4)}
-	params := func(context readContext) json.RawMessage {
-		return mustJSON(map[string]any{"hostId": "local", "conversationId": "id", "hasUnreadTurn": false, "context": context})
-	}
-	wrong := readContext{Identity: map[string]string{"kind": "chatgpt", "accountId": "other", "userId": "user-test"}, HostKey: nativeContext.HostKey}
-	c.events <- Frame{Method: "thread-read-state-changed", Version: 3, Source: "official-owner", Params: params(wrong)}
-	c.events <- Frame{Method: "thread-read-state-changed", Version: 2, Source: "official-owner", Params: params(nativeContext)}
-	c.events <- Frame{Method: "thread-read-state-changed", Version: 3, Source: "main-coordination-client", Params: params(nativeContext)}
-	close(c.events)
-	b.events(c)
-	if b.sessions["id"].Sequence != 1 {
-		t.Fatal("untrusted context or protocol accepted")
-	}
-	var raw map[string]any
-	json.Unmarshal(b.sessions["id"].Snapshot, &raw)
-	if raw["hasUnreadTurn"] != true {
-		t.Fatal("canonical patch base modified")
-	}
-	write()
-	// A genuine desktop manual-unread must override any older gateway receipt.
-	native, err := b.nativeReads()
-	if err != nil || native.Unread["id"] {
-		t.Fatal("read confirmation not visible", err)
-	}
-	write("id")
-	native, err = b.nativeReads()
-	if err != nil || !native.Unread["id"] {
-		t.Fatal("manual unread lost", err)
-	}
-}
-
 func TestProjectInheritanceMatchesDesktopRootsWithoutInventingDirectoryProjects(t *testing.T) {
 	var m projectMetadata
 	if err := json.Unmarshal([]byte(`{"local-projects":{"parent":{"name":"Parent","rootPaths":["D:\\work"]},"child":{"name":"Child","rootPaths":["D:\\work\\child"]},"unix":{"name":"Unix","rootPaths":["/Work"]},"unc":{"name":"Share","rootPaths":["\\\\server\\share"]}},"thread-project-assignments":{"explicit":{"projectKind":"local","projectId":"parent"}},"projectless-thread-ids":["none"]}`), &m); err != nil {

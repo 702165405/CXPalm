@@ -14,6 +14,16 @@ Versions describe implemented changes, not physical-device acceptance.
   privacy checks. Keep local account and runtime state outside Git.
 - Project license and public repository publication remain pending.
 
+## 0.0.23 (build59)
+
+- Use original-owner desktop snapshots for read/unread state on Web and Android;
+  historical gateway receipts no longer override the desktop.
+- Remove credential/global-state file reads from synchronization. Learn outgoing
+  context from live IPC, including execution-storage identities; do not guess it.
+- Confirm reads only after owner state changes. Missing context, uncertain writes,
+  disconnections and newer replies never produce optimistic read success.
+  Notification preferences remain independent of read synchronization.
+
 ## 0.0.22 (build58)
 
 - Add an independent start-minimized-to-tray desktop preference; setup and

@@ -13,52 +13,52 @@ import (
 )
 
 type State struct {
-	removed     bool
-	lastNative  time.Time
-	lastFollow  time.Time
-	lastOpen    time.Time
-	document    *nativeDocument
-	UnreadUntil time.Time       `json:"-"`
-	UnreadToken string          `json:"-"`
-	ReadToken   string          `json:"readToken,omitempty"`
-	Unread      *bool           `json:"-"`
-	Archived    bool            `json:"archived"`
-	ID          string          `json:"id"`
-	Owner       string          `json:"-"`
-	Connected   bool            `json:"connected"`
-	Revision    json.RawMessage `json:"revision,omitempty"`
-	Sequence    uint64          `json:"sequence"`
-	Snapshot    json.RawMessage `json:"snapshot,omitempty"`
-	Error       string          `json:"error,omitempty"`
+	removed    bool
+	lastNative time.Time
+	lastFollow time.Time
+	lastOpen   time.Time
+	document   *nativeDocument
+	ReadToken  string          `json:"readToken,omitempty"`
+	Archived   bool            `json:"archived"`
+	ID         string          `json:"id"`
+	Owner      string          `json:"-"`
+	Connected  bool            `json:"connected"`
+	Revision   json.RawMessage `json:"revision,omitempty"`
+	Sequence   uint64          `json:"sequence"`
+	Snapshot   json.RawMessage `json:"snapshot,omitempty"`
+	Error      string          `json:"error,omitempty"`
 }
 type Bridge struct {
-	Uploads         *attachments.Manager
-	historyMu       sync.Mutex
-	historyCache    []historyRecord
-	queueMu         sync.Mutex
-	queueWorkers    map[string]bool
-	nativeReadCache nativeReadCache
-	ReadStore       *store.Store
-	readChanges     chan struct{}
-	config          config.Config
-	History         History
-	connectMu       sync.Mutex
-	mu              sync.Mutex
-	ipc             *IPC
-	sessions        map[string]*State
-	watchers        map[string]map[chan State]bool
-	actions         map[string]*sync.Mutex
-	listSyncOnce    sync.Once
-	listProgress    SessionSync
-	listMembers     map[string]bool
-	maintenance     sync.Once
-	rollouts        map[string]rolloutSummary
-	closeOnce       sync.Once
-	done            chan struct{}
-	ctx             context.Context
-	cancel          context.CancelFunc
-	opening         map[string]bool
-	following       map[string]bool
+	Uploads           *attachments.Manager
+	historyMu         sync.Mutex
+	historyCache      []historyRecord
+	queueMu           sync.Mutex
+	queueWorkers      map[string]bool
+	readContextHint   readContext
+	readContextIPC    *IPC
+	readContextSource string
+	readAttempts      map[string]string
+	ReadStore         *store.Store
+	readChanges       chan struct{}
+	config            config.Config
+	History           History
+	connectMu         sync.Mutex
+	mu                sync.Mutex
+	ipc               *IPC
+	sessions          map[string]*State
+	watchers          map[string]map[chan State]bool
+	actions           map[string]*sync.Mutex
+	listSyncOnce      sync.Once
+	listProgress      SessionSync
+	listMembers       map[string]bool
+	maintenance       sync.Once
+	rollouts          map[string]rolloutSummary
+	closeOnce         sync.Once
+	done              chan struct{}
+	ctx               context.Context
+	cancel            context.CancelFunc
+	opening           map[string]bool
+	following         map[string]bool
 }
 
 func NewBridge(c config.Config) *Bridge {
@@ -104,6 +104,7 @@ func (b *Bridge) connect(ctx context.Context) (*IPC, error) {
 	default:
 	}
 	b.mu.Lock()
+	b.clearReadContextLocked()
 	b.ipc = c
 	b.mu.Unlock()
 	go b.events(c)
@@ -129,6 +130,24 @@ func (b *Bridge) emitLocked(s *State) {
 }
 func (b *Bridge) events(c *IPC) {
 	for f := range c.Events() {
+		b.mu.Lock()
+		stale := b.ipc != nil && b.ipc != c
+		b.mu.Unlock()
+		if stale {
+			continue
+		}
+		if f.Method == "ipc-connection-reset" {
+			b.mu.Lock()
+			b.clearReadContextLocked()
+			b.readChangedLocked()
+			for _, s := range b.sessions {
+				s.Connected, s.Owner, s.Revision = false, "", nil
+				s.Error = "desktop connection reset; waiting for a fresh owner snapshot"
+				b.emitLocked(s)
+			}
+			b.mu.Unlock()
+			continue
+		}
 		if f.Method == "client-status-changed" {
 			var p struct {
 				Client string `json:"clientId"`
@@ -136,6 +155,13 @@ func (b *Bridge) events(c *IPC) {
 			}
 			if json.Unmarshal(f.Params, &p) == nil && p.Status == "disconnected" {
 				b.mu.Lock()
+				if b.readContextIPC == c && b.readContextSource == p.Client {
+					b.clearReadContextLocked()
+					b.readChangedLocked()
+					for _, s := range b.sessions {
+						b.emitLocked(s)
+					}
+				}
 				for _, s := range b.sessions {
 					if s.Owner == p.Client {
 						s.Connected = false
@@ -150,32 +176,7 @@ func (b *Bridge) events(c *IPC) {
 			continue
 		}
 		if f.Method == "thread-read-state-changed" && f.Version == 3 {
-			var p struct {
-				Host    string      `json:"hostId"`
-				ID      string      `json:"conversationId"`
-				Unread  *bool       `json:"hasUnreadTurn"`
-				Context readContext `json:"context"`
-			}
-			if json.Unmarshal(f.Params, &p) == nil && p.Host == "local" && p.Unread != nil {
-				native, err := b.nativeReads()
-				// Coordination broadcasts originate from main-process clients as well as
-				// thread owners. Bind them to the current account/host, not an owner ID.
-				if err == nil && sameReadContext(native.Context, p.Context) {
-					b.mu.Lock()
-					// Official broadcasts cannot erase a CXPalm exact-reply receipt.
-					b.readChangedLocked()
-					if s := b.sessions[p.ID]; s != nil {
-						if raw := s.snapshotValue(); raw != nil {
-							value := *p.Unread
-							s.Unread = &value
-							s.UnreadToken = readToken(raw)
-							s.UnreadUntil = time.Now().Add(2 * time.Second)
-						}
-						b.emitLocked(s)
-					}
-					b.mu.Unlock()
-				}
-			}
+			b.learnReadContext(c, f)
 			continue
 		}
 		if f.Method != "thread-stream-state-changed" {
@@ -213,6 +214,7 @@ func (b *Bridge) events(c *IPC) {
 			b.mu.Unlock()
 			continue
 		}
+		oldUnread, oldKnown := s.snapshotValue()["hasUnreadTurn"].(bool)
 		valid := false
 		if p.Change.Type == "snapshot" {
 			var value map[string]any
@@ -239,6 +241,13 @@ func (b *Bridge) events(c *IPC) {
 			s.Revision = p.Change.Revision
 			s.Connected = true
 			s.Error = ""
+			unread, known := s.snapshotValue()["hasUnreadTurn"].(bool)
+			if known && !unread {
+				delete(b.readAttempts, s.ID)
+			}
+			if unread != oldUnread || known != oldKnown {
+				b.readChangedLocked()
+			}
 		} else {
 			s.Connected = false
 			s.Owner = ""
@@ -253,6 +262,8 @@ func (b *Bridge) events(c *IPC) {
 	if b.ipc != c {
 		return
 	}
+	b.clearReadContextLocked()
+	b.readChangedLocked()
 	for _, s := range b.sessions {
 		s.Connected = false
 		s.Owner = ""

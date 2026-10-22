@@ -103,16 +103,26 @@ entry for an uncertain operation.
 
 ## Notifications
 
-`chat.read {thread,readToken}` confirms the exact latest visible reply in the
-gateway database. CXPalm Web/Android read state is independent of official login
-and auth.json. It requires a live original-owner snapshot and a matching token;
-stale tokens, offline/cached or archived state cannot confirm a reply. Receipts
-survive restarts, fan out to connected receivers and do not cover newer replies.
-`readSyncAvailable` refers to gateway storage; `officialReadSyncAvailable` is a
-separate optional capability. Official read synchronization is best-effort,
-retains identity/host checks and never erases a CXPalm receipt on failure or
-account switches. No official state file is edited and no uncertain native
-write is automatically retried.
+Read/unread presentation comes only from live original-owner snapshots, including
+manual desktop changes. Historical gateway receipts no longer override desktop
+state and are not deleted or migrated. Missing desktop flags remain unknown.
+The read path does not inspect auth.json or the official global-state file.
+
+`chat.read {thread,readToken}` requires a matching visible reply, an active owner
+and a local read context observed through the current native IPC connection.
+The official desktop still validates that context; CXPalm never guesses an
+identity. A context broadcast is only an outgoing hint, not a read confirmation.
+Until the desktop publishes one, read-write capability remains unavailable;
+displaying its existing read state and receiving notifications still work.
+
+One native request is sent, with no optimistic local receipt. Only a matching
+original-owner snapshot/patch showing read confirms success. Reply, context or
+owner changes, disconnection and timeout do not confirm success; an uncertain
+attempt for the same reply is not automatically replayed. The native protocol
+does not provide a transactional compare-and-set across three UIs, so this is
+desktop-authoritative synchronization, not a claim of distributed atomicity.
+`readSyncAvailable` and `officialReadSyncAvailable` now describe this native
+capability, not gateway receipt storage. No official file is edited.
 
 Chats are muted unless explicitly opted in with `chat.notifications`. Preferences
 are desktop-installation/chat scoped, shared across authorized receivers and

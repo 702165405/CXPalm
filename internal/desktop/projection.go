@@ -28,10 +28,6 @@ func projectState(s State, lazy bool) State {
 		return s
 	}
 	s.ReadToken = readToken(raw)
-	// Read broadcasts are presentation overlays, never native JSON-patch bases.
-	if s.Unread != nil && s.UnreadToken == s.ReadToken && (s.UnreadUntil.IsZero() || time.Now().Before(s.UnreadUntil)) {
-		raw["hasUnreadTurn"] = *s.Unread
-	}
 	turns := orderedTurns(raw)
 	more := len(turns) > 20
 	truncated, _ := raw["historyMore"].(bool)

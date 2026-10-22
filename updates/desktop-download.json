@@ -1,13 +1,13 @@
 {
   "schema": 1,
   "releaseLine": "initial-001",
-  "build": 58,
+  "build": 59,
   "appId": "dev.cxpalm.desktop",
   "platform": "win32",
   "arch": "x64",
-  "version": "0.0.22",
-  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.22-build58/CXPalm-Setup-0.0.22-build58-x64.exe",
-  "size": 120731618,
-  "sha256": "bbd210ff1b32da530883e5d04220fc21976da73eb86ed68ac8a66dd73df46a5f",
-  "notes": "CXPalm 0.0.22 / build58: Add an independent start-minimized-to-tray option under desktop Settings. It applies on the next app launch or restart without changing login/app-open Agent startup. First-time setup and startup failures stay visible; reopening or clicking the tray restores the window. Preserve configuration, authorizations, IP policy and existing preferences. Include the fetched strict build-runtime guards and one-shot Node HTTPS updater transport. Replace private deployment domains in current tests with reserved examples; history still contains author metadata and historical identifiers and is not rewritten. Runtime security limitations remain documented."
+  "version": "0.0.23",
+  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.23-build59/CXPalm-Setup-0.0.23-build59-x64.exe",
+  "size": 120724667,
+  "sha256": "d6ba6bf12db02e0468a81c11145432b6d378f6100a116c9e0e576b67c40f27c3",
+  "notes": "CXPalm 0.0.23 / build59: Read and unread state now follows official Codex Desktop. Web and Android no longer override it with independent gateway receipts. Synchronization no longer reads auth.json or the official global-state file. A read is confirmed only after the original desktop owner reports it; unavailable context or uncertain results do not clear unread or block reminders. Preserve configuration, authorizations and startup preferences."
 }

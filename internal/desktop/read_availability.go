@@ -5,7 +5,7 @@ import (
 	"errors"
 )
 
-const ReadSyncUnavailableReason = "网关已读存储暂不可用；聊天和会话提醒连接不受影响，请稍后重试。"
+const ReadSyncUnavailableReason = "桌面已读同步尚未就绪；以桌面状态为准，聊天和会话提醒不受影响。"
 
 var ErrReadSyncUnavailable = errors.New(ReadSyncUnavailableReason)
 
@@ -16,12 +16,26 @@ type NotificationPreferenceState struct {
 }
 
 func (b *Bridge) ReadSyncAvailable() bool {
-	return b.ReadStore != nil
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.readContextAvailableLocked()
 }
 
 func (b *Bridge) OfficialReadSyncAvailable() bool {
-	_, err := b.nativeReads()
-	return err == nil
+	return b.ReadSyncAvailable()
+}
+
+func (b *Bridge) readContextAvailableLocked() bool {
+	c := b.ipc
+	if c == nil || b.readContextIPC != c || !validReadContext(b.readContextHint) {
+		return false
+	}
+	select {
+	case <-c.Done():
+		return false
+	default:
+		return true
+	}
 }
 
 func (b *Bridge) NotificationPreference(id string) (NotificationPreferenceState, error) {

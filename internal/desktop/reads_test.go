@@ -2,14 +2,12 @@ package desktop
 
 import (
 	"context"
-	"crypto/sha256"
 	"cxpalm/internal/config"
 	"cxpalm/internal/store"
 	"database/sql"
-	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -19,330 +17,306 @@ import (
 	"time"
 )
 
-func nativeReadFixture(t *testing.T, root string, ids ...string) (readContext, func(...string)) {
-	t.Helper()
-	identity := map[string]string{"kind": "chatgpt", "accountId": "account-test", "userId": "user-test"}
-	sum := sha256.Sum256([]byte(`["chatgpt","account-test","user-test"]`))
-	key := fmt.Sprintf("%x", sum)
-	host := "local:fixture-host"
-	claims := map[string]any{"https://api.openai.com/auth": map[string]any{"chatgpt_account_id": "account-test", "user_id": "user-test", "unrelated_bool": true}}
-	payload, _ := json.Marshal(claims)
-	auth := map[string]any{"auth_mode": "chatgpt", "tokens": map[string]any{"access_token": "header." + base64.RawURLEncoding.EncodeToString(payload) + ".signature"}}
-	raw, _ := json.Marshal(auth)
-	if err := os.WriteFile(filepath.Join(root, "auth.json"), raw, 0600); err != nil {
-		t.Fatal(err)
-	}
-	write := func(ids ...string) {
-		if ids == nil {
-			ids = []string{}
-		}
-		raw, _ := json.Marshal(map[string]any{"electron-thread-read-state-v1": map[string]any{"version": 1, "unreadByIdentity": map[string]any{key: map[string]any{host: ids}}}})
-		if err := os.WriteFile(filepath.Join(root, ".codex-global-state.json"), raw, 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write(ids...)
-	return readContext{Identity: identity, HostKey: host}, write
+func readTestContext() readContext {
+	return readContext{Identity: map[string]string{"kind": "chatgpt", "accountId": "fixture-account", "userId": "fixture-user"}, HostKey: "local:fixture-host"}
 }
-
-func TestSharedReadReceiptExactReplyAndPersistence(t *testing.T) {
+func readSnapshot(unread bool, text string) json.RawMessage {
+	return mustJSON(map[string]any{"id": "chat", "hasUnreadTurn": unread, "threadRuntimeStatus": map[string]any{"type": "idle"}, "turns": []any{map[string]any{"turnId": "turn", "status": "completed", "items": []any{map[string]any{"type": "agentMessage", "text": text}}}}})
+}
+func readHint(c readContext, source string) Frame {
+	return Frame{Type: "broadcast", Method: "thread-read-state-changed", Version: 3, Source: source, Params: mustJSON(map[string]any{"hostId": "local", "conversationId": "chat", "hasUnreadTurn": false, "context": c})}
+}
+func readFixture(t *testing.T, hint bool) (*Bridge, *IPC, net.Conn, string) {
+	t.Helper()
 	root := t.TempDir()
 	native, err := sql.Open("sqlite", filepath.Join(root, "state_5.sqlite"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer native.Close()
 	_, err = native.Exec(`CREATE TABLE threads(id TEXT,title TEXT,cwd TEXT,updated_at INTEGER,source TEXT,archived INTEGER);INSERT INTO threads VALUES('chat','Example','.',1,'vscode',0)`)
+	native.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := t.TempDir()
-	db, err := store.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { db.Close() }()
 	b := NewBridge(config.Config{CodexHome: root})
-	defer b.Close()
-	b.ReadStore = db
-	nativeContext, writeNative := nativeReadFixture(t, root, "chat")
-	client, owner := net.Pipe()
-	b.ipc = &IPC{conn: client, closed: make(chan struct{}), clientID: "cxpalm-test"}
-	received := make(chan error, 1)
-	go func() {
-		defer owner.Close()
-		var header [4]byte
-		if _, e := io.ReadFull(owner, header[:]); e != nil {
-			received <- e
-			return
-		}
-		raw := make([]byte, binary.LittleEndian.Uint32(header[:]))
-		if _, e := io.ReadFull(owner, raw); e != nil {
-			received <- e
-			return
-		}
-		var frame Frame
-		json.Unmarshal(raw, &frame)
-		var params struct {
-			Host    string      `json:"hostId"`
-			ID      string      `json:"conversationId"`
-			Unread  bool        `json:"hasUnreadTurn"`
-			Context readContext `json:"context"`
-		}
-		json.Unmarshal(frame.Params, &params)
-		if frame.Method != "thread-read-state-changed" || frame.Version != 3 || params.Host != "local" || params.ID != "chat" || params.Unread || !sameReadContext(params.Context, nativeContext) {
-			received <- fmt.Errorf("invalid native write")
-			return
-		}
-		writeNative()
-		received <- nil
-	}()
-	raw := json.RawMessage(`{"id":"chat","hasUnreadTurn":true,"threadRuntimeStatus":{"type":"idle"},"turns":[{"turnId":"t","status":"completed","items":[{"id":"a","type":"agentMessage","text":"first reply"}]}]}`)
-	state := &State{ID: "chat", Owner: "official", Connected: true, Snapshot: raw}
-	b.sessions["chat"] = state
-	one, two := make(chan State, 4), make(chan State, 4)
-	b.watchers["chat"] = map[chan State]bool{one: true, two: true}
-	var canonical map[string]any
-	json.Unmarshal(raw, &canonical)
-	token := readToken(canonical)
-	change := b.ReadChanges()
-	accepted, err := b.MarkRead(context.Background(), "chat", token)
-	if err != nil || !accepted {
-		t.Fatal(accepted, err)
-	}
-	if err := <-received; err != nil {
+	db, err := store.Open(t.TempDir())
+	if err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-change:
-	default:
-		t.Fatal("list subscribers were not woken")
+	b.ReadStore = db
+	client, owner := net.Pipe()
+	c := &IPC{conn: client, closed: make(chan struct{}), events: make(chan Frame, 32), clientID: "cxpalm-test"}
+	b.ipc = c
+	s := &State{ID: "chat", Owner: "original-owner", Connected: true, Snapshot: readSnapshot(true, "reply")}
+	b.sessions["chat"] = s
+	done := make(chan struct{})
+	go func() { b.events(c); close(done) }()
+	t.Cleanup(func() {
+		owner.Close()
+		c.Close()
+		close(c.events)
+		<-done
+		b.Close()
+		db.Close()
+	})
+	if hint {
+		b.learnReadContext(c, readHint(readTestContext(), "desktop-coordinator"))
+	}
+	return b, c, owner, readToken(s.snapshotValue())
+}
+func readFrame(t *testing.T, conn net.Conn) Frame {
+	t.Helper()
+	conn.SetReadDeadline(time.Now().Add(time.Second))
+	var header [4]byte
+	if _, err := io.ReadFull(conn, header[:]); err != nil {
+		t.Fatal(err)
+	}
+	n := binary.LittleEndian.Uint32(header[:])
+	if n > 8192 {
+		t.Fatal("unexpected read frame size")
+	}
+	raw := make([]byte, n)
+	if _, err := io.ReadFull(conn, raw); err != nil {
+		t.Fatal(err)
+	}
+	var f Frame
+	if err := json.Unmarshal(raw, &f); err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+func publishRead(t *testing.T, b *Bridge, c *IPC, source string, unread bool, text string) {
+	t.Helper()
+	b.mu.Lock()
+	seq := b.sessions["chat"].Sequence
+	b.mu.Unlock()
+	c.events <- Frame{Type: "broadcast", Method: "thread-stream-state-changed", Version: 11, Source: source, Params: mustJSON(map[string]any{"hostId": "local", "conversationId": "chat", "change": map[string]any{"type": "snapshot", "conversationState": json.RawMessage(readSnapshot(unread, text)), "revision": time.Now().UnixNano()}})}
+	if source != "original-owner" {
+		return
+	}
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		b.mu.Lock()
+		ready := b.sessions["chat"].Sequence > seq
+		b.mu.Unlock()
+		if ready {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("owner snapshot not applied")
+}
+func readView(t *testing.T, b *Bridge) map[string]any {
+	t.Helper()
+	b.mu.Lock()
+	s := *b.sessions["chat"]
+	b.mu.Unlock()
+	var raw map[string]any
+	if err := json.Unmarshal(b.PhoneState(s).Snapshot, &raw); err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+func assertNoOfficialFiles(t *testing.T, b *Bridge) {
+	t.Helper()
+	for _, name := range []string{"auth.json", ".codex-global-state.json"} {
+		if _, err := os.Stat(filepath.Join(b.config.CodexHome, name)); !os.IsNotExist(err) {
+			t.Fatal("official file created", name)
+		}
+	}
+}
+
+func TestDesktopReadConfirmedWithoutAuthFiles(t *testing.T) {
+	b, c, owner, token := readFixture(t, true)
+	assertNoOfficialFiles(t, b)
+	// Old independent receipts must have no authority in either direction.
+	if err := b.ReadStore.SetReadToken("chat", token); err != nil {
+		t.Fatal(err)
+	}
+	if readView(t, b)["hasUnreadTurn"] != true {
+		t.Fatal("old local receipt overrode desktop unread")
+	}
+	changed := b.ReadChanges()
+	one, two := make(chan State, 8), make(chan State, 8)
+	b.mu.Lock()
+	b.watchers["chat"] = map[chan State]bool{one: true, two: true}
+	b.mu.Unlock()
+	result := make(chan error, 1)
+	go func() {
+		ok, err := b.MarkRead(context.Background(), "chat", token)
+		if !ok && err == nil {
+			err = errors.New("read not accepted")
+		}
+		result <- err
+	}()
+	f := readFrame(t, owner)
+	var p struct {
+		Context readContext `json:"context"`
+		Unread  bool        `json:"hasUnreadTurn"`
+	}
+	json.Unmarshal(f.Params, &p)
+	if f.Method != "thread-read-state-changed" || f.Version != 3 || p.Unread || !sameReadContext(p.Context, readTestContext()) {
+		t.Fatal("incorrect native read request")
+	}
+	if readView(t, b)["hasUnreadTurn"] != true {
+		t.Fatal("write was optimistically accepted")
+	}
+	// Even a reflected broadcast is not an acknowledgement.
+	b.learnReadContext(c, readHint(readTestContext(), "desktop-coordinator"))
+	if readView(t, b)["hasUnreadTurn"] != true {
+		t.Fatal("broadcast changed displayed read state")
+	}
+	publishRead(t, b, c, "original-owner", false, "reply")
+	if err := <-result; err != nil {
+		t.Fatal(err)
 	}
 	for _, ch := range []chan State{one, two} {
 		select {
 		case s := <-ch:
-			var p map[string]any
-			json.Unmarshal(b.PhoneState(s).Snapshot, &p)
-			if p["hasUnreadTurn"] != false {
-				t.Fatal("other device did not observe read")
+			var raw map[string]any
+			json.Unmarshal(b.PhoneState(s).Snapshot, &raw)
+			if raw["hasUnreadTurn"] != false {
+				t.Fatal("receiver diverged")
 			}
 		default:
-			t.Fatal("chat subscriber not notified")
+			t.Fatal("receiver not notified")
 		}
 	}
-	if string(state.Snapshot) != string(raw) {
-		t.Fatal("native patch base mutated")
+	select {
+	case <-changed:
+	default:
+		t.Fatal("list not notified")
 	}
 	page, err := b.Browse(context.Background(), "", false, "", 10, 0)
 	if err != nil || len(page.Items) != 1 || page.Items[0].Unread == nil || *page.Items[0].Unread {
 		t.Fatal("list diverged", err)
 	}
-	if ok, err := b.MarkRead(context.Background(), "chat", token); err != nil || !ok || state.Sequence != 2 {
-		t.Fatal("receipt is not idempotent", err)
-	}
-	db.Close()
-	db, err = store.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b.ReadStore = db
-	stored, err := db.ReadToken("chat")
-	if err != nil || stored != token {
-		t.Fatal("read receipt lost on gateway restart", err)
-	}
-	writeNative("chat")
-	state.Snapshot = json.RawMessage(strings.Replace(string(raw), "first reply", "new reply", 1))
-	if ok, err := b.MarkRead(context.Background(), "chat", token); err != nil || ok {
-		t.Fatal("stale receipt accepted", err)
-	}
-	var p map[string]any
-	json.Unmarshal(b.PhoneState(*state).Snapshot, &p)
-	if p["hasUnreadTurn"] != true {
-		t.Fatal("new reply was incorrectly read")
-	}
-	state.Snapshot = raw
-	c := &IPC{events: make(chan Frame, 1)}
-	c.events <- Frame{Method: "thread-read-state-changed", Version: 3, Source: "official", Params: mustJSON(map[string]any{"hostId": "local", "conversationId": "chat", "hasUnreadTurn": true, "context": nativeContext})}
-	close(c.events)
-	b.events(c)
-	stored, _ = db.ReadToken("chat")
-	if stored != token {
-		t.Fatal("official unread erased the independent CXPalm receipt")
-	}
-	state.Connected = false
-	if accepted, err = b.MarkRead(context.Background(), "chat", token); err == nil && accepted {
-		t.Fatal("offline read accepted")
-	}
-	state.Connected = true
-	writeNative()
-	state.Snapshot = json.RawMessage(strings.Replace(string(raw), `"idle"`, `"active"`, 1))
 	if ok, err := b.MarkRead(context.Background(), "chat", token); err != nil || !ok {
-		t.Fatal("visible reply cannot become read while turn is still active", err)
+		t.Fatal("already-read acknowledgement failed", err)
 	}
-	for _, bad := range []string{"", strings.Repeat("z", 64)} {
-		if _, err = b.MarkRead(context.Background(), "chat", bad); err == nil {
-			t.Fatal("invalid token accepted")
-		}
+	publishRead(t, b, c, "original-owner", true, "reply")
+	if readView(t, b)["hasUnreadTurn"] != true {
+		t.Fatal("official manual unread lost")
 	}
-}
-
-func TestOfficialReadOverlaySurvivesUnrelatedPatchesButNotNewReply(t *testing.T) {
-	b := NewBridge(config.Config{})
-	defer b.Close()
-	raw := json.RawMessage(`{"id":"chat","hasUnreadTurn":false,"turns":[{"turnId":"turn","status":"completed","items":[{"type":"agentMessage","text":"reply"}]}]}`)
-	var canonical map[string]any
-	json.Unmarshal(raw, &canonical)
-	unread := true
-	state := State{ID: "chat", Connected: true, Snapshot: raw, Unread: &unread, UnreadToken: readToken(canonical)}
-	// Settings/tool-only state changes must not erase an explicit owner unread event.
-	state.Snapshot = json.RawMessage(strings.Replace(string(raw), `"id":"chat"`, `"id":"chat","latestModel":"new-model"`, 1))
-	var projected map[string]any
-	json.Unmarshal(PhoneState(state).Snapshot, &projected)
-	if projected["hasUnreadTurn"] != true {
-		t.Fatal("unrelated state update erased official unread")
-	}
-	state.Snapshot = json.RawMessage(strings.Replace(string(raw), `"reply"`, `"new reply"`, 1))
-	json.Unmarshal(PhoneState(state).Snapshot, &projected)
-	if projected["hasUnreadTurn"] != false {
-		t.Fatal("old read overlay leaked to another reply")
-	}
-}
-
-func TestExpiredBroadcastCannotOverridePersistedManualUnread(t *testing.T) {
-	root := t.TempDir()
-	_, write := nativeReadFixture(t, root, "chat")
-	b := NewBridge(config.Config{CodexHome: root})
-	defer b.Close()
-	db, err := store.Open(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	b.ReadStore = db
-	raw := json.RawMessage(`{"id":"chat","hasUnreadTurn":false,"turns":[{"turnId":"t","items":[{"type":"agentMessage","text":"reply"}]}]}`)
-	var m map[string]any
-	json.Unmarshal(raw, &m)
-	unread := false
-	state := State{ID: "chat", Connected: true, Snapshot: raw, Unread: &unread, UnreadToken: readToken(m), UnreadUntil: time.Now().Add(-time.Second)}
-	write("chat")
-	json.Unmarshal(b.PhoneState(state).Snapshot, &m)
-	if m["hasUnreadTurn"] != true {
-		t.Fatal("old receipt hid persisted official manual unread")
-	}
-}
-
-func TestUnconfirmedOfficialReadDoesNotBlockCXPalmRead(t *testing.T) {
-	root := t.TempDir()
-	nativeReadFixture(t, root, "chat")
-	history, err := sql.Open("sqlite", filepath.Join(root, "state_5.sqlite"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = history.Exec(`CREATE TABLE threads(id TEXT,title TEXT,cwd TEXT,updated_at INTEGER,source TEXT,archived INTEGER);INSERT INTO threads VALUES('chat','Example','.',1,'vscode',0)`)
-	history.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	b := NewBridge(config.Config{CodexHome: root})
-	defer b.Close()
-	db, err := store.Open(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	b.ReadStore = db
-	raw := json.RawMessage(`{"id":"chat","hasUnreadTurn":true,"turns":[{"turnId":"t","items":[{"type":"agentMessage","text":"reply"}]}]}`)
-	state := &State{ID: "chat", Owner: "owner", Connected: true, Snapshot: raw}
-	b.sessions["chat"] = state
-	var m map[string]any
-	json.Unmarshal(raw, &m)
-	client, owner := net.Pipe()
-	defer owner.Close()
-	b.ipc = &IPC{conn: client, closed: make(chan struct{}), clientID: "test"}
-	// The desktop receives the frame but never accepts or persists it.
-	go io.Copy(io.Discard, owner)
-	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
-	defer cancel()
-	token := readToken(m)
-	if accepted, err := b.MarkRead(ctx, "chat", token); err != nil || !accepted {
-		t.Fatal("optional official sync blocked local receipt", err)
-	}
-	if receipt, _ := db.ReadToken("chat"); receipt != token {
-		t.Fatal("confirmed CXPalm read was not persisted")
-	}
-	json.Unmarshal(b.PhoneState(*state).Snapshot, &m)
-	if m["hasUnreadTurn"] != false {
-		t.Fatal("failed optional sync kept the CXPalm reply unread")
-	}
-}
-
-func TestCXPalmReadWithoutAuthSurvivesRestartAndNewReply(t *testing.T) {
-	root, dir := t.TempDir(), t.TempDir()
-	history, err := sql.Open("sqlite", filepath.Join(root, "state_5.sqlite"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = history.Exec(`CREATE TABLE threads(id TEXT,title TEXT,cwd TEXT,updated_at INTEGER,source TEXT,archived INTEGER);INSERT INTO threads VALUES('chat','Example','.',1,'vscode',0)`)
-	history.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	db, err := store.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { db.Close() }()
-	b := NewBridge(config.Config{CodexHome: root})
-	defer b.Close()
-	b.ReadStore = db
-	raw := json.RawMessage(`{"hasUnreadTurn":true,"threadRuntimeStatus":{"type":"idle"},"turns":[{"turnId":"t","status":"completed","items":[{"id":"a","type":"agentMessage","text":"reply"}]}]}`)
-	s := &State{ID: "chat", Owner: "original-owner", Connected: true, Snapshot: raw}
-	b.sessions["chat"] = s
-	token := readToken(s.snapshotValue())
-	if ok, err := b.MarkRead(context.Background(), "chat", token); err != nil || !ok {
-		t.Fatal(ok, err)
-	}
-	for _, view := range []State{b.PhoneState(*s), b.StreamState(*s)} {
-		var value map[string]any
-		json.Unmarshal(view.Snapshot, &value)
-		if value["hasUnreadTurn"] != false || value["readSyncAvailable"] != true || value["officialReadSyncAvailable"] != false {
-			t.Fatal("independent read missing", value)
-		}
-	}
-	page, err := b.Browse(context.Background(), "", false, "", 10, 0)
-	if err != nil || len(page.Items) != 1 || page.Items[0].Unread == nil || *page.Items[0].Unread {
-		t.Fatal("list and chat read state differ", err)
-	}
-	db.Close()
-	db, err = store.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b.ReadStore = db
-	if saved, _ := db.ReadToken("chat"); saved != token {
-		t.Fatal("restart lost receipt")
-	}
-	s.Snapshot = json.RawMessage(strings.Replace(string(raw), `"reply"`, `"new reply"`, 1))
+	// A deliberate new desktop unread event may be read again, not suppressed by an old receipt.
+	publishRead(t, b, c, "original-owner", true, "new reply")
 	if ok, err := b.MarkRead(context.Background(), "chat", token); err != nil || ok {
-		t.Fatal("stale receipt accepted", err)
+		t.Fatal("stale reply accepted", err)
 	}
-	var next map[string]any
-	json.Unmarshal(b.PhoneState(*s).Snapshot, &next)
-	if next["hasUnreadTurn"] != true {
-		t.Fatal("new reply was incorrectly read")
+	assertNoOfficialFiles(t, b)
+}
+
+func TestReadNeverAcknowledgesUnconfirmedOrChangedAuthority(t *testing.T) {
+	for _, mode := range []string{"timeout", "broadcast-only", "wrong-owner", "new-reply", "context-switch", "disconnect"} {
+		t.Run(mode, func(t *testing.T) {
+			b, c, owner, token := readFixture(t, true)
+			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Millisecond)
+			defer cancel()
+			result := make(chan error, 1)
+			go func() {
+				ok, err := b.MarkRead(ctx, "chat", token)
+				if ok {
+					result <- errors.New("unconfirmed read accepted")
+					return
+				}
+				if !errors.Is(err, ErrReadSyncUnavailable) {
+					result <- errors.New("unavailable status missing")
+					return
+				}
+				result <- nil
+			}()
+			readFrame(t, owner)
+			switch mode {
+			case "broadcast-only":
+				b.learnReadContext(c, readHint(readTestContext(), "desktop-coordinator"))
+			case "wrong-owner":
+				publishRead(t, b, c, "different-owner", false, "reply")
+			case "new-reply":
+				publishRead(t, b, c, "original-owner", true, "new reply")
+			case "context-switch":
+				next := readTestContext()
+				next.Identity["accountId"] = "new-account"
+				b.learnReadContext(c, readHint(next, "desktop-coordinator"))
+			case "disconnect":
+				c.Close()
+			}
+			if err := <-result; err != nil {
+				t.Fatal(err)
+			}
+			if readView(t, b)["hasUnreadTurn"] != true {
+				t.Fatal("unconfirmed read hid unread")
+			}
+			if stored, err := b.ReadStore.ReadToken("chat"); err != nil || stored != "" {
+				t.Fatal("local receipt persisted", err)
+			}
+			if mode != "new-reply" {
+				if ok, err := b.MarkRead(context.Background(), "chat", token); ok || !errors.Is(err, ErrReadSyncUnavailable) {
+					t.Fatal("uncertain write was replayed", err)
+				}
+			}
+		})
 	}
+}
+
+func TestMissingContextAndMalformedFilesDoNotChangeDesktopState(t *testing.T) {
+	b, _, _, token := readFixture(t, false)
 	for _, name := range []string{"auth.json", ".codex-global-state.json"} {
-		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
-			t.Fatal("official file created", name, err)
+		if err := os.WriteFile(filepath.Join(b.config.CodexHome, name), []byte("invalid"), 0600); err != nil {
+			t.Fatal(err)
 		}
 	}
-	s.Archived = true
-	if ok, err := b.MarkRead(context.Background(), "chat", readToken(s.snapshotValue())); err != nil || ok {
+	if readView(t, b)["hasUnreadTurn"] != true {
+		t.Fatal("official unread missing")
+	}
+	if ok, err := b.MarkRead(context.Background(), "chat", token); ok || !errors.Is(err, ErrReadSyncUnavailable) {
+		t.Fatal("missing context accepted", err)
+	}
+	if _, err := b.MarkRead(context.Background(), "chat", strings.Repeat("z", 64)); err == nil {
+		t.Fatal("invalid token accepted")
+	}
+	b.mu.Lock()
+	b.sessions["chat"].Archived = true
+	b.mu.Unlock()
+	if ok, err := b.MarkRead(context.Background(), "chat", token); err != nil || ok {
 		t.Fatal("archived read accepted", err)
 	}
-	s.Archived = false
-	db.Close()
-	if ok, err := b.MarkRead(context.Background(), "chat", readToken(s.snapshotValue())); err == nil || ok {
-		t.Fatal("failed persistence reported success")
+}
+
+func TestReadContextHintsAreConnectionBoundAndNeverReadState(t *testing.T) {
+	for _, mode := range []string{"wrong-version", "self", "missing-source", "invalid-context", "old-connection"} {
+		t.Run(mode, func(t *testing.T) {
+			b, c, _, _ := readFixture(t, false)
+			f := readHint(readTestContext(), "coordinator")
+			source := c
+			switch mode {
+			case "wrong-version":
+				f.Version = 2
+			case "self":
+				f.Source = c.clientID
+			case "missing-source":
+				f.Source = ""
+			case "invalid-context":
+				f = readHint(readContext{Identity: map[string]string{"kind": "chatgpt"}, HostKey: "local:fixture"}, "coordinator")
+			case "old-connection":
+				source = &IPC{clientID: "old"}
+			}
+			b.learnReadContext(source, f)
+			if b.ReadSyncAvailable() {
+				t.Fatal("invalid hint enabled writes")
+			}
+			if readView(t, b)["hasUnreadTurn"] != true {
+				t.Fatal("hint changed authority")
+			}
+		})
 	}
+}
+
+func TestExecutionStorageContextWithoutAccountFiles(t *testing.T) {
+	b, c, _, _ := readFixture(t, false)
+	context := readContext{Identity: map[string]string{"kind": "execution-storage", "authMode": "apikey"}, HostKey: "local:fixture-host"}
+	b.learnReadContext(c, readHint(context, "desktop-coordinator"))
+	if !b.ReadSyncAvailable() || readView(t, b)["hasUnreadTurn"] != true {
+		t.Fatal("desktop execution-storage context was rejected or changed read state")
+	}
+	assertNoOfficialFiles(t, b)
 }

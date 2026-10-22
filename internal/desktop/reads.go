@@ -8,9 +8,8 @@ import (
 	"time"
 )
 
-// A receipt confirms reading in CXPalm, not an official desktop mutation. Keep
-// it durable before optional owner synchronization so missing auth or a timeout
-// cannot leave the same visible reply unread on every receiver.
+// Local receipts never override official state. A write is sent once and must
+// be confirmed by a fresh original-owner snapshot, not a reflected broadcast.
 func (b *Bridge) MarkRead(ctx context.Context, id, token string) (bool, error) {
 	if len(token) != 64 {
 		return false, errors.New("invalid read token")
@@ -25,104 +24,68 @@ func (b *Bridge) MarkRead(ctx context.Context, id, token string) (bool, error) {
 		return false, err
 	}
 	b.mu.Lock()
-	s := b.sessions[id]
-	if s == nil || !s.Connected || s.Owner == "" || s.Archived || s.removed || readToken(s.snapshotValue()) != token {
-		b.mu.Unlock()
-		return false, nil
-	}
-	if b.ReadStore == nil {
-		b.mu.Unlock()
-		return false, ErrReadSyncUnavailable
-	}
-	err := b.ReadStore.SetReadToken(id, token)
-	if err == nil {
-		s.Unread, s.UnreadToken = nil, ""
-		b.readChangedLocked()
-		b.emitLocked(s)
-	}
-	b.mu.Unlock()
-	if err != nil {
-		return false, err
-	}
-	// Best effort only; never manufacture an official identity or replay this
-	// write later. The helper rechecks reply, owner connection and native context.
-	_, _ = b.syncOfficialRead(ctx, id, token)
-	return true, nil
-}
-
-// Official read synchronization retains its own identity and confirmation checks.
-func (b *Bridge) syncOfficialRead(ctx context.Context, id, token string) (bool, error) {
-	if len(token) != 64 {
-		return false, errors.New("invalid read token")
-	}
-	if _, err := hex.DecodeString(token); err != nil {
-		return false, errors.New("invalid read token")
-	}
-	if _, err := b.History.Get(ctx, id); err != nil {
-		return false, err
-	}
-	native, err := b.nativeReads()
-	if err != nil {
-		return false, err
-	}
-	b.mu.Lock()
-	s := b.sessions[id]
-	c := b.ipc
+	s, c := b.sessions[id], b.ipc
 	valid := func() bool {
-		if s == nil || !s.Connected || s.Owner == "" || b.ReadStore == nil {
-			return false
-		}
-		raw := s.snapshotValue()
-		if raw == nil || readToken(raw) != token {
-			return false
-		}
-		return true
+		return b.sessions[id] == s && s != nil && s.Connected && s.Owner != "" && !s.Archived && !s.removed && readToken(s.snapshotValue()) == token
 	}
 	if !valid() {
 		b.mu.Unlock()
 		return false, nil
 	}
+	unread, known := s.snapshotValue()["hasUnreadTurn"].(bool)
+	if !known {
+		b.mu.Unlock()
+		return false, ErrReadSyncUnavailable
+	}
+	if !unread {
+		b.mu.Unlock()
+		return true, nil
+	}
+	if !b.readContextAvailableLocked() {
+		b.mu.Unlock()
+		return false, ErrReadSyncUnavailable
+	}
+	if b.readAttempts[id] == token {
+		b.mu.Unlock()
+		return false, ErrReadSyncUnavailable
+	}
+	if b.readAttempts == nil {
+		b.readAttempts = map[string]string{}
+	}
+	b.readAttempts[id] = token
+	native, owner := b.readContextHint, s.Owner
 	b.mu.Unlock()
-	if native.Unread[id] {
-		if c == nil {
-			return false, errors.New("desktop disconnected")
+	params := mustJSON(map[string]any{"hostId": "local", "conversationId": id, "hasUnreadTurn": false, "context": native})
+	writeCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	if err := c.send(writeCtx, Frame{Type: "broadcast", Method: "thread-read-state-changed", Version: 3, Params: params}); err != nil {
+		return false, errors.Join(ErrReadSyncUnavailable, err)
+	}
+	tick := time.NewTicker(25 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		b.mu.Lock()
+		current := valid() && s.Owner == owner && b.ipc == c && b.readContextAvailableLocked() && sameReadContext(native, b.readContextHint)
+		confirmed := false
+		if current {
+			value, ok := s.snapshotValue()["hasUnreadTurn"].(bool)
+			confirmed = ok && !value
 		}
-		params := mustJSON(map[string]any{"hostId": "local", "conversationId": id, "hasUnreadTurn": false, "context": native.Context})
-		if err = c.send(ctx, Frame{Type: "broadcast", Method: "thread-read-state-changed", Version: 3, Params: params}); err != nil {
-			return false, err
+		b.mu.Unlock()
+		if !current {
+			return false, errors.Join(ErrReadSyncUnavailable, errors.New("desktop reply, owner or read context changed; read not confirmed"))
 		}
-		timeout := time.NewTimer(4 * time.Second)
-		defer timeout.Stop()
-		tick := time.NewTicker(25 * time.Millisecond)
-		defer tick.Stop()
-	confirm:
-		for {
-			select {
-			case <-ctx.Done():
-				return false, ctx.Err()
-			case <-timeout.C:
-				return false, errors.New("desktop did not confirm read state; not marked as read")
-			case <-tick.C:
-				current, e := b.nativeReads()
-				if e != nil {
-					return false, e
-				}
-				if !sameReadContext(native.Context, current.Context) {
-					return false, errors.New("desktop account or host changed")
-				}
-				if !current.Unread[id] {
-					break confirm
-				}
-			}
+		if confirmed {
+			return true, nil
+		}
+		select {
+		case <-writeCtx.Done():
+			return false, errors.Join(ErrReadSyncUnavailable, errors.New("desktop did not confirm read state; inspect desktop before retrying"))
+		case <-c.Done():
+			return false, errors.Join(ErrReadSyncUnavailable, errors.New("desktop disconnected; read not confirmed"))
+		case <-tick.C:
 		}
 	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	// A newer reply must remain unread even if the previous receipt finished late.
-	if b.sessions[id] != s || !valid() {
-		return false, nil
-	}
-	return true, nil
 }
 func (b *Bridge) ReadChanges() <-chan struct{} {
 	b.mu.Lock()
@@ -138,19 +101,15 @@ func (b *Bridge) phoneState(s State, lazy bool) State {
 		view.document = &nativeDocument{value: b.withSteers(s.ID, raw)}
 	}
 	p := b.projectNotifications(b.projectQueue(b.projectGoal(projectState(view, lazy))))
-	if b.ReadStore == nil || !s.Connected || p.ReadToken == "" {
-		return p
-	}
 	var raw map[string]any
-	if json.Unmarshal(p.Snapshot, &raw) != nil {
-		return p
+	if json.Unmarshal(p.Snapshot, &raw) == nil {
+		_, known := raw["hasUnreadTurn"].(bool)
+		b.mu.Lock()
+		blocked := b.readAttempts[s.ID] == p.ReadToken && raw["hasUnreadTurn"] == true
+		b.mu.Unlock()
+		available := known && s.Connected && !blocked && b.ReadSyncAvailable()
+		raw["readSyncAvailable"], raw["officialReadSyncAvailable"] = available, available
+		p.Snapshot = mustJSON(raw)
 	}
-	stored, err := b.ReadStore.ReadToken(s.ID)
-	if err != nil {
-		raw["readSyncAvailable"] = false
-	} else {
-		raw["hasUnreadTurn"] = stored != p.ReadToken
-	}
-	p.Snapshot = mustJSON(raw)
 	return p
 }
