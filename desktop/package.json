@@ -1,7 +1,7 @@
 {
   "name": "cxpalm-desktop",
   "productName": "CXPalm",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "private": true,
   "description": "CXPalm local desktop control center",
   "author": "CXPalm",
@@ -13,7 +13,7 @@
     "smoke": "electron test/smoke.cjs"
   },
   "devDependencies": {
-    "electron": "44.5.1",
+    "electron": "44.9.3",
     "electron-builder": "26.15.3"
   },
   "build": {
@@ -73,8 +73,8 @@
       "allowElevation": false,
       "allowToChangeInstallationDirectory": true,
       "deleteAppDataOnUninstall": false,
-      "artifactName": "CXPalm-Setup-0.0.20-build56-${arch}.${ext}"
+      "artifactName": "CXPalm-Setup-0.0.21-build57-${arch}.${ext}"
     }
   },
-  "releaseBuild": 56
+  "releaseBuild": 57
 }

@@ -11,7 +11,7 @@ const tr=(value,...args)=>languageUI?languageUI.tr(value,...args):value;
 const {DesktopUpdater}=require('./updater.cjs');
 const fixture = !app.isPackaged && process.env.CXPALM_DESKTOP_FIXTURE === '1';
 const smoke = fixture && process.env.CXPALM_DESKTOP_SMOKE === '1';
-let updater;
+let updater, reconnecting;
 let win, tray, client, configPath = '', lastState = null, quitting = false, confirmingQuit = false, connectionError = '';
 let settingsBusy=false, startupError='', fixtureLogin=fixture&&process.env.CXPALM_DESKTOP_FIXTURE_LOGIN==='1';
 const loginLaunch=process.argv.includes('--login-start');
@@ -49,8 +49,18 @@ async function connect(file){
   client=null;lastState=null;connectionError='';configPath=file;
   if(fixture){client=require('./test/fixture.cjs').create();}
   else client=new HostClient(binaryPath(),file);
-  client.on('closed',()=>{lastState=null;connectionError='桌面管理连接已断开，请重新选择配置。';updateTray();});
+  const connectedClient=client;
+  client.on('closed',()=>{if(client!==connectedClient)return;lastState=null;connectionError='桌面管理连接已断开，请刷新状态恢复连接。';updateTray();});
   try{return snapshot(await client.request('status'));}catch(error){await client.close().catch(()=>{});client=null;connectionError='无法载入配置或启动桌面管理进程。请检查所选 JSON 和内置 Agent。';throw error;}
+}
+async function ensureConnection(){
+  if(reconnecting){await reconnecting;return !!client&&!client.closed;}
+  if(client&&!client.closed)return true;
+  if(!configPath)return false;
+  // Reconnect only before dispatch. Never replay a command whose outcome is unknown.
+  if(!reconnecting)reconnecting=connect(configPath).finally(()=>{reconnecting=null;});
+  await reconnecting;
+  return !!client&&!client.closed;
 }
 function snapshot(state){lastState=state;updateTray();return {...state,configPath,fixture,startupError};}
 function updateTray(){
@@ -91,7 +101,7 @@ const ready=hasLock?app.whenReady().then(async()=>{
     trusted(event);validate(method,args);
     if(settingsBusy)throw new Error('设置正在保存，请稍后再试。');
     if(method==='shutdown')throw new Error('请通过托盘退出桌面端。');
-    if(!client||client.closed){if(method!=='status')throw new Error('请先选择有效的 CXPalm 配置。');return {state:connectionError?'error':'unconfigured',fixture,configPath,error:connectionError,startupError};}
+    if(!await ensureConnection()){if(method!=='status')throw new Error('请先选择有效的 CXPalm 配置。');return {state:connectionError?'error':'unconfigured',fixture,configPath,error:connectionError,startupError};}
     const data=await client.request(method,args);
     if(['status','start','stop','diagnose'].includes(method))return snapshot(data);
     return data;

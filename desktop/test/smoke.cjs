@@ -4,8 +4,8 @@ const {app}=require('electron');const path=require('node:path');const fs=require
 const output=path.resolve(__dirname,'../../.local/desktop-ui-tests');
 app.setPath('userData',path.resolve(__dirname,'../../.local/desktop-ui-profile-'+process.pid));app.disableHardwareAcceleration();
 const fixture=require('./fixture.cjs'),createFixture=fixture.create;
-let statusDelay=null,statusReads=0;
-fixture.create=()=>{const client=createFixture(),request=client.request.bind(client);client.request=async(method,args)=>{if(method==='status'){statusReads++;if(statusDelay)await statusDelay;}return request(method,args);};return client;};
+let statusDelay=null,statusReads=0,fixtureClient,fixtureCreates=0,startRequests=0;
+fixture.create=()=>{const client=createFixture(),request=client.request.bind(client);fixtureClient=client;fixtureCreates++;client.request=async(method,args)=>{if(method==='start')startRequests++;if(method==='status'){statusReads++;if(statusDelay)await statusDelay;}return request(method,args);};return client;};
 const desktop=require('../main.cjs');
 async function evaluate(win,script){try{return await win.webContents.executeJavaScript(script,true);}catch(error){console.error('Failed renderer expression: '+script);throw error;}}
 async function wait(win,predicate){const until=Date.now()+10000;while(Date.now()<until){if(await evaluate(win,predicate))return;await new Promise(resolve=>setTimeout(resolve,80));}throw new Error('UI condition timed out: '+predicate);}
@@ -16,6 +16,13 @@ async function capture(win,name){await new Promise(resolve=>setTimeout(resolve,2
  assert.equal(await evaluate(win,"(()=>{const ids=[...document.querySelectorAll('[id]')].map(n=>n.id);return ids.length===new Set(ids).size})()"),true);
  const problems=[];win.webContents.on('console-message',details=>{if(details.level==='error')problems.push(details.message);});win.webContents.on('preload-error',(_event,_path,error)=>problems.push(String(error)));win.webContents.on('render-process-gone',()=>problems.push('renderer exited'));
  await wait(win,"document.getElementById('active-count').textContent==='13'");
+ const previousCreates=fixtureCreates,previousStarts=startRequests;
+ fixtureClient.closed=true;fixtureClient.emit('closed');
+ await evaluate(win,"Promise.all([window.cxDesktop.invoke('status'),window.cxDesktop.invoke('status')])");
+ assert.equal(fixtureCreates,previousCreates+1,'closed host must reconnect only once');
+ assert.equal(startRequests,previousStarts,'reconnect must not start an Agent');
+ assert.equal(await evaluate(win,"window.cxDesktop.invoke('start').then(x=>x.owned)"),true);
+ await evaluate(win,"window.cxDesktop.invoke('stop')");
  if(process.platform==='darwin')assert.ok(await evaluate(win,"document.querySelector('.titlebar > span').getBoundingClientRect().left>=84"),'Mac title must leave space for native window buttons');
  assert.equal(await evaluate(win,"document.documentElement.dataset.platform"),process.platform);
  assert.equal(await evaluate(win,"getComputedStyle(document.querySelector('.titlebar')).webkitAppRegion"),'drag');

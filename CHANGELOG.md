@@ -9,6 +9,15 @@ Versions describe implemented changes, not physical-device acceptance.
   privacy checks. Keep local account and runtime state outside Git.
 - Project license and public repository publication remain pending.
 
+## 0.0.21 (build57)
+
+- Share exact-reply read receipts through the gateway independently of official
+  account files. Optional official synchronization cannot block or erase them.
+- Reconnect a closed desktop management pipe before explicit dispatch; never
+  replay an uncertain request or silently enable automatic gateway startup.
+- Rebuild gateway artifacts with Go 1.27.3 and desktop with Electron 44.9.3.
+  See docs/RUNTIME-SECURITY.md for the embedded-runtime limits and audit scope.
+
 ## 0.0.20 (build56)
 
 - Make conversation reminders independent of official login, auth.json and

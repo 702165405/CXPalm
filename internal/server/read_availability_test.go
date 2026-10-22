@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestMissingIdentityReadRequestsReturnUnavailableNotSuccess(t *testing.T) {
+func TestMissingIdentityStillRequiresAnExactLiveReply(t *testing.T) {
 	s, _, _ := fixture(t)
 	db, err := sql.Open("sqlite", filepath.Join(s.Config.CodexHome, "state_5.sqlite"))
 	if err != nil {
@@ -25,7 +25,7 @@ func TestMissingIdentityReadRequestsReturnUnavailableNotSuccess(t *testing.T) {
 		t.Fatal("automatic read surfaced an optional-feature error", err)
 	}
 	result := value.(map[string]any)
-	if result["accepted"] != false || result["available"] != false || result["reason"] != desktop.ReadSyncUnavailableReason {
+	if result["accepted"] != false || result["available"] != true {
 		t.Fatal(result)
 	}
 	if token, err := s.Store.ReadToken("chat"); err != nil || token != "" {

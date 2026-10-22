@@ -166,8 +166,8 @@ func TestSharedReadReceiptExactReplyAndPersistence(t *testing.T) {
 	close(c.events)
 	b.events(c)
 	stored, _ = db.ReadToken("chat")
-	if stored != "" {
-		t.Fatal("explicit official unread did not invalidate shared receipt")
+	if stored != token {
+		t.Fatal("official unread erased the independent CXPalm receipt")
 	}
 	state.Connected = false
 	if accepted, err = b.MarkRead(context.Background(), "chat", token); err == nil && accepted {
@@ -231,7 +231,7 @@ func TestExpiredBroadcastCannotOverridePersistedManualUnread(t *testing.T) {
 	}
 }
 
-func TestUnconfirmedNativeReadDoesNotBecomeSharedRead(t *testing.T) {
+func TestUnconfirmedOfficialReadDoesNotBlockCXPalmRead(t *testing.T) {
 	root := t.TempDir()
 	nativeReadFixture(t, root, "chat")
 	history, err := sql.Open("sqlite", filepath.Join(root, "state_5.sqlite"))
@@ -263,14 +263,86 @@ func TestUnconfirmedNativeReadDoesNotBecomeSharedRead(t *testing.T) {
 	go io.Copy(io.Discard, owner)
 	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
 	defer cancel()
-	if accepted, err := b.MarkRead(ctx, "chat", readToken(m)); err == nil || accepted {
-		t.Fatal("unconfirmed write acknowledged", err)
+	token := readToken(m)
+	if accepted, err := b.MarkRead(ctx, "chat", token); err != nil || !accepted {
+		t.Fatal("optional official sync blocked local receipt", err)
 	}
-	if receipt, _ := db.ReadToken("chat"); receipt != "" {
-		t.Fatal("unconfirmed native result persisted as read")
+	if receipt, _ := db.ReadToken("chat"); receipt != token {
+		t.Fatal("confirmed CXPalm read was not persisted")
 	}
 	json.Unmarshal(b.PhoneState(*state).Snapshot, &m)
-	if m["hasUnreadTurn"] != true {
-		t.Fatal("failed native confirmation hidden by local overlay")
+	if m["hasUnreadTurn"] != false {
+		t.Fatal("failed optional sync kept the CXPalm reply unread")
+	}
+}
+
+func TestCXPalmReadWithoutAuthSurvivesRestartAndNewReply(t *testing.T) {
+	root, dir := t.TempDir(), t.TempDir()
+	history, err := sql.Open("sqlite", filepath.Join(root, "state_5.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = history.Exec(`CREATE TABLE threads(id TEXT,title TEXT,cwd TEXT,updated_at INTEGER,source TEXT,archived INTEGER);INSERT INTO threads VALUES('chat','Example','.',1,'vscode',0)`)
+	history.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { db.Close() }()
+	b := NewBridge(config.Config{CodexHome: root})
+	defer b.Close()
+	b.ReadStore = db
+	raw := json.RawMessage(`{"hasUnreadTurn":true,"threadRuntimeStatus":{"type":"idle"},"turns":[{"turnId":"t","status":"completed","items":[{"id":"a","type":"agentMessage","text":"reply"}]}]}`)
+	s := &State{ID: "chat", Owner: "original-owner", Connected: true, Snapshot: raw}
+	b.sessions["chat"] = s
+	token := readToken(s.snapshotValue())
+	if ok, err := b.MarkRead(context.Background(), "chat", token); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	for _, view := range []State{b.PhoneState(*s), b.StreamState(*s)} {
+		var value map[string]any
+		json.Unmarshal(view.Snapshot, &value)
+		if value["hasUnreadTurn"] != false || value["readSyncAvailable"] != true || value["officialReadSyncAvailable"] != false {
+			t.Fatal("independent read missing", value)
+		}
+	}
+	page, err := b.Browse(context.Background(), "", false, "", 10, 0)
+	if err != nil || len(page.Items) != 1 || page.Items[0].Unread == nil || *page.Items[0].Unread {
+		t.Fatal("list and chat read state differ", err)
+	}
+	db.Close()
+	db, err = store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.ReadStore = db
+	if saved, _ := db.ReadToken("chat"); saved != token {
+		t.Fatal("restart lost receipt")
+	}
+	s.Snapshot = json.RawMessage(strings.Replace(string(raw), `"reply"`, `"new reply"`, 1))
+	if ok, err := b.MarkRead(context.Background(), "chat", token); err != nil || ok {
+		t.Fatal("stale receipt accepted", err)
+	}
+	var next map[string]any
+	json.Unmarshal(b.PhoneState(*s).Snapshot, &next)
+	if next["hasUnreadTurn"] != true {
+		t.Fatal("new reply was incorrectly read")
+	}
+	for _, name := range []string{"auth.json", ".codex-global-state.json"} {
+		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
+			t.Fatal("official file created", name, err)
+		}
+	}
+	s.Archived = true
+	if ok, err := b.MarkRead(context.Background(), "chat", readToken(s.snapshotValue())); err != nil || ok {
+		t.Fatal("archived read accepted", err)
+	}
+	s.Archived = false
+	db.Close()
+	if ok, err := b.MarkRead(context.Background(), "chat", readToken(s.snapshotValue())); err == nil || ok {
+		t.Fatal("failed persistence reported success")
 	}
 }

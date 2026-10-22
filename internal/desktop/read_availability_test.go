@@ -35,8 +35,8 @@ func TestMissingIdentityDisablesOnlyOfficialReadSync(t *testing.T) {
 	if err := os.Remove(authPath); err != nil {
 		t.Fatal(err)
 	}
-	if b.ReadSyncAvailable() {
-		t.Fatal("cached identity survived logout")
+	if !b.ReadSyncAvailable() || b.OfficialReadSyncAvailable() {
+		t.Fatal("gateway read availability depends on official login")
 	}
 	pref, err := b.NotificationPreference("chat")
 	if err != nil || !pref.Available || pref.NotificationPreference != saved || pref.Reason != "" {
@@ -48,7 +48,7 @@ func TestMissingIdentityDisablesOnlyOfficialReadSync(t *testing.T) {
 	if err := json.Unmarshal(projected.Snapshot, &view); err != nil {
 		t.Fatal(err)
 	}
-	if view["readSyncAvailable"] != false || view["hasUnreadTurn"] != true || len(view["turns"].([]any)) == 0 {
+	if view["readSyncAvailable"] != true || view["officialReadSyncAvailable"] != false || view["hasUnreadTurn"] != true || len(view["turns"].([]any)) == 0 {
 		t.Fatal("optional read synchronization blocked or falsely read the chat")
 	}
 	if view["notificationPreference"].(map[string]any)["available"] != true {

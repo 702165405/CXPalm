@@ -164,15 +164,18 @@ func (b *Bridge) Browse(ctx context.Context, query string, archived bool, projec
 			enrichSession(&out.Items[i], state)
 		}
 	}
-	if native, err := b.nativeReads(); err == nil {
+	if b.ReadStore != nil {
+		reads, err := b.ReadStore.ReadTokens()
 		for i := range out.Items {
 			row := &out.Items[i]
-			unread := native.Unread[row.ID]
-			b.mu.Lock()
-			if current := b.sessions[row.ID]; current != nil && current.Unread != nil && current.UnreadToken == row.ReadToken && (current.UnreadUntil.IsZero() || time.Now().Before(current.UnreadUntil)) {
-				unread = *current.Unread
+			if !row.Live || row.ReadToken == "" {
+				continue
 			}
-			b.mu.Unlock()
+			if err != nil {
+				row.Unread = nil
+				continue
+			}
+			unread := reads[row.ID] != row.ReadToken
 			row.Unread = &unread
 		}
 	}

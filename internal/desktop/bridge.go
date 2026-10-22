@@ -162,9 +162,7 @@ func (b *Bridge) events(c *IPC) {
 				// thread owners. Bind them to the current account/host, not an owner ID.
 				if err == nil && sameReadContext(native.Context, p.Context) {
 					b.mu.Lock()
-					if b.ReadStore != nil && *p.Unread {
-						_ = b.ReadStore.SetReadToken(p.ID, "")
-					}
+					// Official broadcasts cannot erase a CXPalm exact-reply receipt.
 					b.readChangedLocked()
 					if s := b.sessions[p.ID]; s != nil {
 						if raw := s.snapshotValue(); raw != nil {

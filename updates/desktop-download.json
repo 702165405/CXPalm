@@ -1,13 +1,13 @@
 {
   "schema": 1,
   "releaseLine": "initial-001",
-  "build": 56,
+  "build": 57,
   "appId": "dev.cxpalm.desktop",
   "platform": "win32",
   "arch": "x64",
-  "version": "0.0.20",
-  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.20-build56/CXPalm-Setup-0.0.20-build56-x64.exe",
-  "size": 120384816,
-  "sha256": "1a52447838a5e1adb5eb4e4c6a7926b6b23c2d007fe402ffc015771f13ea273a",
-  "notes": "CXPalm 0.0.20 / build56: Decouple conversation reminders from the official account and auth.json. Reminder preferences, events and checkpoints belong to the configured desktop installation and remain stable across official account switches and gateway restarts. Keep explicit per-chat opt-in, revocable device authorization, IP policy and original-owner-only monitoring. Official cross-device read synchronization keeps its own identity checks and no longer disables reminders. Legacy account-scoped records remain untouched; enable each desired chat once in the new installation scope. No credentials, permission changes or data migrations are required."
+  "version": "0.0.21",
+  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.21-build57/CXPalm-Setup-0.0.21-build57-x64.exe",
+  "size": 120729774,
+  "sha256": "8cf992a159aee950fae7a305f6c2154b6409f476a0ec59b24309fc01ef6f78e0",
+  "notes": "CXPalm 0.0.21 / build57: Clear unread markers across Web and Android after confirming the exact visible reply in the gateway, independently of official login. New replies remain unread; stale, offline and archived receipts cannot clear them. Official read sync is optional and cannot erase a gateway receipt. Recover a closed desktop management connection on refresh without replaying an operation or auto-starting the Agent. Rebuild with Go 1.27.3 and Electron 44.9.3; system Node is separate from the embedded runtime. Electron includes the verified blocked-CA-key patch but still reports embedded Node 24.22.0, not the complete Node 24.22.1 security release. Preserve settings, authorizations, IP policy and existing records."
 }

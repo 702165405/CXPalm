@@ -8,9 +8,50 @@ import (
 	"time"
 )
 
-// Confirm an exact visible reply through the official coordination owner. Never
-// edit its JSON/SQLite files, and never acknowledge an unconfirmed native write.
+// A receipt confirms reading in CXPalm, not an official desktop mutation. Keep
+// it durable before optional owner synchronization so missing auth or a timeout
+// cannot leave the same visible reply unread on every receiver.
 func (b *Bridge) MarkRead(ctx context.Context, id, token string) (bool, error) {
+	if len(token) != 64 {
+		return false, errors.New("invalid read token")
+	}
+	if _, err := hex.DecodeString(token); err != nil {
+		return false, errors.New("invalid read token")
+	}
+	if _, err := b.History.Get(ctx, id); err != nil {
+		return false, err
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	b.mu.Lock()
+	s := b.sessions[id]
+	if s == nil || !s.Connected || s.Owner == "" || s.Archived || s.removed || readToken(s.snapshotValue()) != token {
+		b.mu.Unlock()
+		return false, nil
+	}
+	if b.ReadStore == nil {
+		b.mu.Unlock()
+		return false, ErrReadSyncUnavailable
+	}
+	err := b.ReadStore.SetReadToken(id, token)
+	if err == nil {
+		s.Unread, s.UnreadToken = nil, ""
+		b.readChangedLocked()
+		b.emitLocked(s)
+	}
+	b.mu.Unlock()
+	if err != nil {
+		return false, err
+	}
+	// Best effort only; never manufacture an official identity or replay this
+	// write later. The helper rechecks reply, owner connection and native context.
+	_, _ = b.syncOfficialRead(ctx, id, token)
+	return true, nil
+}
+
+// Official read synchronization retains its own identity and confirmation checks.
+func (b *Bridge) syncOfficialRead(ctx context.Context, id, token string) (bool, error) {
 	if len(token) != 64 {
 		return false, errors.New("invalid read token")
 	}
@@ -81,21 +122,6 @@ func (b *Bridge) MarkRead(ctx context.Context, id, token string) (bool, error) {
 	if b.sessions[id] != s || !valid() {
 		return false, nil
 	}
-	previous, err := b.ReadStore.ReadToken(id)
-	if err != nil {
-		return false, err
-	}
-	if previous != token {
-		err = b.ReadStore.SetReadToken(id, token)
-	}
-	if err != nil {
-		return false, err
-	}
-	// Confirmation is already persisted; discard provisional broadcast overlays.
-	s.Unread = nil
-	s.UnreadToken = ""
-	b.readChangedLocked()
-	b.emitLocked(s)
 	return true, nil
 }
 func (b *Bridge) ReadChanges() <-chan struct{} {
@@ -115,17 +141,15 @@ func (b *Bridge) phoneState(s State, lazy bool) State {
 	if b.ReadStore == nil || !s.Connected || p.ReadToken == "" {
 		return p
 	}
-	native, err := b.nativeReads()
-	if err != nil {
-		return p
-	}
 	var raw map[string]any
 	if json.Unmarshal(p.Snapshot, &raw) != nil {
 		return p
 	}
-	raw["hasUnreadTurn"] = native.Unread[s.ID]
-	if s.Unread != nil && s.UnreadToken == p.ReadToken && (s.UnreadUntil.IsZero() || time.Now().Before(s.UnreadUntil)) {
-		raw["hasUnreadTurn"] = *s.Unread
+	stored, err := b.ReadStore.ReadToken(s.ID)
+	if err != nil {
+		raw["readSyncAvailable"] = false
+	} else {
+		raw["hasUnreadTurn"] = stored != p.ReadToken
 	}
 	p.Snapshot = mustJSON(raw)
 	return p

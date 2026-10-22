@@ -4,6 +4,32 @@ This public record intentionally excludes real conversation titles, IDs,
 content, device identifiers, account counts, private paths and deployment logs.
 Private test evidence is not part of the source repository.
 
+## Independent Read Receipts And Runtime Refresh (0.0.21 / build57)
+
+- CXPalm commits exact visible-reply read receipts in its own database before
+  optional official synchronization. Missing official identity and an official
+  timeout do not block or erase them. New replies and stale receipts remain
+  distinct; offline, archived and failed-storage requests do not report success.
+  List and conversation projections agree across receivers and after restart.
+- Desktop refresh reconnects a closed management pipe once, without replaying
+  the original command or changing Agent auto-start preferences. Final packaged
+  desktop source files match the source checked by isolated Electron UI tests;
+  the concurrent reconnect and explicit-start checks pass.
+- Go tests/vet pass with Go 1.27.3. Windows amd64 and macOS amd64/arm64 gateway
+  archives contain binaries whose embedded build information reports Go 1.27.3;
+  Mac archives also verify architecture and executable mode. They are standalone
+  gateways, not Mac desktop applications or Mac runtime acceptance.
+- All 65 Node checks and isolated Chromium regressions pass on system Node
+  22.23.4. Android: 81 tests, 80 passed and one public-network opt-in skipped;
+  Lint and normal APK assembly pass. The APK retains its signer and excludes
+  rendering probes. No fresh physical-phone or emulator acceptance is claimed.
+- The Windows desktop is rebuilt with Electron 44.9.3; its actual packaged
+  runtime versions are checked separately from system Node. Electron's official
+  blocked-CA-key patch is verified in source, but the embedded Node still reports
+  24.22.0, not the complete 24.22.1 security release. The independent browser, OS,
+  CA and deployment-host audit and remaining updates are documented in
+  [runtime security](docs/RUNTIME-SECURITY.md); no OS trust or server policy is changed.
+
 ## Account-Independent Reminders (0.0.20 / build56)
 
 - Notification preferences, event journals and transition checkpoints use a

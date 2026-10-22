@@ -48,7 +48,7 @@ async function main() {
   const commandApproval={id:'approval-fixture',method:'item/commandExecution/requestApproval',params:{command:'fixture only - not executed',availableDecisions:['accept','decline']}};
   let approvalRequests=[commandApproval];
   const snapshot = () => ({type: 'chat.state', data: {id: 'main-fixture', sequence:++sequence,readToken:replyToken, connected: true, snapshot: {
-    readSyncAvailable,notificationPreference,queuedMessages,queueAvailable:true,threadGoal:nativeGoal,goalRevision:'fixture-goal-revision',goalAvailable:true,hasUnreadTurn:sharedReadToken!==replyToken,latestModel:settings.model,latestReasoningEffort:settings.effort,latestCollaborationMode:{mode:settings.mode},latestThreadSettings:{activePermissionProfile:{id:settings.permission==='auto-review'?':workspace':settings.permission},approvalsReviewer:settings.permission==='auto-review'?'auto_review':'user'},controlsRevision:'fixture-revision',latestTokenUsageInfo:{last:{inputTokens:2000},modelContextWindow:10000},threadRuntimeStatus: {type: active ? 'active' : 'idle'}, observedAtMs:Date.now(),turns: [{turnId:'t69',status:active?'inProgress':'completed',turnStartedAtMs,...(active?{}:{durationMs:764351}),items: [
+    readSyncAvailable,officialReadSyncAvailable:false,notificationPreference,queuedMessages,queueAvailable:true,threadGoal:nativeGoal,goalRevision:'fixture-goal-revision',goalAvailable:true,hasUnreadTurn:sharedReadToken!==replyToken,latestModel:settings.model,latestReasoningEffort:settings.effort,latestCollaborationMode:{mode:settings.mode},latestThreadSettings:{activePermissionProfile:{id:settings.permission==='auto-review'?':workspace':settings.permission},approvalsReviewer:settings.permission==='auto-review'?'auto_review':'user'},controlsRevision:'fixture-revision',latestTokenUsageInfo:{last:{inputTokens:2000},modelContextWindow:10000},threadRuntimeStatus: {type: active ? 'active' : 'idle'}, observedAtMs:Date.now(),turns: [{turnId:'t69',status:active?'inProgress':'completed',turnStartedAtMs,...(active?{}:{durationMs:764351}),items: [
       {type: 'userMessage', text: '检查这个功能的安全边界。'},
       {type: 'agentMessage', text: '这是隔离的 UI 测试会话，不是真实模型输出。\n\n```js\nconst safe = true;\n```\n\n<img src=x onerror="window.xss=true">'},
       {id:'tool-fixture',type:'commandExecution',command:'fixture command --not-executed',status:processRunning?'inProgress':processRevision?'completed':'inProgress',text:'',deferred:true,bodyRevision:'fixture-body-'+processRevision},
@@ -832,16 +832,18 @@ async function main() {
     await page.locator('#notify-chat').click();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='true');
     await page.reload();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='true');
     await page.locator('#notify-chat').click();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='false');
-    // Official read identity must not gate gateway-owned notification controls.
-    readSyncAvailable=false;notificationPreference={enabled:false,available:true};
+    // Neither shared receipts nor notification controls require official read identity.
+    readSyncAvailable=true;notificationPreference={enabled:false,available:true};
     sharedReadToken='';replyToken='e'.repeat(64);currentSocket.send(JSON.stringify(snapshot()));
     await page.waitForFunction(()=>!document.querySelector('#notify-chat').disabled);
+    await page.locator('#messages').evaluate(n=>{n.scrollTop=n.scrollHeight;n.dispatchEvent(new Event('scroll'));});
+    await page.waitForTimeout(150);assert.equal(sharedReadToken,replyToken,'official identity blocked gateway read');
     const readsBeforeNotificationToggle=sent.filter(q=>q.method==='chat.read').length;
     await page.locator('#notify-chat').click();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='true');
     await page.locator('#notify-chat').click();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='false');
     assert.equal(sent.filter(q=>q.method==='chat.read').length,readsBeforeNotificationToggle);
     // A real notification-store failure can still disable its controls.
-    readSyncAvailable=false;notificationPreference={enabled:false,available:false,reason:'桌面身份暂不可用，正常聊天不受影响'};
+    readSyncAvailable=false;notificationPreference={enabled:false,available:false,reason:'提醒存储暂不可用，正常聊天不受影响'};
     sharedReadToken='';replyToken='e'.repeat(64);currentSocket.send(JSON.stringify(snapshot()));
     await page.waitForFunction(()=>document.querySelector('#notify-chat').disabled);
     const readsWithoutIdentity=sent.filter(q=>q.method==='chat.read').length;
@@ -850,7 +852,7 @@ async function main() {
     await page.locator('#messages').evaluate(n=>{n.scrollTop=n.scrollHeight;n.dispatchEvent(new Event('scroll'));});
     await page.waitForTimeout(150);
     assert.equal(sent.filter(q=>q.method==='chat.read').length,readsWithoutIdentity);
-    assert.equal(sharedReadToken,'','missing identity was falsely marked read');
+    assert.equal(sharedReadToken,'','unavailable gateway storage was falsely marked read');
     assert.match(await page.locator('#notify-chat').innerText(),/暂不可用/);
     assert.match(await page.locator('#notify-chat').getAttribute('title'),/正常聊天不受影响/);
     readSyncAvailable=true;notificationPreference={enabled:false,available:true};currentSocket.send(JSON.stringify(snapshot()));

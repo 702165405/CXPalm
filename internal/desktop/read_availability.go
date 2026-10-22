@@ -5,7 +5,7 @@ import (
 	"errors"
 )
 
-const ReadSyncUnavailableReason = "当前桌面未提供可验证的已读同步身份，官方跨端已读暂不可用；聊天和会话提醒不受影响。身份恢复后会自动重新检查。"
+const ReadSyncUnavailableReason = "网关已读存储暂不可用；聊天和会话提醒连接不受影响，请稍后重试。"
 
 var ErrReadSyncUnavailable = errors.New(ReadSyncUnavailableReason)
 
@@ -16,6 +16,10 @@ type NotificationPreferenceState struct {
 }
 
 func (b *Bridge) ReadSyncAvailable() bool {
+	return b.ReadStore != nil
+}
+
+func (b *Bridge) OfficialReadSyncAvailable() bool {
 	_, err := b.nativeReads()
 	return err == nil
 }

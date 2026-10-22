@@ -103,6 +103,17 @@ entry for an uncertain operation.
 
 ## Notifications
 
+`chat.read {thread,readToken}` confirms the exact latest visible reply in the
+gateway database. CXPalm Web/Android read state is independent of official login
+and auth.json. It requires a live original-owner snapshot and a matching token;
+stale tokens, offline/cached or archived state cannot confirm a reply. Receipts
+survive restarts, fan out to connected receivers and do not cover newer replies.
+`readSyncAvailable` refers to gateway storage; `officialReadSyncAvailable` is a
+separate optional capability. Official read synchronization is best-effort,
+retains identity/host checks and never erases a CXPalm receipt on failure or
+account switches. No official state file is edited and no uncertain native
+write is automatically retried.
+
 Chats are muted unless explicitly opted in with `chat.notifications`. Preferences
 are desktop-installation/chat scoped, shared across authorized receivers and
 included in live state. Official account switches, missing `auth.json` and

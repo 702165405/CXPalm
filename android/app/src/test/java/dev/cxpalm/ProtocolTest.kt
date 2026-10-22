@@ -31,6 +31,8 @@ class ProtocolTest {
         val snapshot=org.json.JSONObject("""{"hasUnreadTurn":true,"threadRuntimeStatus":{"type":"idle"}}""")
         val state=ViewState(thread="a",connected=true,desktopConnected=true,sharedReadSync=true,readToken="a".repeat(64),snapshot=snapshot)
         org.junit.Assert.assertTrue(readReceiptEligible(state,true,true))
+        snapshot.put("officialReadSyncAvailable",false)
+        org.junit.Assert.assertTrue(readReceiptEligible(state,true,true))
         snapshot.put("readSyncAvailable",false)
         org.junit.Assert.assertFalse(readReceiptEligible(state,true,true))
         snapshot.put("readSyncAvailable",true)
