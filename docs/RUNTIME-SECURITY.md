@@ -42,6 +42,8 @@ was active; no Caddy executable, active unit, process or running container was
 found. Its CA bundle, OpenSSL and Nginx matched that host's configured package
 index candidates, whose security/update indexes were dated 2026-10-21. No fresh
 package-index refresh, server upgrade or proxy/firewall change was performed.
+Other system packages had available upgrades; matching CA/OpenSSL/Nginx
+candidates does not mean the entire deployment host is fully patched.
 This does not establish the state of other hosts, stopped containers or future
 updates. If Caddy is used elsewhere, inspect that actual binary's build info
 and Go version; local Go or gateway metadata is not evidence about Caddy.

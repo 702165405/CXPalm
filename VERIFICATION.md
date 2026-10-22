@@ -29,6 +29,18 @@ Private test evidence is not part of the source repository.
   24.22.0, not the complete 24.22.1 security release. The independent browser, OS,
   CA and deployment-host audit and remaining updates are documented in
   [runtime security](docs/RUNTIME-SECURITY.md); no OS trust or server policy is changed.
+- All ten public release assets (including three standalone gateway archives)
+  match staged size/SHA-256 values. Both repository update feeds match build57;
+  four deployed Web files match staged bytes. Actual Electron and Android
+  update transports download and verify the public packages. No installer is
+  executed by the update transport tests.
+- Local installation replaces and hash-verifies all 76 packaged runtime files,
+  not only the EXE/ASAR, with a complete prior-install backup. Protected config,
+  devices, IP policy, preferences, shortcuts and startup registration are
+  unchanged. The desktop UI restores its Agent; health and read-only official
+  desktop diagnosis report 0.0.21 with official desktop IPC connected. Public
+  unauthenticated session access still returns 401. No real chat action or
+  physical-device read/notification acceptance is claimed.
 
 ## Account-Independent Reminders (0.0.20 / build56)
 
