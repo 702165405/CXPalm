@@ -29,3 +29,10 @@ test('unknown binary content requires manual review',()=>{
   assert.equal(inspect('unknown.bin',Buffer.from([0,1,2]))[0].rule,'unexpected-binary-manual-review');
   assert.deepEqual(inspect('assets/icon.png',Buffer.from([0,1,2])),[]);
 });
+test('private deployment hosts are rejected without exposing their value',()=>{
+  const host=['win','lqilt','top'].join('.');
+  const rows=check('test.js','https://'+host+'/cxpalm/');
+  assert.equal(rows[0].rule,'deployment-domain');
+  assert.ok(!JSON.stringify(rows).includes(host));
+  assert.deepEqual(check('test.js','https://old-updates.example.test/cxpalm/'),[]);
+});

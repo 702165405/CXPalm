@@ -85,9 +85,10 @@
 <details class="settings-advanced"><summary>配置文件与高级导入</summary><p id="settings-config-path"></p><button id="import-config" class="text-button">导入已有配置</button><p>数据目录和已有设备授权保持不变。开启隧道不代表公网已连通，可前往“连接诊断”检查。</p></details>
 </article>
 <div class="settings-side">
-<article class="card startup-settings"><span class="eyebrow">02 / STARTUP</span><h2>启动，由你决定。</h2><p class="muted">两个选项独立生效，默认均关闭。</p>
+<article class="card startup-settings"><span class="eyebrow">02 / STARTUP</span><h2>启动，由你决定。</h2><p class="muted">启动与窗口选项独立生效，默认均关闭。</p>
 <label class="startup-row" for="setting-login-start"><div><strong>登录电脑后自动启动</strong><p>开启后，登录电脑时自动启动网关。</p><small>桌面控制台在后台托盘运行。</small></div><span class="policy-switch"><input id="setting-login-start" type="checkbox" role="switch"><i></i></span></label>
 <label class="startup-row" for="setting-app-start"><div><strong>打开 App 时自动启动网关</strong><p>手动打开桌面 App 时，一并启动网关。</p><small>关闭此项不影响“登录电脑后自动启动”。</small></div><span class="policy-switch"><input id="setting-app-start" type="checkbox" role="switch"><i></i></span></label>
+<label class="startup-row" for="setting-start-minimized"><div><strong>启动后自动最小化到托盘</strong><p>下次打开或重启桌面 App 时，不弹出主窗口。</p><small>不改变网关启动设置；首次配置或启动失败仍显示窗口，点击托盘可恢复。</small></div><span class="policy-switch"><input id="setting-start-minimized" type="checkbox" role="switch"><i></i></span></label>
 <p id="startup-save-status" class="small-label" role="status">保存后在下次对应启动时生效，不会立即启动网关。</p><button class="button outline wide" id="save-startup">保存启动设置</button></article>
 <article class="card settings-update-link"><span class="eyebrow">03 / APP UPDATES</span><h2>让体验，保持新鲜。</h2><p class="muted">无需登录即可检查桌面版本，下载与安装均由你确认。</p><button id="go-updates" class="button outline wide">检查应用更新<svg><use href="#icon-arrow"/></svg></button></article>
 </div>

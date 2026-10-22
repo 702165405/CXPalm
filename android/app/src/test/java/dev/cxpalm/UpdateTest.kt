@@ -59,7 +59,7 @@ class UpdateTest {
     @Test fun onlyFixedRepositoryReleaseApkPathsAreAccepted() {
         assertEquals("https://raw.githubusercontent.com/702165405/CXPalm/main/updates/download.json", UPDATE_MANIFEST_URL)
         assertEquals(manifest().apk, updateApkUrl(manifest().apk))
-        for (input in listOf("https://win.lqilt.top/cxpalm/a.apk", "http://github.com/702165405/CXPalm/releases/download/v0.0.2-build3/a.apk",
+        for (input in listOf("https://old-updates.example.test/cxpalm/a.apk", "http://github.com/702165405/CXPalm/releases/download/v0.0.2-build3/a.apk",
             manifest().apk.replace("702165405", "another-owner"), manifest().apk.replace("CXPalm/releases", "Other/releases"),
             manifest().apk.replace("github.com/", "user@github.com/"), manifest().apk.replace("github.com/", "github.com:443/"),
             "//github.com/702165405/CXPalm/a.apk", "CXPalm-0.0.2-build3-debug.apk", "../a.apk", "/android/a.apk",

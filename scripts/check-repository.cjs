@@ -11,6 +11,7 @@ const patterns=[
   ['github-token', /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})\b/],
   ['api-key', /\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{32,}\b/],
   ['aws-access-key', /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/],
+  ['deployment-domain', /\b(?:win|mac)\.lqilt\x2etop\b/i],
   ['jwt', /\beyJ[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/],
 ];
 

@@ -134,7 +134,7 @@ function renderSettings(){
  const running=state.owned===true,ready=!!savedSettings;
  for(const id of ['setting-origin','setting-ssh-enabled','save-connection'])$(id).disabled=busy||running||!ready;
  for(const id of ['setting-host','setting-user','setting-ssh-port','setting-remote-port'])$(id).disabled=busy||running||!ready||!$('setting-ssh-enabled').checked;
- for(const id of ['setting-login-start','setting-app-start','save-startup'])$(id).disabled=busy||!ready;
+ for(const id of ['setting-login-start','setting-app-start','setting-start-minimized','save-startup'])$(id).disabled=busy||!ready;
  $('setting-login-start').disabled=busy||!ready||!savedSettings?.startupSupported;
  $('reload-settings').disabled=busy;$('import-config').disabled=busy||running;
  if(ready)$('connection-save-status').textContent=running?tr('网关运行中，请先停止再保存连接设置。'):connectionDirty?tr('有未保存的连接修改'):tr('已读取本机设置 · 保存不会启动网关');
@@ -154,13 +154,13 @@ async function loadSettings(force=false){
    $('settings-config-path').textContent=value.configPath;
  }
  if(!startupDirty||force){
-   startupDirty=false;$('setting-login-start').checked=value.loginAutoStart;$('setting-app-start').checked=value.appAutoStart;
-   $('startup-save-status').textContent=tr('已保存：登录启动{0} · 打开 App 启动{1}。下次对应启动时生效。',value.loginAutoStart?tr('开启'):tr('关闭'),value.appAutoStart?tr('开启'):tr('关闭'));
+   startupDirty=false;$('setting-login-start').checked=value.loginAutoStart;$('setting-app-start').checked=value.appAutoStart;$('setting-start-minimized').checked=value.startMinimized;
+   $('startup-save-status').textContent=tr('已保存：登录启动{0} · 打开 App 启动{1} · 启动后最小化{2}。下次对应启动时生效。',value.loginAutoStart?tr('开启'):tr('关闭'),value.appAutoStart?tr('开启'):tr('关闭'),value.startMinimized?tr('开启'):tr('关闭'));
  }
  renderSettings();
 }
 for(const id of ['setting-origin','setting-ssh-enabled','setting-host','setting-user','setting-ssh-port','setting-remote-port'])$(id).addEventListener(id==='setting-ssh-enabled'?'change':'input',()=>{connectionDirty=true;renderSettings();});
-for(const id of ['setting-login-start','setting-app-start'])$(id).addEventListener('change',()=>{startupDirty=true;$('startup-save-status').textContent=tr('有未保存的启动修改。保存不会立即启动网关。');});
+for(const id of ['setting-login-start','setting-app-start','setting-start-minimized'])$(id).addEventListener('change',()=>{startupDirty=true;$('startup-save-status').textContent=tr('有未保存的启动修改。保存不会立即启动网关。');});
 $('reload-settings').addEventListener('click',()=>run(()=>loadSettings(true)));
 $('connection-form').addEventListener('submit',event=>{
  event.preventDefault();void run(async()=>{
@@ -170,10 +170,10 @@ $('connection-form').addEventListener('submit',event=>{
  });
 });
 $('save-startup').addEventListener('click',()=>run(async()=>{
- const value=await api.saveStartup({loginAutoStart:$('setting-login-start').checked,appAutoStart:$('setting-app-start').checked});
- startupDirty=false;$('setting-login-start').checked=value.loginAutoStart;$('setting-app-start').checked=value.appAutoStart;
- $('startup-save-status').textContent=tr('已保存：登录启动{0} · 打开 App 启动{1}。下次对应启动时生效。',value.loginAutoStart?tr('开启'):tr('关闭'),value.appAutoStart?tr('开启'):tr('关闭'));
- activity(tr('两个启动选项已独立保存'));toast(tr('启动设置已保存，下次对应启动时生效'));
+ const value=await api.saveStartup({loginAutoStart:$('setting-login-start').checked,appAutoStart:$('setting-app-start').checked,startMinimized:$('setting-start-minimized').checked});
+ startupDirty=false;$('setting-login-start').checked=value.loginAutoStart;$('setting-app-start').checked=value.appAutoStart;$('setting-start-minimized').checked=value.startMinimized;
+ $('startup-save-status').textContent=tr('已保存：登录启动{0} · 打开 App 启动{1} · 启动后最小化{2}。下次对应启动时生效。',value.loginAutoStart?tr('开启'):tr('关闭'),value.appAutoStart?tr('开启'):tr('关闭'),value.startMinimized?tr('开启'):tr('关闭'));
+ activity(tr('启动与窗口选项已独立保存'));toast(tr('启动设置已保存，下次对应启动时生效'));
 }));
 
 for(const id of ['account-username','account-password','account-confirm'])$(id).addEventListener('input',()=>{loginDirty=true;});

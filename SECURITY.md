@@ -34,3 +34,17 @@ in Git. `node scripts/check-repository.cjs` checks selected risky names, file
 types and credential patterns without printing matching values. It is not a
 complete secret scanner. Review manually as well. If a secret was published,
 revoke/rotate it; deleting its latest file alone is not sufficient.
+
+Git author/committer names and email addresses are public metadata, separate
+from file contents. Use GitHub's verified noreply address for new commits if
+you do not want a personal address exposed. A normal cleanup commit cannot
+remove existing metadata or historical deployment identifiers from old commits,
+tags, releases, clones or caches. History rewriting requires coordinated,
+explicit approval and is not performed automatically by release scripts.
+
+The build58 source audit checked 33 commits and 585 unique file blobs reachable
+from the fetched main branch. No selected-pattern credential or private runtime
+file findings were detected. Historical deployment identifiers and non-noreply
+author metadata remain; current test hosts were replaced with reserved examples.
+This is a bounded heuristic/manual audit, not proof that all secrets or
+identifying information are absent from every fork, GitHub surface or binary.

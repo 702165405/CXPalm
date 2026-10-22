@@ -4,6 +4,34 @@ This public record intentionally excludes real conversation titles, IDs,
 content, device identifiers, account counts, private paths and deployment logs.
 Private test evidence is not part of the source repository.
 
+## Startup Window Preference And Privacy Review (0.0.22 / build58)
+
+- The requested pull retains the strict Node build guards and isolated updater
+  connections from the fetched main commit. Existing local Mac tooling notes
+  were preserved across the pull and remain outside this release's commit scope.
+- An independent, off-by-default start-minimized preference hides the initial
+  desktop window in the tray on a later launch/restart. It changes neither Agent
+  auto-start switch. First-run configuration and startup failures remain visible;
+  explicit reopening restores the window, and saving does not hide it immediately.
+- All 72 Node checks pass, including preference persistence, input validation,
+  source hygiene and runtime guards. Isolated Electron checks pass for normal,
+  hidden, auto-start-hidden, first-run and failed-start windows, the four existing
+  login/app-open startup combinations, the settings UI and English/Chinese UI.
+  These use fake Agents and isolated preferences, not real OS startup changes.
+- A bounded audit covers the fetched main history (33 commits, 585 unique file
+  blobs), current source candidates, selected credential patterns and runtime
+  file names. No matching secret/runtime-file findings are detected. Historical
+  deployment identifiers and non-noreply Git authors remain public metadata;
+  history is not rewritten. Current tests use reserved hosts, with a regression
+  that prevents private deployment hosts from returning. See SECURITY.md.
+- Go 1.27.3 tests and vet pass; Windows amd64 and macOS amd64/arm64 gateway
+  artifacts are cross-built and packaged. Android unit checks report 80 passed
+  and one opt-in public-update check skipped; Lint and the normal APK build pass.
+  The APK retains the expected signing identity and excludes rendering probes.
+- Packaged desktop sources match the tested inputs, and the packaged source
+  privacy scan finds no matching credentials or private runtime files. These
+  checks do not constitute physical Android or macOS runtime acceptance.
+
 ## System Node Security Update (2026-10-22)
 
 - The Mac system Node command is upgraded from 22.13.1 to official 22.23.4,

@@ -745,5 +745,11 @@
   "确认批准": "Confirm approval",
   "取消请求": "Cancel request",
   "本会话内始终批准": "Always approve in this conversation",
-  "由官方桌面按本会话的授权范围记住批准；不是永久授权，后续匹配操作可能不再逐次询问。": "The official desktop remembers approval within this conversation scope, not permanently. Later matching operations may run without another prompt."
+  "由官方桌面按本会话的授权范围记住批准；不是永久授权，后续匹配操作可能不再逐次询问。": "The official desktop remembers approval within this conversation scope, not permanently. Later matching operations may run without another prompt.",
+  "启动与窗口选项独立生效，默认均关闭。": "Startup and window options are independent and off by default.",
+  "启动后自动最小化到托盘": "Start minimized to the tray",
+  "下次打开或重启桌面 App 时，不弹出主窗口。": "Keep the main window hidden the next time you open or restart the desktop app.",
+  "不改变网关启动设置；首次配置或启动失败仍显示窗口，点击托盘可恢复。": "Gateway startup settings stay unchanged. First-time setup or startup errors still show the window; click the tray icon to restore it.",
+  "已保存：登录启动{0} · 打开 App 启动{1} · 启动后最小化{2}。下次对应启动时生效。": "Saved: login startup {0}, app-open startup {1}, start minimized {2}. Applies on the next matching launch.",
+  "启动与窗口选项已独立保存": "Startup and window options saved independently"
 }

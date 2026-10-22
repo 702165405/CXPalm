@@ -47,6 +47,12 @@ async function capture(win,name){await new Promise(resolve=>setTimeout(resolve,2
  await click(win,'setting-login-start');await click(win,'setting-app-start');await click(win,'save-startup');await wait(win,"document.getElementById('startup-save-status').textContent.includes('打开 App 启动开启')");
  assert.equal(await evaluate(win,"document.getElementById('setting-login-start').checked"),false);
  await click(win,'setting-app-start');await click(win,'save-startup');await wait(win,"document.getElementById('startup-save-status').textContent.includes('打开 App 启动关闭')");
+ assert.equal(await evaluate(win,"document.getElementById('setting-start-minimized').checked"),false);
+ await click(win,'setting-start-minimized');await click(win,'save-startup');await wait(win,"document.getElementById('startup-save-status').textContent.includes('启动后最小化开启')");
+ assert.equal(await evaluate(win,"document.getElementById('setting-login-start').checked"),false);
+ assert.equal(await evaluate(win,"document.getElementById('setting-app-start').checked"),false);
+ assert.equal(JSON.parse(await fs.readFile(path.join(app.getPath('userData'),'desktop-preferences.json'),'utf8')).startMinimized,true);
+ await click(win,'setting-start-minimized');await click(win,'save-startup');await wait(win,"document.getElementById('startup-save-status').textContent.includes('启动后最小化关闭')");
  await evaluate(win,"document.getElementById('setting-origin').value='https://updated.example.test';document.getElementById('setting-origin').dispatchEvent(new Event('input'))");
  await click(win,'save-connection');await wait(win,"document.getElementById('connection-save-status').textContent.includes('已读取')");
  assert.equal(await evaluate(win,"document.getElementById('global-status').textContent.includes('已停止')"),true);

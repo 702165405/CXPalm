@@ -1,9 +1,9 @@
 {
-  "version": "0.0.21",
-  "versionCode": 57,
+  "version": "0.0.22",
+  "versionCode": 58,
   "package": "io.github.u702165405.cxpalm.debug",
-  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.21-build57/CXPalm-0.0.21-build57-debug.apk",
-  "size": 9884967,
-  "sha256": "b96bbd04a5bbf36120a6bd87bcb2bc8db43eabbec4d48f1ae0e0223d14eca59d",
-  "notes": "CXPalm 0.0.21 / build57: Clear unread markers across Web and Android after confirming the exact visible reply in the gateway, independently of official login. New replies remain unread; stale, offline and archived receipts cannot clear them. Official read sync is optional and cannot erase a gateway receipt. Recover a closed desktop management connection on refresh without replaying an operation or auto-starting the Agent. Rebuild with Go 1.27.3 and Electron 44.9.3; system Node is separate from the embedded runtime. Electron includes the verified blocked-CA-key patch but still reports embedded Node 24.22.0, not the complete Node 24.22.1 security release. Preserve settings, authorizations, IP policy and existing records."
+  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.22-build58/CXPalm-0.0.22-build58-debug.apk",
+  "size": 9885347,
+  "sha256": "a4f270c636e4e85b72e03a6597b3ecf82f9ae2fc011d16359826c6d692ed7a15",
+  "notes": "CXPalm 0.0.22 / build58: Add an independent start-minimized-to-tray option under desktop Settings. It applies on the next app launch or restart without changing login/app-open Agent startup. First-time setup and startup failures stay visible; reopening or clicking the tray restores the window. Preserve configuration, authorizations, IP policy and existing preferences. Include the fetched strict build-runtime guards and one-shot Node HTTPS updater transport. Replace private deployment domains in current tests with reserved examples; history still contains author metadata and historical identifiers and is not rewritten. Runtime security limitations remain documented."
 }

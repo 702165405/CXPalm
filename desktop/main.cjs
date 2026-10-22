@@ -37,7 +37,7 @@ function readConnection(){return settings.connection(connectionFile(),app.getPat
 function getSettings(){
   const {value,revision}=readConnection();
   return {configPath:connectionFile(),revision,origin:value.origin||'',sshEnabled:!!value.sshHost,sshHost:value.sshHost||'',sshUser:value.sshUser||'',sshPort:value.sshPort||0,sshRemotePort:value.sshRemotePort||18791,
-    loginAutoStart:loginApp.getLoginItemSettings(settings.loginOptions(loginApp,true)).openAtLogin,appAutoStart:preferences().appAutoStart===true,startupSupported:['win32','darwin'].includes(process.platform)};
+    loginAutoStart:loginApp.getLoginItemSettings(settings.loginOptions(loginApp,true)).openAtLogin,appAutoStart:preferences().appAutoStart===true,startMinimized:preferences().startMinimized===true,startupSupported:['win32','darwin'].includes(process.platform)};
 }
 async function lockedSettings(operation){
   if(settingsBusy)throw new Error('设置正在保存，请稍后再试。');
@@ -191,7 +191,6 @@ const ready=hasLock?app.whenReady().then(async()=>{
   win.on('show',()=>{if(!fixture&&!settingsBusy)void updater.check(true).catch(()=>{});});
   await win.loadURL(pageURL);
   const loggedIn=loginLaunch||(process.platform==='darwin'&&app.getLoginItemSettings().wasOpenedAtLogin);
-  if(!smoke&&!loggedIn)win.show();
   configPath=fixture?(process.env.CXPALM_DESKTOP_FIRST_RUN==='1'?'':path.join(app.getPath('userData'),'cxpalm.json')):detectConfig();
   if(fixture&&configPath)settings.atomicJSON(configPath,{listen:'127.0.0.1:18789',origin:'https://cxpalm.example.test',dataDir:path.join(app.getPath('userData'),'data'),codexHome:app.getPath('userData'),sshHost:'fixture-host',sshRemotePort:18791});
   if(configPath){try{await connect(configPath);}catch{client=null;}}
@@ -202,7 +201,10 @@ const ready=hasLock?app.whenReady().then(async()=>{
       if(lastState?.state==='occupied')throw new Error('已有进程占用网关端口，本窗口未接管或停止它。');
       snapshot(await client.request('start'));
     }
-  }catch(error){startupError='自动启动网关未完成：'+error.message;if(!smoke)win.show();}
+  }catch(error){startupError='自动启动网关未完成：'+error.message;}
+  // Decide only after configuration and optional Agent startup finish. First run
+  // and failures must stay visible; explicitly reopening the app still shows it.
+  if(!smoke&&settings.shouldShowOnStartup({loginLaunch:loggedIn,startMinimized:preferences().startMinimized,configured:!!configPath&&!!client,failed:!!startupError||!!connectionError}))win.show();
   win.webContents.send('desktop:changed');
   if(!fixture)void updater.check(true).catch(()=>{});
 }):Promise.resolve();

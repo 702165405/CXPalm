@@ -14,6 +14,14 @@ Versions describe implemented changes, not physical-device acceptance.
   privacy checks. Keep local account and runtime state outside Git.
 - Project license and public repository publication remain pending.
 
+## 0.0.22 (build58)
+
+- Add an independent start-minimized-to-tray desktop preference; setup and
+  startup errors remain visible, and explicit reopening restores the window.
+- Retain the fetched strict Node build guards and isolated updater connections.
+- Replace deployment hosts in test fixtures with reserved example domains and
+  add a repository-check regression to prevent their reintroduction.
+
 ## 0.0.21 (build57)
 
 - Share exact-reply read receipts through the gateway independently of official

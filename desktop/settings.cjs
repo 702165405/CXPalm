@@ -47,8 +47,12 @@ function loginOptions(app,enabled) {
 function shouldAutoStart(loginLaunch,loginEnabled,appEnabled) {
   return loginLaunch ? loginEnabled===true : appEnabled===true;
 }
+function shouldShowOnStartup({loginLaunch,startMinimized,configured,failed}) {
+  return !configured||failed===true||(!loginLaunch&&startMinimized!==true);
+}
 function validateStartup(input) {
-  if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).length!==2||typeof input.loginAutoStart!=='boolean'||typeof input.appAutoStart!=='boolean')throw new Error('启动设置格式无效。');
+  const keys=['loginAutoStart','appAutoStart','startMinimized'];
+  if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).length!==keys.length||Object.keys(input).some(key=>!keys.includes(key))||keys.some(key=>typeof input[key]!=='boolean'))throw new Error('启动设置格式无效。');
 }
 function saveStartup(app,file,input) {
   validateStartup(input);
@@ -61,7 +65,7 @@ function saveStartup(app,file,input) {
       throw new Error('系统未接受登录启动设置，请检查系统启动项权限。');
     }
   }
-  try {atomicJSON(file,{...readJSON(file).value,appAutoStart:input.appAutoStart});}
+  try {atomicJSON(file,{...readJSON(file).value,appAutoStart:input.appAutoStart,startMinimized:input.startMinimized});}
   catch(error) {if(changed)app.setLoginItemSettings(loginOptions(app,previous));throw error;}
 }
-module.exports={readJSON,atomicJSON,connection,editConnection,validateConfig,loginOptions,shouldAutoStart,validateStartup,saveStartup};
+module.exports={readJSON,atomicJSON,connection,editConnection,validateConfig,loginOptions,shouldAutoStart,shouldShowOnStartup,validateStartup,saveStartup};

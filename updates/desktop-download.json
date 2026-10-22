@@ -1,13 +1,13 @@
 {
   "schema": 1,
   "releaseLine": "initial-001",
-  "build": 57,
+  "build": 58,
   "appId": "dev.cxpalm.desktop",
   "platform": "win32",
   "arch": "x64",
-  "version": "0.0.21",
-  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.21-build57/CXPalm-Setup-0.0.21-build57-x64.exe",
-  "size": 120729774,
-  "sha256": "8cf992a159aee950fae7a305f6c2154b6409f476a0ec59b24309fc01ef6f78e0",
-  "notes": "CXPalm 0.0.21 / build57: Clear unread markers across Web and Android after confirming the exact visible reply in the gateway, independently of official login. New replies remain unread; stale, offline and archived receipts cannot clear them. Official read sync is optional and cannot erase a gateway receipt. Recover a closed desktop management connection on refresh without replaying an operation or auto-starting the Agent. Rebuild with Go 1.27.3 and Electron 44.9.3; system Node is separate from the embedded runtime. Electron includes the verified blocked-CA-key patch but still reports embedded Node 24.22.0, not the complete Node 24.22.1 security release. Preserve settings, authorizations, IP policy and existing records."
+  "version": "0.0.22",
+  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.22-build58/CXPalm-Setup-0.0.22-build58-x64.exe",
+  "size": 120731618,
+  "sha256": "bbd210ff1b32da530883e5d04220fc21976da73eb86ed68ac8a66dd73df46a5f",
+  "notes": "CXPalm 0.0.22 / build58: Add an independent start-minimized-to-tray option under desktop Settings. It applies on the next app launch or restart without changing login/app-open Agent startup. First-time setup and startup failures stay visible; reopening or clicking the tray restores the window. Preserve configuration, authorizations, IP policy and existing preferences. Include the fetched strict build-runtime guards and one-shot Node HTTPS updater transport. Replace private deployment domains in current tests with reserved examples; history still contains author metadata and historical identifiers and is not rewritten. Runtime security limitations remain documented."
 }

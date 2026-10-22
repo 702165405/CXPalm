@@ -69,7 +69,7 @@ test('initial release build namespace is immutable and stays on the exact truste
  const release={...manifest(),releaseLine:'initial-001',build:36,url:'https://github.com/702165405/CXPalm/releases/download/v0.0.9-build36/CXPalm-Setup-0.0.9-build36-x64.exe'};
  release.version='0.0.9';
  assert.equal(validateManifest(release).build,36);
- for(const change of [{build:0},{build:'36'},{releaseLine:'preview-001'},{url:'https://evil.example/CXPalm-Setup-0.0.9-build36-x64.exe'},{url:'https://win.lqilt.top/cxpalm/../CXPalm-Setup-0.0.9-build36-x64.exe'}])assert.throws(()=>validateManifest({...release,...change}));
+ for(const change of [{build:0},{build:'36'},{releaseLine:'preview-001'},{url:'https://evil.example/CXPalm-Setup-0.0.9-build36-x64.exe'},{url:'https://old-updates.example.test/cxpalm/../CXPalm-Setup-0.0.9-build36-x64.exe'}])assert.throws(()=>validateManifest({...release,...change}));
 });
 
 test('GitHub redirects stay on this repository CDN, are bounded and never redirect manifests',async()=>{
