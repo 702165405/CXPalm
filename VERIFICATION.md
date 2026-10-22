@@ -4,6 +4,30 @@ This public record intentionally excludes real conversation titles, IDs,
 content, device identifiers, account counts, private paths and deployment logs.
 Private test evidence is not part of the source repository.
 
+## State Synchronization Latency (0.0.24 / build60)
+
+- Native read changes coalesce a passive snapshot refresh to the existing owner
+  after 50 ms rather than waiting for periodic renewal. Pending read confirmation
+  may request up to three fresh snapshots, never replaying the native write.
+  Presentation still waits for an authoritative owner snapshot or patch.
+- Meaningful runtime, unread, approval and connectivity changes wake list
+  subscriptions, bounded to one refresh per 100 ms. One hundred body-only token
+  updates do not wake the catalogue in the regression. The one-second metadata
+  fallback and 15-second membership/maintenance checks are retained.
+- A bounded four-request per-socket metadata lane prevents read-confirmation
+  waits from blocking session switching and ordered chat commands. Ten repeated
+  isolated regressions pass; synthetic owner confirmation after a passive refresh
+  is about 100 ms. This is not real-phone or public-network read acceptance.
+- Local health requests measure 0-5 ms. Public unauthenticated requests measure
+  about 940-1016 ms including connection setup, and about 479-516 ms on a reused
+  connection. These HTTP samples are not WebSocket push-latency measurements or
+  a latency guarantee for other networks.
+- Full Go tests/vet and Windows amd64/macOS amd64+arm64 builds pass. All 72 Node
+  checks and isolated Chromium UI checks pass. Android reports 80 unit checks
+  passed, one opt-in check skipped, with Lint and normal APK build passing.
+  Packaged sources match tested inputs, APK signing identity is retained, and
+  selected privacy checks find no credentials or private runtime files.
+
 ## Desktop-Authoritative Read State (0.0.23 / build59)
 
 - Read synchronization no longer reads or checks auth.json or the official

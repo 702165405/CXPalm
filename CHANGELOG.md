@@ -14,6 +14,16 @@ Versions describe implemented changes, not physical-device acceptance.
   privacy checks. Keep local account and runtime state outside Git.
 - Project license and public repository publication remain pending.
 
+## 0.0.24 (build60)
+
+- Refresh original-owner snapshots promptly after native read-state events;
+  confirmation retries request snapshots only and never replay the read write.
+- Push session-list status changes through coalesced events instead of waiting
+  for polling. Body-only token deltas do not trigger catalogue scans.
+- Move read-confirmation waits into a bounded per-connection metadata lane;
+  session switching and ordered chat commands no longer wait behind them.
+  Desktop confirmation remains required; no optimistic unread clearing.
+
 ## 0.0.23 (build59)
 
 - Use original-owner desktop snapshots for read/unread state on Web and Android;

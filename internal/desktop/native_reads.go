@@ -53,8 +53,8 @@ func (b *Bridge) learnReadContext(c *IPC, f Frame) {
 		return
 	}
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	if b.ipc != c {
+		b.mu.Unlock()
 		return
 	}
 	changed := b.readContextIPC != c || !sameReadContext(b.readContextHint, p.Context)
@@ -65,6 +65,8 @@ func (b *Bridge) learnReadContext(c *IPC, f Frame) {
 			b.emitLocked(s)
 		}
 	}
+	b.mu.Unlock()
+	b.refreshAfterReadBroadcast(c, p.ID)
 }
 func (b *Bridge) clearReadContextLocked() {
 	b.readContextHint, b.readContextIPC, b.readContextSource = readContext{}, nil, ""

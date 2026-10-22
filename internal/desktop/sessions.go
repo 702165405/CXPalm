@@ -102,6 +102,30 @@ type SessionPage struct {
 	Sync     SessionSync `json:"sync"`
 }
 
+// Body-only deltas must not cause catalogue scans on every streamed token.
+type sessionSignal struct {
+	connected, archived, removed, known, unread, waiting bool
+	runtime, terminal                                    string
+}
+
+func sessionListSignal(s State) sessionSignal {
+	raw := s.snapshotValue()
+	unread, known := raw["hasUnreadTurn"].(bool)
+	runtime, _ := raw["threadRuntimeStatus"].(map[string]any)
+	kind, _ := runtime["type"].(string)
+	requests, _ := raw["requests"].([]any)
+	out := sessionSignal{connected: s.Connected, archived: s.Archived, removed: s.removed,
+		known: known, unread: unread, waiting: len(requests) > 0, runtime: kind}
+	if kind == "idle" {
+		turns := orderedTurns(raw)
+		if len(turns) > 0 {
+			last, _ := turns[len(turns)-1].(map[string]any)
+			out.terminal, _ = last["status"].(string)
+		}
+	}
+	return out
+}
+
 func (b *Bridge) Browse(ctx context.Context, query string, archived bool, project string, limit, offset int) (SessionPage, error) {
 	out := SessionPage{Items: []Session{}, Projects: []Project{}}
 	if limit < 1 || limit > 5000 || offset < 0 {

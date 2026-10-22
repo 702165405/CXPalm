@@ -63,6 +63,9 @@ func (b *Bridge) MarkRead(ctx context.Context, id, token string) (bool, error) {
 	}
 	tick := time.NewTicker(25 * time.Millisecond)
 	defer tick.Stop()
+	refresh := time.NewTimer(75 * time.Millisecond)
+	defer refresh.Stop()
+	refreshes := 0
 	for {
 		b.mu.Lock()
 		current := valid() && s.Owner == owner && b.ipc == c && b.readContextAvailableLocked() && sameReadContext(native, b.readContextHint)
@@ -83,6 +86,15 @@ func (b *Bridge) MarkRead(ctx context.Context, id, token string) (bool, error) {
 			return false, errors.Join(ErrReadSyncUnavailable, errors.New("desktop did not confirm read state; inspect desktop before retrying"))
 		case <-c.Done():
 			return false, errors.Join(ErrReadSyncUnavailable, errors.New("desktop disconnected; read not confirmed"))
+		case <-refresh.C:
+			// Retry only passive snapshot reads, never the native state mutation.
+			if err := c.Follow(writeCtx, id, owner); err != nil {
+				return false, errors.Join(ErrReadSyncUnavailable, err)
+			}
+			refreshes++
+			if refreshes < 3 {
+				refresh.Reset(time.Duration(refreshes*refreshes) * 250 * time.Millisecond)
+			}
 		case <-tick.C:
 		}
 	}

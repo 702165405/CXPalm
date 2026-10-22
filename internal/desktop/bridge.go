@@ -13,6 +13,7 @@ import (
 )
 
 type State struct {
+	listSignal sessionSignal
 	removed    bool
 	lastNative time.Time
 	lastFollow time.Time
@@ -38,6 +39,7 @@ type Bridge struct {
 	readContextIPC    *IPC
 	readContextSource string
 	readAttempts      map[string]string
+	readRefreshes     map[string]bool
 	ReadStore         *store.Store
 	readChanges       chan struct{}
 	config            config.Config
@@ -111,6 +113,10 @@ func (b *Bridge) connect(ctx context.Context) (*IPC, error) {
 	return c, nil
 }
 func (b *Bridge) emitLocked(s *State) {
+	if next := sessionListSignal(*s); next != s.listSignal {
+		s.listSignal = next
+		b.readChangedLocked()
+	}
 	s.Sequence++
 	for ch := range b.watchers[s.ID] {
 		copy := *s
@@ -214,7 +220,6 @@ func (b *Bridge) events(c *IPC) {
 			b.mu.Unlock()
 			continue
 		}
-		oldUnread, oldKnown := s.snapshotValue()["hasUnreadTurn"].(bool)
 		valid := false
 		if p.Change.Type == "snapshot" {
 			var value map[string]any
@@ -244,9 +249,6 @@ func (b *Bridge) events(c *IPC) {
 			unread, known := s.snapshotValue()["hasUnreadTurn"].(bool)
 			if known && !unread {
 				delete(b.readAttempts, s.ID)
-			}
-			if unread != oldUnread || known != oldKnown {
-				b.readChangedLocked()
 			}
 		} else {
 			s.Connected = false

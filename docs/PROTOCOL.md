@@ -124,6 +124,16 @@ desktop-authoritative synchronization, not a claim of distributed atomicity.
 `readSyncAvailable` and `officialReadSyncAvailable` now describe this native
 capability, not gateway receipt storage. No official file is edited.
 
+Read broadcasts trigger a coalesced passive refresh of their existing original
+owner, not an optimistic overlay or a 15-second maintenance wait. Pending read
+confirmation may issue up to three passive snapshot renewals; it never resends
+the native read mutation. A bounded four-request per-socket metadata lane keeps
+these waits outside ordered chat-command dispatch. Busy reads return unavailable,
+not accepted. Meaningful status/read/approval changes wake list subscriptions,
+with a 100 ms refresh bound; body-only deltas do not wake catalogue scans. The
+one-second metadata fallback and 15-second membership sweep remain separate.
+
+
 Chats are muted unless explicitly opted in with `chat.notifications`. Preferences
 are desktop-installation/chat scoped, shared across authorized receivers and
 included in live state. Official account switches, missing `auth.json` and

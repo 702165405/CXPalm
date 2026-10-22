@@ -1,13 +1,13 @@
 {
   "schema": 1,
   "releaseLine": "initial-001",
-  "build": 59,
+  "build": 60,
   "appId": "dev.cxpalm.desktop",
   "platform": "win32",
   "arch": "x64",
-  "version": "0.0.23",
-  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.23-build59/CXPalm-Setup-0.0.23-build59-x64.exe",
-  "size": 120724667,
-  "sha256": "d6ba6bf12db02e0468a81c11145432b6d378f6100a116c9e0e576b67c40f27c3",
-  "notes": "CXPalm 0.0.23 / build59: Read and unread state now follows official Codex Desktop. Web and Android no longer override it with independent gateway receipts. Synchronization no longer reads auth.json or the official global-state file. A read is confirmed only after the original desktop owner reports it; unavailable context or uncertain results do not clear unread or block reminders. Preserve configuration, authorizations and startup preferences."
+  "version": "0.0.24",
+  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.24-build60/CXPalm-Setup-0.0.24-build60-x64.exe",
+  "size": 120733465,
+  "sha256": "fc39c6ab634ad164cbc81c9279f5d1378433f96b05c17561297da4ee4cad374a",
+  "notes": "CXPalm 0.0.24 / build60: Reduce extra read/status synchronization waits with coalesced original-owner snapshot refreshes and event-driven list updates. Pending read confirmation no longer blocks session switching or ordered chat commands. Confirmation retries are read-only; no write is replayed and unread clears only after desktop confirmation. Configuration, device authorizations and startup preferences are preserved. Actual network and device latency still apply."
 }

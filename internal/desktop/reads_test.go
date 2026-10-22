@@ -60,7 +60,7 @@ func readFixture(t *testing.T, hint bool) (*Bridge, *IPC, net.Conn, string) {
 		db.Close()
 	})
 	if hint {
-		b.learnReadContext(c, readHint(readTestContext(), "desktop-coordinator"))
+		b.readContextHint, b.readContextIPC, b.readContextSource = readTestContext(), c, "desktop-coordinator"
 	}
 	return b, c, owner, readToken(s.snapshotValue())
 }

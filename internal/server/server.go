@@ -245,6 +245,7 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	commands := readCommands(ctx, c, cancel)
+	readSlots := make(chan struct{}, 4)
 	for {
 		var b []byte
 		select {
@@ -258,6 +259,12 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 		var q Command
 		if json.Unmarshal(b, &q) != nil || q.ID == "" || len(q.ID) > 128 {
 			send(Event{Type: "error", Error: "valid command id required"})
+			continue
+		}
+		if q.Method == "chat.read" {
+			dispatchRead(ctx, readSlots, q, func(call context.Context, command Command) (any, error) {
+				return s.execute(call, d.ID, command)
+			}, send)
 			continue
 		}
 		if q.Method == "sessions.subscribe" {
@@ -279,9 +286,20 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 				timer := time.NewTicker(time.Second)
 				defer timer.Stop()
 				previous := ""
+				var nextRefresh time.Time
 				for {
+					if delay := time.Until(nextRefresh); delay > 0 {
+						wait := time.NewTimer(delay)
+						select {
+						case <-listCtx.Done():
+							wait.Stop()
+							return
+						case <-wait.C:
+						}
+					}
 					readChanges := s.Bridge.ReadChanges()
 					page, err := s.Bridge.Browse(listCtx, q.Text, q.Archived, q.Project, q.Limit, q.Offset)
+					nextRefresh = time.Now().Add(100 * time.Millisecond)
 					if err == nil {
 						raw, _ := json.Marshal(page)
 						if string(raw) != previous {
