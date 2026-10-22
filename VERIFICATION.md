@@ -31,11 +31,17 @@ Private test evidence is not part of the source repository.
   requires authorization. Actual Electron updater check/download/pre-install
   verification passes without executing the installer. The Android public-update
   opt-in passes on retry after an initial TLS handshake interruption.
-- Local desktop replacement remains pending: the existing application window
-  cannot be activated for safe Agent restoration. The healthy 0.0.22 gateway is
-  left running; installing a new phone package or refreshing the Web page alone
-  does not activate the gateway-side change. No local build59 runtime acceptance
-  or real three-client read mutation is claimed.
+- On the subsequent deployment request, all 76 local desktop runtime files are
+  replaced and hash-checked against the staged build59 package, with the previous
+  installation backed up. The installed gateway reports 0.0.23; read-only doctor
+  confirms connection to the original official desktop. Configuration, device
+  authorizations, preferences, IP/startup settings and historical links match
+  the pre-install snapshots.
+- Agent restoration still requires the user's manual Start Agent action: both
+  automatic-start preferences remain off, and the application window cannot be
+  activated by the desktop helper. The post-install health endpoint is not yet
+  reachable. Installation checks are not a claim of a running gateway, restored
+  public tunnel or real three-client read-mutation acceptance.
 
 ## Startup Window Preference And Privacy Review (0.0.22 / build58)
 
