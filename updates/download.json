@@ -1,9 +1,9 @@
 {
-  "version": "0.0.19",
-  "versionCode": 55,
+  "version": "0.0.20",
+  "versionCode": 56,
   "package": "io.github.u702165405.cxpalm.debug",
-  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.19-build55/CXPalm-0.0.19-build55-debug.apk",
+  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.20-build56/CXPalm-0.0.20-build56-debug.apk",
   "size": 9884967,
-  "sha256": "19193c564a81a5e6e1d855613b94d0c5143261c9848030aa3a7669f3b9ffe637",
-  "notes": "CXPalm 0.0.19 / build55: Add session-scoped approval. When the original owner request explicitly offers persistence for the current conversation, Web and Android can approve for this session and the owner stores the scoped grant; command and file approvals require acceptForSession in availableDecisions, MCP tool confirmations require _meta.persist to offer session, permission-profile requests stay turn-only, and permanent always grants are never exposed. Both clients confirm the scope before sending and the gateway caches nothing globally. Also keep normal Web and Android conversations usable when the desktop does not expose a verifiable identity: report cross-device read synchronization and per-chat notifications as temporarily unavailable instead of repeatedly surfacing read identity errors, never guess historical accounts, create auth files, mark unconfirmed replies read or replay a previous account's notifications, and restore optional features when identity returns while preserving saved settings, authorization and IP policy. Safe degradation only, not a replacement desktop login or physical-device acceptance."
+  "sha256": "7b49a36b910e8e183b40b0ea6f39bc7c7e974b3ebea7def4117bb21189d39c12",
+  "notes": "CXPalm 0.0.20 / build56: Decouple conversation reminders from the official account and auth.json. Reminder preferences, events and checkpoints belong to the configured desktop installation and remain stable across official account switches and gateway restarts. Keep explicit per-chat opt-in, revocable device authorization, IP policy and original-owner-only monitoring. Official cross-device read synchronization keeps its own identity checks and no longer disables reminders. Legacy account-scoped records remain untouched; enable each desired chat once in the new installation scope. No credentials, permission changes or data migrations are required."
 }

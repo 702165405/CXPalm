@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -150,13 +151,18 @@ func sameReadContext(a, b readContext) bool {
 	return string(x) == string(y)
 }
 
-// Notification journals are isolated by the official signed-in account and execution host.
+// Notifications belong to this desktop installation, not its current model account.
+// The gateway's database and device authorization isolate receivers; no auth file
+// or official read-state lookup is needed for monitoring original-owner events.
 func (b *Bridge) NotificationScope() (string, error) {
-	native, err := b.nativeReads()
-	if err != nil {
-		return "", err
+	home := filepath.Clean(b.config.CodexHome)
+	if !filepath.IsAbs(home) {
+		return "", errors.New("notification desktop directory must be absolute")
 	}
-	raw, _ := json.Marshal([]any{b.config.CodexHome, native.Context})
+	if runtime.GOOS == "windows" {
+		home = strings.ToLower(home)
+	}
+	raw, _ := json.Marshal([]string{"cxpalm-notifications-desktop-v1", home})
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:]), nil
 }

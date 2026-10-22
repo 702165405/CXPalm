@@ -9,6 +9,16 @@ Versions describe implemented changes, not physical-device acceptance.
   privacy checks. Keep local account and runtime state outside Git.
 - Project license and public repository publication remain pending.
 
+## 0.0.20 (build56)
+
+- Make conversation reminders independent of official login, auth.json and
+  official read state. Preferences, journals and checkpoints use a stable
+  desktop-installation scope across account switches and gateway restarts.
+- Keep explicit opt-in, device revocation, IP policy, generation filtering and
+  original-owner monitoring. Official read receipts retain separate validation.
+- Preserve legacy account-scoped data without merging or migrating it; enable
+  desired chats once in the new scope.
+
 ## 0.0.19 (build55)
 
 - Offer session-scoped approval when the original owner request explicitly

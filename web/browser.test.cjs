@@ -832,7 +832,15 @@ async function main() {
     await page.locator('#notify-chat').click();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='true');
     await page.reload();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='true');
     await page.locator('#notify-chat').click();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='false');
-    // Missing desktop identity disables optional sync, not reading or sending.
+    // Official read identity must not gate gateway-owned notification controls.
+    readSyncAvailable=false;notificationPreference={enabled:false,available:true};
+    sharedReadToken='';replyToken='e'.repeat(64);currentSocket.send(JSON.stringify(snapshot()));
+    await page.waitForFunction(()=>!document.querySelector('#notify-chat').disabled);
+    const readsBeforeNotificationToggle=sent.filter(q=>q.method==='chat.read').length;
+    await page.locator('#notify-chat').click();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='true');
+    await page.locator('#notify-chat').click();await page.waitForFunction(()=>document.querySelector('#notify-chat').getAttribute('aria-pressed')==='false');
+    assert.equal(sent.filter(q=>q.method==='chat.read').length,readsBeforeNotificationToggle);
+    // A real notification-store failure can still disable its controls.
     readSyncAvailable=false;notificationPreference={enabled:false,available:false,reason:'桌面身份暂不可用，正常聊天不受影响'};
     sharedReadToken='';replyToken='e'.repeat(64);currentSocket.send(JSON.stringify(snapshot()));
     await page.waitForFunction(()=>document.querySelector('#notify-chat').disabled);

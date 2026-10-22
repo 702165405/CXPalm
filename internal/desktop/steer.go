@@ -131,7 +131,7 @@ func (b *Bridge) projectNotifications(s State) State {
 		return s
 	}
 	raw["notificationPreference"] = pref
-	raw["readSyncAvailable"] = pref.Available
+	raw["readSyncAvailable"] = b.ReadSyncAvailable()
 	s.Snapshot = mustJSON(raw)
 	return s
 }

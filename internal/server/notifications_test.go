@@ -87,6 +87,14 @@ func TestNotificationsFanOutToAllReceiversAndReplayOnce(t *testing.T) {
 func TestAuthenticatedWebAndAppBothReceiveNotifications(t *testing.T) {
 	s, ts, firstToken := fixture(t)
 	s.notifications.once.Do(func() {}) // Isolate transport from the official desktop.
+	scope, err := s.Bridge.NotificationScope()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pref, err := s.Store.SetNotificationPreference(scope, "not-selected", true)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, secondToken, err := loginFixture(t, s.Store, "second-receiver")
 	if err != nil {
 		t.Fatal(err)
@@ -119,7 +127,7 @@ func TestAuthenticatedWebAndAppBothReceiveNotifications(t *testing.T) {
 		return c
 	}
 	web, app := dial(firstToken), dial(secondToken)
-	event := Notification{ID: strings.Repeat("a", 64), Kind: "approval", Thread: "not-selected", Title: "Other chat"}
+	event := Notification{ID: strings.Repeat("a", 64), Kind: "approval", Thread: "not-selected", Title: "Other chat", Subscription: pref.Generation}
 	s.notifications.publish(event)
 	for _, receiver := range []*websocket.Conn{web, app} {
 		_, raw, err := receiver.Read(ctx)
@@ -175,7 +183,6 @@ func notificationAccountFixture(t *testing.T, root, account string) {
 func TestNotificationReplayAndCheckpointRecoverAfterGatewayRestart(t *testing.T) {
 	root := t.TempDir()
 	dir := t.TempDir()
-	notificationAccountFixture(t, root, "account-one")
 	db, err := store.Open(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -241,11 +248,11 @@ func TestNotificationReplayAndCheckpointRecoverAfterGatewayRestart(t *testing.T)
 	if err := next.notifications.syncJournal(next); err != nil {
 		t.Fatal(err)
 	}
-	if len(next.notifications.recent) != 0 {
-		t.Fatal("account journal leaked")
+	if len(next.notifications.recent) != 2 || next.notifications.scope != scope {
+		t.Fatal("account switch reset the desktop journal")
 	}
-	if next.notifications.publishScoped(scope, Notification{ID: "old-account-event"}) {
-		t.Fatal("old account watcher published into new account")
+	if !next.notifications.publishScoped(scope, Notification{ID: "after-account-switch", Thread: "chat", Subscription: pref.Generation}) {
+		t.Fatal("account switch interrupted the desktop watcher")
 	}
 }
 func TestNotificationJournalFailureIsNotReportedAsHealthy(t *testing.T) {

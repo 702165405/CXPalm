@@ -4,6 +4,29 @@ This public record intentionally excludes real conversation titles, IDs,
 content, device identifiers, account counts, private paths and deployment logs.
 Private test evidence is not part of the source repository.
 
+## Account-Independent Reminders (0.0.20 / build56)
+
+- Notification preferences, event journals and transition checkpoints use a
+  stable configured-desktop scope in the gateway database. No official account,
+  auth.json, access token or official read-state file is required for reminders.
+  Official cross-device reads keep their existing, independent validation.
+- Tests cover no auth/read-state files, auth-mode changes, logout, account
+  switching, restart checkpoint recovery and a separate desktop scope. An
+  authenticated two-receiver WebSocket fixture receives opted-in events without
+  an official identity and still rejects the revoked receiver. Initial snapshot
+  baselines, opt-in generations and durable-failure guards remain tested.
+- Legacy account-scoped records are retained without any migration or merging;
+  chats must be opted in once in the new scope. Subsequent official account
+  switches retain preferences and journals. No real conversation mutation or
+  real account switch is performed by these fixtures.
+- Go tests/vet and Windows amd64 / macOS amd64+arm64 cross-builds pass. All 65
+  Node tests and isolated Chromium regressions pass, including toggling reminder
+  preferences while official read synchronization is unavailable.
+- Android: 81 tests, 80 passed and one public-network opt-in skipped by default;
+  Lint and normal APK assembly pass. The normal APK excludes rendering probes
+  and retains its package and signer. This release does not claim a fresh
+  emulator, physical-phone notification-delivery or macOS runtime acceptance.
+
 ## Session-Scoped Approval And Read Availability (0.0.19 / build55)
 
 - Web and Android approve for the current conversation only when the original

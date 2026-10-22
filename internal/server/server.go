@@ -482,8 +482,6 @@ func (s *Server) execute(ctx context.Context, device string, q Command) (any, er
 			if scope, err = s.Bridge.NotificationScope(); err == nil {
 				result, err = s.Store.SetNotificationPreference(scope, q.Thread, *q.Enabled)
 				s.Bridge.NotifyChanged(q.Thread)
-			} else {
-				err = errors.New(desktop.ReadSyncUnavailableReason)
 			}
 		}
 	} else if q.Method == "chat.queue" {

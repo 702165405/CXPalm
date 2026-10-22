@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-const Version = "0.0.19"
+const Version = "0.0.20"
 
 type Config struct {
 	TrustedProxyIP bool   `json:"trustedProxyIP,omitempty"`

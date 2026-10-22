@@ -104,7 +104,9 @@ entry for an uncertain operation.
 ## Notifications
 
 Chats are muted unless explicitly opted in with `chat.notifications`. Preferences
-are account/host/chat scoped, shared across receivers and included in live state.
+are desktop-installation/chat scoped, shared across authorized receivers and
+included in live state. Official account switches, missing `auth.json` and
+unavailable official read synchronization do not disable gateway notifications.
 Live and replay delivery both filter the current subscription generation.
 `notifications.subscribe` remains independent of the displayed conversation.
 See [notification semantics](NOTIFICATIONS.md) for cursor and background limits.

@@ -33,8 +33,17 @@ func TestMissingIdentityReadRequestsReturnUnavailableNotSuccess(t *testing.T) {
 	}
 	value, err = s.execute(context.Background(), "phone", Command{Method: "chat.notifications.get", Thread: "chat"})
 	pref := value.(desktop.NotificationPreferenceState)
-	if err != nil || pref.Available || pref.Enabled || pref.Reason == "" {
+	if err != nil || !pref.Available || pref.Enabled || pref.Reason != "" {
 		t.Fatal(value, err)
+	}
+	value, err = s.execute(context.Background(), "phone", Command{ID: "enable-reminder", Method: "chat.notifications", Thread: "chat", Enabled: boolPointer(true)})
+	if err != nil {
+		t.Fatal("missing auth blocked notification opt-in", value, err)
+	}
+	value, err = s.execute(context.Background(), "phone", Command{Method: "chat.notifications.get", Thread: "chat"})
+	pref = value.(desktop.NotificationPreferenceState)
+	if err != nil || !pref.Available || !pref.Enabled {
+		t.Fatal("opt-in was not saved without auth", value, err)
 	}
 	for _, q := range []Command{
 		{Method: "chat.read", Thread: "chat", ReadToken: "bad"},
@@ -47,7 +56,9 @@ func TestMissingIdentityReadRequestsReturnUnavailableNotSuccess(t *testing.T) {
 	}
 }
 
-func TestLostIdentityCannotReplayPreviousAccountNotifications(t *testing.T) {
+func boolPointer(value bool) *bool { return &value }
+
+func TestNotificationsPersistAcrossLogoutAndAccountSwitch(t *testing.T) {
 	s, _, _ := fixture(t)
 	notificationAccountFixture(t, s.Config.CodexHome, "account")
 	s.notifications.once.Do(func() {})
@@ -71,14 +82,14 @@ func TestLostIdentityCannotReplayPreviousAccountNotifications(t *testing.T) {
 		return true
 	})
 	stop()
-	if len(replay["events"].([]Notification)) != 0 || s.notifications.scope != "" {
-		t.Fatal("unverified identity replayed private notifications")
+	if len(replay["events"].([]Notification)) != 1 || s.notifications.scope != scope || replay["error"] != "" {
+		t.Fatal("logout interrupted authorized gateway notification replay")
 	}
-	if s.notifications.publishScoped(scope, Notification{ID: "late-event"}) {
-		t.Fatal("old account watcher remained active")
+	if !s.notifications.publishScoped(scope, Notification{ID: "late-event", Thread: "chat", Subscription: pref.Generation}) {
+		t.Fatal("logout stopped the original desktop watcher")
 	}
-	notificationAccountFixture(t, s.Config.CodexHome, "account")
-	if err := s.notifications.syncJournal(s); err != nil || s.notifications.scope != scope || len(s.notifications.recent) != 1 {
-		t.Fatal("recovery lost the durable account journal", err)
+	notificationAccountFixture(t, s.Config.CodexHome, "different-account")
+	if err := s.notifications.syncJournal(s); err != nil || s.notifications.scope != scope || len(s.notifications.recent) != 2 {
+		t.Fatal("account switch changed the desktop journal", err)
 	}
 }

@@ -10,8 +10,8 @@ android {
         applicationId = "io.github.u702165405.cxpalm"
         minSdk = 26
         targetSdk = 35
-        versionCode = 55
-        versionName = "0.0.19"
+        versionCode = 56
+        versionName = "0.0.20"
     }
     sourceSets.getByName("main").assets.srcDir(rootProject.file("../locales"))
     if (providers.gradleProperty("renderProbe").orNull == "true") {

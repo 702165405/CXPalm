@@ -105,8 +105,7 @@ func (f *notificationFeed) syncJournal(s *Server) error {
 	scope, err := s.Bridge.NotificationScope()
 	if err != nil {
 		f.mu.Lock()
-		// Invalidate only the in-memory view. Never replay a previous account's
-		// journal while the current identity cannot be verified.
+		// A missing installation scope must not reuse another desktop's journal.
 		f.journal, f.scope, f.recent, f.checkpoints = nil, "", nil, nil
 		f.mu.Unlock()
 		return err
