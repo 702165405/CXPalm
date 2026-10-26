@@ -32,5 +32,22 @@ real acceptance.
 - Packaged desktop sources match tested inputs and pass the selected privacy
   scan. Current source and new Git history are checked separately before upload.
 
-Public-byte, updater and deployment results are recorded after publication.
-Windows/macOS cross-compilation is not physical Android or macOS runtime acceptance.
+## Published Release And Deployment
+
+- The new repository has a parentless initial root, no inherited source history,
+  only the main branch and one v0.0.1-build1 release/tag. Source author metadata
+  uses the maintainer's GitHub noreply address. Private backups are not uploaded.
+- All ten published assets are downloaded and match staged sizes and SHA-256
+  values. Both main-branch update manifests report 0.0.1/build1. GitHub asset
+  redirects are verified against the new repository's numeric resource identity.
+- Actual Electron check/download/pre-install verification passes without running
+  an installer. A higher installed version is not offered a downgrade, and the
+  previous release line is rejected. Android's public download/hash test passes
+  with one test and no skips; no phone install or uninstall is performed.
+- The Web entry and three versioned assets match their public hashes. All 76
+  installed Windows runtime files match the new package. The gateway reports
+  0.0.1, official desktop IPC connects, the desktop owns its Agent and established
+  tunnel, reverse health succeeds and unauthenticated public API returns 401.
+- Configuration, authorizations, IP policy, preferences, shortcuts and startup
+  registration remain unchanged. Local diagnostics are active. Windows/macOS
+  cross-compilation is not physical Android or macOS runtime acceptance.
