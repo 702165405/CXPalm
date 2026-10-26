@@ -27,7 +27,20 @@ explicitly described as deployment connectivity or public-byte checks.
   probes and checked private runtime files. No phone installation is performed.
 - All 12 packaged desktop source/manifest files pass the selected privacy scan;
   executable source files match tested inputs and generated package identity
-  matches source metadata. Published-byte and deployment checks follow release.
+  matches source metadata. All 294 staged source blobs pass the selected privacy
+  scan; unrelated local development tooling is not committed.
+- All ten published assets are freshly downloaded and match staged sizes and
+  SHA-256 values. Both main-branch update feeds report 0.0.2/build2. Actual
+  Electron check/download/pre-install verification passes without executing an
+  installer; higher-version downgrade and legacy-line protections remain active.
+  Android's public update/download/hash check passes with one test and no skips.
+- The Web entry and three versioned assets match their public hashes. All 76
+  installed Windows runtime files match the package. Gateway health reports
+  0.0.2; official desktop IPC connects, the desktop owns its host, listener and
+  established tunnel, reverse health succeeds and unauthorized public API returns
+  401. Configuration, authorizations, IP policy, preferences, shortcuts and startup
+  registration remain unchanged. No physical Android or macOS runtime acceptance
+  or real conversation/model execution is claimed.
 
 ## 0.0.1 / build1
 
