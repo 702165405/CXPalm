@@ -142,6 +142,24 @@ Live and replay delivery both filter the current subscription generation.
 `notifications.subscribe` remains independent of the displayed conversation.
 See [notification semantics](NOTIFICATIONS.md) for cursor and background limits.
 
+`sessions.create.settings` advertises optional `sessions.create.options`
+(`model`, `effort`, `permission`, `confirmFullAccess`) and an explicit boolean
+`enabled` for the new chat's notification preference. Web and Android remember
+only their last confirmed newly created thread, separately per computer/client,
+and refresh defaults only from its connected, non-archived desktop state. They
+do not inherit requests, grants, instructions, messages or execution ownership.
+Full access requires fresh confirmation. Unsupported settings are rejected
+before creation; old gateways are not sent options they could silently ignore.
+
+After creation, settings are applied once through the original owner's existing
+conditional settings API, while the chat is still empty. Empty-thread metadata
+startup overrides alone are not treated as durable settings. The gateway waits
+at most 12 seconds for owner connection and acknowledgement, never retries the
+settings mutation, and reports an unconfirmed setup alongside the created ID.
+Notification-save failure also retains the created ID and warns; neither case
+must be treated as a reason to replay creation. Later manual edits remain
+available in the normal chat controls.
+
 ## Local desktop boundary
 
 The `desktop-host` exchanges bounded JSON lines over inherited stdin/stdout,

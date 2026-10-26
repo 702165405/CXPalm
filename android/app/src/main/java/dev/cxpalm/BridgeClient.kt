@@ -37,6 +37,7 @@ class BridgeClient(context: Context) {
     @Volatile private var generation = 0
     private var retry = 0
     private var wanted = false
+    private var createSettingsSupported = false
     private var subscription = 0
     private var listSubscription = ""
     private var historyCall: String? = null
@@ -213,7 +214,7 @@ class BridgeClient(context: Context) {
     private fun receive(event: JSONObject) {
         try {
             when (event.optString("type")) {
-                "hello" -> { check(event.getJSONObject("data").optString("device").isNotBlank()); val stableGeneration=generation;main.postDelayed({if(stableGeneration==generation && mutable.value.connected)retry=0},30000); update { it.copy(connected = true, status = "Connected", sharedReadSync = event.getJSONObject("data").optJSONArray("capabilities")?.let { caps -> (0 until caps.length()).any { caps.optString(it)=="chat.read" } } == true) }; refresh(); mutable.value.thread?.let { subscribe(it,reconnecting=true) }; mutable.value.pendingOperations.keys.toList().forEach { checkPending(it) } }
+                "hello" -> { createSettingsSupported=event.getJSONObject("data").optJSONArray("capabilities")?.let { caps -> (0 until caps.length()).any { caps.optString(it)=="sessions.create.settings" } } == true; check(event.getJSONObject("data").optString("device").isNotBlank()); val stableGeneration=generation;main.postDelayed({if(stableGeneration==generation && mutable.value.connected)retry=0},30000); update { it.copy(connected = true, status = "Connected", sharedReadSync = event.getJSONObject("data").optJSONArray("capabilities")?.let { caps -> (0 until caps.length()).any { caps.optString(it)=="chat.read" } } == true) }; refresh(); mutable.value.thread?.let { subscribe(it,reconnecting=true) }; mutable.value.pendingOperations.keys.toList().forEach { checkPending(it) } }
                 "result" -> calls.remove(event.optString("id"))?.invoke(event)
                 "error" -> { val operation=event.optString("id") in mutable.value.pendingOperations || event.optString("id") in receiptQueries; calls.remove(event.optString("id"))?.invoke(event); if(operation)return; val history=event.optString("id")==historyCall; update { it.copy(error = event.optString("error"), historyLoading=if(history) false else it.historyLoading) } }
                 "sessions.error" -> {
@@ -231,6 +232,7 @@ class BridgeClient(context: Context) {
                     if(data.optJSONObject("snapshot")!=null && next.cached)reading.memory.remember(next.copy(cached=false))
                     if(next.snapshot?.optBoolean("hasUnreadTurn")==false) readAttempt=""
                     update { next }
+                    if(next.desktopConnected && !next.cached) rememberNewChat()
                     val attempt="$subscription:${next.desktopConnected}:${next.threadArchived}:${next.snapshot?.optJSONArray("turns")?.let { it.optJSONObject(it.length()-1)?.optString("turnId") }}"
                     if ((next.desktopConnected || next.threadArchived) && !next.historyLoading && next.historyPage==null && historyAttempt!=attempt) { historyAttempt=attempt; history(navigate=false) }
                 }
@@ -281,10 +283,42 @@ class BridgeClient(context: Context) {
         update { it.copy(sessionSearch=search, archived=archived, project=project, sessionLimit=100) };refresh()
     }
     fun moreSessions() { update { it.copy(sessionLimit=(it.sessionLimit+100).coerceAtMost(5000)) };refresh() }
-    fun createChat(project: String) { mutation("sessions.create",JSONObject().put("project",project)) { result ->
+    private fun newChatKey() = mutable.value.current?.let { "new-chat:${it.id}:${it.origin}" }
+    fun savedNewChat(): JSONObject? = try { newChatKey()?.let { store.get(it) }?.let(::JSONObject) } catch (_: Exception) { null }
+    private fun rememberNewChat() {
+        val s=mutable.value;val saved=savedNewChat() ?: return
+        if(saved.optString("thread")!=s.thread || !s.desktopConnected || s.threadArchived || s.cached) return
+        val defaults=newChatDefaults(s.snapshot) ?: return
+        val before=saved.toString()
+        saved.put("options",defaults.getJSONObject("options"))
+        if(defaults.has("enabled")) saved.put("enabled",defaults.getBoolean("enabled"))
+        if(before!=saved.toString()) newChatKey()?.let { store.put(it,saved.toString()) }
+    }
+    fun createChat(project: String, inherit: Boolean = true, confirmFullAccess: Boolean = false) {
+        val saved=savedNewChat()?.takeIf { inherit && it.optJSONObject("options")!=null }
+        if(saved!=null && !createSettingsSupported) { reportError("请更新网关以沿用新建参数，或取消沿用并使用官方默认设置。");return }
+        val fields=JSONObject().put("project",project)
+        saved?.let {
+            val source=it.getJSONObject("options")
+            val options=JSONObject().put("model",source.getString("model")).put("effort",source.getString("effort")).put("permission",source.getString("permission"))
+            if(options.optString("permission")=="full") {
+                if(!confirmFullAccess) { reportError("请先确认新会话的完全访问权限，或取消沿用。");return }
+                options.put("confirmFullAccess",true)
+            }
+            fields.put("options",options)
+            if(it.opt("enabled") is Boolean) fields.put("enabled",it.getBoolean("enabled"))
+        }
+        val key=newChatKey()
+        mutation("sessions.create",fields) { result ->
+        result.optString("id").takeIf { it.isNotBlank() }?.let { id ->
+            val record=JSONObject().put("thread",id)
+            saved?.let { record.put("options",it.getJSONObject("options"));if(it.opt("enabled") is Boolean) record.put("enabled",it.getBoolean("enabled")) }
+            key?.let { store.put(it,record.toString()) }
+        }
         update { it.copy(archived=false,project="",sessionSearch="",sessionLimit=100) }
         result.optString("id").takeIf { it.isNotBlank() }?.let { subscribe(it) };refresh()
         if(!result.optBoolean("desktopReady")&&!result.optBoolean("opening")) reportError("会话已创建，但尚未确认官方桌面接管。请在电脑上的 Codex 打开该会话；连接后将自动同步，不要重复创建。")
+        result.optString("message").takeIf { it.isNotBlank() }?.let(::reportError)
     } }
     fun renameChat(name: String) {
         val thread=mutable.value.thread ?: return
@@ -417,8 +451,10 @@ class BridgeClient(context: Context) {
     }
     fun notifications(enabled: Boolean) {
         val thread=mutable.value.thread?:return
+        val preference=mutable.value.snapshot?.optJSONObject("notificationPreference")
         mutation("chat.notifications",JSONObject().put("thread",thread).put("enabled",enabled)) {result ->
-            update {if(it.thread==thread)it.copy(snapshot=it.snapshot?.let {raw -> jsonCopy(raw).put("notificationPreference",result)}) else it}
+            update {if(it.thread==thread && it.snapshot?.optJSONObject("notificationPreference")===preference)it.copy(snapshot=it.snapshot?.let {raw -> jsonCopy(raw).put("notificationPreference",result)}) else it}
+            rememberNewChat()
         }
     }
     fun goalAction(action: String) {

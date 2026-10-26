@@ -1,6 +1,14 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {SnapshotStream,Bridge, conversation, approvalDecisions, contextUsage, StateSequence, NotificationInbox, sessionSettings, changedSettings, turnElapsed, activeQuestionIndex, computerAddress, extendHistory, mergeHistoryTurns, sessionIndicator, effortLabel, ReadingCache, offlineReading} from './protocol-v1.mjs';
+import {SnapshotStream,Bridge, conversation, approvalDecisions, contextUsage, StateSequence, NotificationInbox, sessionSettings, changedSettings, newChatDefaults, turnElapsed, activeQuestionIndex, computerAddress, extendHistory, mergeHistoryTurns, sessionIndicator, effortLabel, ReadingCache, offlineReading} from './protocol-v1.mjs';
+
+test('new chat defaults contain only settings and explicit notification preference, never approvals',()=>{
+  const snapshot={latestModel:'fixture',latestReasoningEffort:'high',latestThreadSettings:{permissions:':workspace',approvalsReviewer:'auto_review'},notificationPreference:{enabled:true},requests:[{id:'private',decision:'acceptForSession'}],turns:[{}],controlsRevision:'old'};
+  assert.deepEqual(newChatDefaults(snapshot),{options:{model:'fixture',effort:'high',permission:'auto-review'},enabled:true});
+  assert.deepEqual(newChatDefaults({...snapshot,notificationPreference:{available:false,enabled:false}}),{options:{model:'fixture',effort:'high',permission:'auto-review'}});
+  assert.equal(newChatDefaults({}),null);
+  assert.equal(newChatDefaults({...snapshot,latestThreadSettings:{permissions:'custom'}}),null);
+});
 
 const secret = 'a'.repeat(64);
 test('permission approvals stay turn-scoped and unsupported choices fail closed',()=>{

@@ -172,28 +172,7 @@ func metadataCall(ctx context.Context, c config.Config, method string, params an
 
 func (b *Bridge) Lifecycle(ctx context.Context, method, id, project string) (any, error) {
 	if method == "sessions.create" {
-		cwd, e := b.newChatDirectory(ctx, project)
-		if e != nil {
-			return nil, e
-		}
-		result, e := metadataCall(ctx, b.config, "thread/start", map[string]any{"cwd": cwd, "ephemeral": false})
-		if e != nil {
-			return nil, e
-		}
-		var data struct {
-			Thread struct {
-				ID string `json:"id"`
-			} `json:"thread"`
-		}
-		if json.Unmarshal(result, &data) != nil || !threadID.MatchString(data.Thread.ID) {
-			return nil, errors.New("cannot verify newly created chat; inspect desktop before retrying")
-		}
-		// Confirm persistence from a different metadata process, not only a lazy in-memory thread.
-		if _, err := metadataCall(ctx, b.config, "thread/read", map[string]any{"threadId": data.Thread.ID, "includeTurns": true}); err != nil {
-			return map[string]any{"id": data.Thread.ID, "desktopReady": false, "opening": false, "message": "会话已创建，但历史持久化未确认，请核对桌面，不要重复创建。"}, nil
-		}
-		b.openCreatedChat(data.Thread.ID)
-		return map[string]any{"id": data.Thread.ID, "desktopReady": false, "opening": true}, nil
+		return b.CreateChat(ctx, project, Options{})
 	}
 	if method != "sessions.archive" && method != "sessions.unarchive" {
 		return nil, errors.New("session operation not allowlisted")

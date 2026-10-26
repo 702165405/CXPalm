@@ -601,6 +601,9 @@ func (b *Bridge) ControlActionFiles(ctx context.Context, id, operation, action, 
 			return nil, &Rejected{Code: "approval_changed", Message: "approval request changed before dispatch; refresh and review again"}
 		}
 	}
+	if options.newChatOnly && (len(orderedTurns(latest.snapshotValue())) > 0 || activeTurn(latest.snapshotValue()) != "") {
+		return nil, errors.New("new chat is no longer empty; settings not dispatched")
+	}
 	callCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	r, e := c.Request(callCtx, method, p, s.Owner)

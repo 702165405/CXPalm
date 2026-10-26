@@ -64,6 +64,16 @@ fun sessionControlValues(snapshot: JSONObject?): Map<String,String> {
     val permission=if(profile in listOf(":workspace","workspace","workspace-write") && value(settings,"approvalsReviewer")=="auto_review") "auto-review" else when(profile) { ":read-only","read-only" -> "read-only"; ":workspace","workspace","workspace-write" -> "workspace"; ":danger-full-access","danger-full-access","full" -> "full";else -> "" }
     return mapOf("model" to value(snapshot,"latestModel").ifBlank { value(settings,"model") },"effort" to value(snapshot,"latestReasoningEffort").ifBlank { value(settings,"effort") }.ifBlank { "default" },"permission" to permission,"mode" to value(snapshot?.optJSONObject("latestCollaborationMode"),"mode").ifBlank { "default" })
 }
+fun newChatDefaults(snapshot: JSONObject?): JSONObject? {
+    val values=sessionControlValues(snapshot)
+    val model=values.getValue("model");val effort=values.getValue("effort");val permission=values.getValue("permission")
+    if(model.isBlank() || model.length>200 || effort.length>32 || permission !in listOf("read-only","workspace","auto-review","full")) return null
+    val defaults=JSONObject().put("options",JSONObject().put("model",model).put("effort",effort).put("permission",permission))
+    snapshot?.optJSONObject("notificationPreference")?.let { preference ->
+        if(preference.optBoolean("available",true) && preference.opt("enabled") is Boolean) defaults.put("enabled",preference.getBoolean("enabled"))
+    }
+    return defaults
+}
 // Same source fields as the Web context ring; absent or zero windows stay unknown.
 data class ContextUsage(val used: Long, val limit: Long, val percent: Int)
 fun contextUsage(snapshot: JSONObject?): ContextUsage? {

@@ -1,13 +1,13 @@
 {
   "schema": 1,
   "releaseLine": "fresh-001",
-  "build": 1,
+  "build": 2,
   "appId": "dev.cxpalm.desktop",
   "platform": "win32",
   "arch": "x64",
-  "version": "0.0.1",
-  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.1-build1/CXPalm-Setup-0.0.1-build1-x64.exe",
-  "size": 120733540,
-  "sha256": "515a63e30957ff87674cb0d02527b4e10c7c69bb5b1c7ae5f843c9195fbed306",
-  "notes": "CXPalm 0.0.1 / build1: Initial release of the new repository version line. Self-hosted Web/Android control of original desktop-owned Codex conversations, device authorization, approvals, attachments, shared read state, opt-in reminders, Android appearance choices and clear computer switching. Keep local redacted desktop diagnostics and strict package/signature/hash/downgrade checks. No credentials or runtime data are included. Existing higher-version installations require an explicit manual transition; no automatic downgrade or phone-data reset is performed."
+  "version": "0.0.2",
+  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.2-build2/CXPalm-Setup-0.0.2-build2-x64.exe",
+  "size": 120740118,
+  "sha256": "7568ef59eda0facd28c879c09028bfa086ad8c9cff364d47740a05d7d2661cb8",
+  "notes": "CXPalm 0.0.2 / build2: Web and Android can reuse the last newly created chat's notification, model, reasoning effort and permission mode, separately for each computer and client. Full access requires fresh confirmation; approval grants, conversation content and execution ownership are never copied. Settings are applied once through the original desktop owner after connection; an unconfirmed setup retains the created chat and warns instead of replaying creation. Existing configuration, authorizations and startup preferences are preserved."
 }

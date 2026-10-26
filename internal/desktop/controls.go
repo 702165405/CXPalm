@@ -30,6 +30,7 @@ type Catalog struct {
 	Source string  `json:"source"`
 }
 type Options struct {
+	newChatOnly       bool
 	ExpectedGoal      string `json:"expectedGoal,omitempty"`
 	GoalAction        string `json:"goalAction,omitempty"`
 	Model             string `json:"model,omitempty"`

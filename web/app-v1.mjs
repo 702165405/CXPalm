@@ -1,5 +1,5 @@
 import {markdown} from './markdown-v1.mjs';
-import {seedHistoryIndex, Bridge, conversation, approvalDecisions, contextUsage, NotificationInbox, StateSequence, sessionSettings, changedSettings, turnElapsed, activeQuestionIndex, computerAddress, mergeHistoryTurns, extendHistory, sessionIndicator, effortLabel, ReadingCache} from './protocol-v1.mjs';
+import {seedHistoryIndex, Bridge, conversation, approvalDecisions, contextUsage, NotificationInbox, StateSequence, sessionSettings, changedSettings, newChatDefaults, turnElapsed, activeQuestionIndex, computerAddress, mergeHistoryTurns, extendHistory, sessionIndicator, effortLabel, ReadingCache} from './protocol-v1.mjs';
 
 const $ = id => document.getElementById(id);
 const state = {page:'chat',device:null,version:'',sessions:[],projects:[],archived:false,project:'',listLimit:100,listSubscription:null,hasMore:false,settingsBase:null,editGroup:null,selected:null,snapshot:null,desktop:false,reconnect:null,openTools:new Set(),catalog:{models:[],skills:[]},skills:new Set()};
@@ -149,6 +149,7 @@ const bridge = new Bridge({
   changed: () => { syncClearedDraft(); renderControls(); renderPending(); renderLists(); },
   event: event => run(async () => {
     if (event.type === 'hello') {
+      state.createSettingsSupported=event.data.capabilities?.includes('sessions.create.settings')===true;
       state.reminderReady=false;
       clearTimeout(state.reconnect);
       const recoveredErrors=new Set(['连接中断，正在恢复连接。',state.connectionError]);
@@ -182,6 +183,7 @@ const bridge = new Bridge({
       state.desktop = event.data.connected;
       if(typeof event.data.archived==='boolean')state.selected.archived=event.data.archived;
       if (event.data.snapshot) { if(event.data.snapshot.hasUnreadTurn===false)readAttempt=null;state.snapshot = event.data.snapshot;state.cached=!event.data.connected&&!event.data.archived;rememberReading(true); timingAnchor={server:Number.isFinite(state.snapshot.observedAtMs)?state.snapshot.observedAtMs:Date.now(),local:performance.now()}; readToken=event.data.readToken||null; }
+      if(event.data.connected)rememberNewChat();
       renderConversation();
       renderControls();
       if (event.data.error) {state.desktopError=event.data.error;report(event.data.error);}
@@ -939,15 +941,40 @@ listen('project-filter','change',()=>{state.project=$('project-filter').value;st
 listen('list-mode','change',renderLists);
 for(const [id,archived] of [['active-chats',false],['archived-chats',true]])listen(id,'click',()=>{state.archived=archived;state.listLimit=100;for(const key of ['active-chats','archived-chats']){const selected=key===id;$(key).classList.toggle('selected',selected);$(key).setAttribute('aria-pressed',String(selected));}return refreshLists();});
 listen('load-more','click',()=>{state.listLimit=Math.min(5000,state.listLimit+100);return refreshLists();});
-listen('new-chat','click',()=>{$('new-chat-panel').hidden=!$('new-chat-panel').hidden;if(state.project&&state.project!=='none')$('new-project').value=state.project;renderControls();});
+function newChatKey(){return bridge.device?`cxpalm:new-chat:${bridge.device.id}`:null;}
+function savedNewChat(){try{return JSON.parse(localStorage.getItem(newChatKey())||'null');}catch{return null;}}
+function rememberNewChat(){
+  const saved=savedNewChat();
+  if(saved?.thread!==state.selected?.id||!state.desktop||state.selected?.archived||state.cached||!state.snapshot)return;
+  const defaults=newChatDefaults(state.snapshot);
+  if(defaults){const next=JSON.stringify({...saved,...defaults});if(next!==JSON.stringify(saved))localStorage.setItem(newChatKey(),next);}
+}
+function renderNewChat(){
+  const saved=savedNewChat(),inherit=$('inherit-new-chat').checked&&saved?.options;
+  $('inherit-new-chat').disabled=!saved?.options;
+  $('new-chat-defaults').textContent=saved?.options?`${saved.options.model} · ${effortLabel(saved.options.effort)} · ${permissionName({permissions:saved.options.permission==='auto-review'?':workspace':saved.options.permission,approvalsReviewer:saved.options.permission==='auto-review'?'auto_review':'user'})} · 通知${saved.enabled===true?'开启':saved.enabled===false?'关闭':'使用默认值'}`:'首次新建使用官方默认设置；连接后会记住本会话的设置。';
+  $('new-chat-full-access').hidden=!(inherit&&saved.options.permission==='full');
+}
+listen('new-chat','click',()=>{$('new-chat-panel').hidden=!$('new-chat-panel').hidden;if(state.project&&state.project!=='none')$('new-project').value=state.project;$('inherit-new-chat').checked=true;$('confirm-new-chat-full-access').checked=false;renderNewChat();renderControls();});
+listen('inherit-new-chat','change',()=>{$('confirm-new-chat-full-access').checked=false;renderNewChat();});
 listen('new-project','change',renderControls);
 listen('cancel-create','click',()=>{$('new-chat-panel').hidden=true;});
 listen('create-chat','click',async()=>{
-  const receipt=await bridge.mutate('sessions.create',{project:$('new-project').value});
+  const saved=savedNewChat(),defaults=$('inherit-new-chat').checked&&saved?.options?saved:null;
+  if(defaults&&!state.createSettingsSupported)throw new Error('请更新网关以沿用新建参数，或取消沿用并使用官方默认设置。');
+  const options=defaults?{model:defaults.options.model,effort:defaults.options.effort,permission:defaults.options.permission}:undefined;
+  if(options?.permission==='full'){
+    if(!$('confirm-new-chat-full-access').checked)throw new Error('请先确认新会话的完全访问权限，或取消沿用。');
+    options.confirmFullAccess=true;
+  }
+  const key=newChatKey();
+  const receipt=await bridge.mutate('sessions.create',{project:$('new-project').value,...(defaults?{options,...(typeof defaults.enabled==='boolean'?{enabled:defaults.enabled}:{})}:{})});
   if(receipt.status!=='confirmed')return;
+  if(receipt.result?.id)localStorage.setItem(key,JSON.stringify({thread:receipt.result.id,...(defaults?{options:defaults.options,...(typeof defaults.enabled==='boolean'?{enabled:defaults.enabled}:{})}:{})}));
   $('new-chat-panel').hidden=true;state.archived=false;state.project='';state.listLimit=100;
   $('active-chats').classList.add('selected');$('active-chats').setAttribute('aria-pressed','true');$('archived-chats').classList.remove('selected');$('archived-chats').setAttribute('aria-pressed','false');
   if(receipt.result?.id)await selectChat({id:receipt.result.id,title:'新建会话',archived:false});run(refreshLists);if(receipt.result?.desktopReady===false&&!receipt.result?.opening)report('会话已创建，但尚未确认官方桌面接管。请在电脑上的 Codex 打开该会话；连接后将自动同步，不要重复创建。');
+  if(receipt.result?.message)report(receipt.result.message);
 });
 listen('rename-chat','click',()=>{$('rename-panel').hidden=!$('rename-panel').hidden;$('rename-title').value=state.selected?.title||'';if(!$('rename-panel').hidden){$('rename-title').focus();$('rename-title').select();}});
 listen('cancel-rename','click',()=>{$('rename-panel').hidden=true;$('rename-chat').focus();});
@@ -989,9 +1016,9 @@ $('composer').addEventListener('dragover',event=>{if(event.dataTransfer?.types.i
 $('composer').addEventListener('drop',event=>{if(event.dataTransfer?.files.length){event.preventDefault();run(()=>uploadFiles(event.dataTransfer.files));}});
 listen('notify-chat','click',async()=>{
   if($('notify-chat').disabled)return;
-  const thread=state.selected.id,enabled=state.snapshot?.notificationPreference?.enabled!==true;
+  const thread=state.selected.id,preference=state.snapshot?.notificationPreference,enabled=preference?.enabled!==true;
   const result=await write('chat.notifications',{thread,enabled});
-  if(state.selected?.id===thread){state.snapshot={...state.snapshot,notificationPreference:result};renderControls();}
+  if(state.selected?.id===thread){if(state.snapshot?.notificationPreference===preference)state.snapshot={...state.snapshot,notificationPreference:result};rememberNewChat();renderControls();}
 });
 listen('queue-send','click',()=>submitMessage(true));
 $('message').addEventListener('keydown',event=>{if(event.isComposing||event.key!=='Enter')return;const enter=$('send-key').value==='enter';if((enter&&!event.shiftKey)||(event.ctrlKey||event.metaKey)){event.preventDefault();$('composer').requestSubmit();}});

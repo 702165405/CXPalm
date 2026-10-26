@@ -87,7 +87,7 @@ async function main() {
   });
   await page.routeWebSocket(`${origin.replace('https:', 'wss:')}/api/v1/ws`, socket => {
     currentSocket=socket;
-    setTimeout(() => socket.send(JSON.stringify({type:'hello',data:{device:device.id,capabilities:['notifications.subscribe','chat.history','chat.read']}})), 10);
+    setTimeout(() => socket.send(JSON.stringify({type:'hello',data:{device:device.id,capabilities:['notifications.subscribe','chat.history','chat.read','sessions.create.settings']}})), 10);
     socket.onMessage(raw => {
       const q = JSON.parse(raw); sent.push(q); commands.emit(q.method,q);
       const reply = data => {const send=()=>socket.send(JSON.stringify({id:q.id,type:'result',data}));if(holdHistory&&q.method==='chat.history')heldHistory.push(send);else if(holdStartup&&['notifications.subscribe','sessions.browse'].includes(q.method))heldStartup.push(send);else send();};
@@ -747,12 +747,30 @@ async function main() {
     await page.locator('#active-chats').click();await page.locator('#session-list .session-item').waitFor();
     await page.locator('#project-filter').selectOption('project-fixture');
     await page.waitForFunction(()=>document.querySelector('#project-filter').value==='project-fixture');
+    settings={model:'fixture',effort:'high',mode:'default',permission:'auto-review'};notificationPreference={enabled:true};
+    currentSocket.send(JSON.stringify(snapshot()));
     await page.locator('#new-chat').click();await page.locator('#new-chat-panel').waitFor({state:'visible'});await capture('sessions-new-desktop.png');
     assert.equal(await page.locator('#new-project option[value=none]').count(),1);
     await page.locator('#new-project').selectOption('project-fixture');
     await page.locator('#create-chat').click();await page.locator('#new-chat-panel').waitFor({state:'hidden'});
     assert(sent.some(q=>q.method==='sessions.create'&&q.project==='project-fixture'));
+    assert.equal(sent.filter(q=>q.method==='sessions.create').at(-1).options,undefined,'first create must use official defaults');
+    await page.waitForFunction(()=>Object.keys(localStorage).some(key=>key.startsWith('cxpalm:new-chat:')&&JSON.parse(localStorage.getItem(key)).options?.permission==='auto-review'));
     await page.locator('#new-chat').click();await page.locator('#new-project').selectOption('none');await page.locator('#create-chat').click();await page.locator('#new-chat-panel').waitFor({state:'hidden'});assert(sent.some(q=>q.method==='sessions.create'&&q.project==='none'));
+    assert.deepEqual(sent.filter(q=>q.method==='sessions.create').at(-1).options,{model:'fixture',effort:'high',permission:'auto-review'});
+    assert.equal(sent.filter(q=>q.method==='sessions.create').at(-1).enabled,true);
+    assert(!JSON.stringify(sent.filter(q=>q.method==='sessions.create').at(-1)).includes('acceptForSession'));
+    settings.permission=':danger-full-access';notificationPreference={enabled:false};currentSocket.send(JSON.stringify(snapshot()));
+    await page.waitForFunction(()=>Object.keys(localStorage).some(key=>key.startsWith('cxpalm:new-chat:')&&JSON.parse(localStorage.getItem(key)).options?.permission==='full'));
+    await page.locator('#new-chat').click();await page.locator('#new-chat-full-access').waitFor({state:'visible'});
+    const createsBeforeRisk=sent.filter(q=>q.method==='sessions.create').length;
+    await page.locator('#create-chat').click();assert.equal(sent.filter(q=>q.method==='sessions.create').length,createsBeforeRisk,'full access copied without confirmation');
+    await page.locator('#confirm-new-chat-full-access').check();await page.locator('#create-chat').click();await page.locator('#new-chat-panel').waitFor({state:'hidden'});
+    assert.equal(sent.filter(q=>q.method==='sessions.create').at(-1).options.confirmFullAccess,true);
+    assert.equal(sent.filter(q=>q.method==='sessions.create').at(-1).enabled,false);
+    await page.locator('#new-chat').click();assert.equal(await page.locator('#confirm-new-chat-full-access').isChecked(),false);
+    await page.locator('#inherit-new-chat').uncheck();await page.locator('#create-chat').click();await page.locator('#new-chat-panel').waitFor({state:'hidden'});
+    assert.equal(sent.filter(q=>q.method==='sessions.create').at(-1).options,undefined);
     const savedProjects=projects;projects=[];await page.locator('#refresh').click();await page.waitForFunction(()=>document.querySelector('#new-project').options.length===1);await page.locator('#new-chat').click();assert.equal(await page.locator('#new-project').inputValue(),'none');assert.equal(await page.locator('#create-chat').isEnabled(),true);await capture('new-chat-without-projects.png');await page.locator('#cancel-create').click();projects=savedProjects;await page.locator('#refresh').click();await page.waitForFunction(()=>document.querySelector('#new-project').options.length===2);
     await page.setViewportSize({width:390,height:844});await page.locator('#show-list').click();await capture('sessions-project-mobile.png');
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);

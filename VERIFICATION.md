@@ -4,6 +4,31 @@ Public verification records exclude real conversation content, device identifier
 private deployment paths, credentials and raw logs. Tests use synthetic data unless
 explicitly described as deployment connectivity or public-byte checks.
 
+## 0.0.2 / build2
+
+- Web and Android remember the last confirmed newly created chat's notification,
+  model, reasoning effort and permission mode, separately per computer/client.
+  Only connected desktop state updates defaults; approval grants, messages,
+  instructions and execution ownership are not copied. Full access requires
+  fresh confirmation and unsupported model/effort selections are rejected.
+- Empty-thread startup overrides were not durable in an isolated official CLI
+  check. The implementation instead applies settings once through the original
+  desktop owner's conditional settings API, after connection and while the new
+  chat remains empty. Unknown/rejected results never replay the settings write
+  or creation. Synthetic original-owner, rejection, disconnect and nonempty-chat
+  tests pass; this is not a real conversation or physical-device acceptance.
+- Full Go tests and vet pass. Windows amd64 and macOS amd64/arm64 artifacts are
+  rebuilt with Go 1.27.3, trimmed paths and no Git VCS build metadata.
+- All 78 Node checks and isolated Chromium UI checks pass, including first-use
+  defaults, parameter reuse, explicit full-access confirmation and opting out.
+- Android reports 84 unit tests: 83 pass and one publication-only updater test
+  is skipped before release. Lint and normal assembly pass. The APK reports
+  version 0.0.2/code 2, retains its package/signing identity and excludes rendering
+  probes and checked private runtime files. No phone installation is performed.
+- All 12 packaged desktop source/manifest files pass the selected privacy scan;
+  executable source files match tested inputs and generated package identity
+  matches source metadata. Published-byte and deployment checks follow release.
+
 ## 0.0.1 / build1
 
 The release starts a new repository/version line. Android, Windows desktop and

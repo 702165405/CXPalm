@@ -59,6 +59,10 @@ fun sessionDate(session: JSONObject): String {
     var grouped by rememberSaveable { mutableStateOf(true) }
     var showProjects by rememberSaveable { mutableStateOf(false) }
     var creating by rememberSaveable { mutableStateOf(false) }
+    var inheritNewChat by remember(state.current?.id,creating) { mutableStateOf(true) }
+    var confirmNewChatFullAccess by remember(state.current?.id,creating,inheritNewChat) { mutableStateOf(false) }
+    val newChatDefaults=remember(state.current?.id,creating) { client.savedNewChat() }
+    val newChatOptions=newChatDefaults?.optJSONObject("options")
     var unreadOnly by rememberSaveable(state.current?.id) { mutableStateOf(false) }
     var newProject by remember(state.current?.id, creating) { mutableStateOf(state.project.takeIf { it.isNotBlank() } ?: "none") }
     LaunchedEffect(search) { if(search!=state.sessionSearch) { kotlinx.coroutines.delay(250); client.sessionFilter(search=search) } }
@@ -91,9 +95,22 @@ fun sessionDate(session: JSONObject): String {
             Column(Modifier.fillMaxWidth().padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                 Text(tr("新建会话"),style=MaterialTheme.typography.titleMedium)
                 Text(tr("可以选择无项目，使用独立工作目录。创建后自动打开官方桌面，连接成功即可发送消息。"),style=MaterialTheme.typography.bodySmall)
+                Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
+                    Checkbox(checked=inheritNewChat && newChatOptions!=null,onCheckedChange={inheritNewChat=it},enabled=newChatOptions!=null)
+                    Text(tr("沿用上次新建会话设置"))
+                }
+                if(newChatOptions!=null) {
+                    Text("${newChatOptions.optString("model")} · ${effortLabel(newChatOptions.optString("effort"))} · ${tr(when(newChatOptions.optString("permission")) { "full" -> "完全访问"; "auto-review" -> "帮我批准"; "workspace" -> "手动批准"; else -> "只读" })}",style=MaterialTheme.typography.bodySmall)
+                    Text(tr(when(newChatDefaults.opt("enabled")) { true -> "通知开启"; false -> "通知关闭"; else -> "通知使用默认值" }),style=MaterialTheme.typography.bodySmall)
+                } else Text(tr("首次新建使用官方默认设置；连接后会记住本会话的设置。"),style=MaterialTheme.typography.bodySmall)
+                Text(tr("只记忆当前电脑在此客户端中新建的会话，不复制审批授权；创建后可在会话中修改。"),style=MaterialTheme.typography.bodySmall)
+                if(inheritNewChat && newChatOptions?.optString("permission")=="full") Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
+                    Checkbox(checked=confirmNewChatFullAccess,onCheckedChange={confirmNewChatFullAccess=it})
+                    Text(tr("确认新会话使用完全访问 · 无审批（高风险）"))
+                }
                 FlowRow(horizontalArrangement=Arrangement.spacedBy(6.dp)) { FilterChip(selected=newProject=="none",onClick={newProject="none"},label={Text(tr("无项目 · 独立工作目录"))});state.projects.forEach { p -> FilterChip(selected=newProject==p.optString("id"),onClick={newProject=p.optString("id")},label={Text(p.optString("name"))}) } }
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    Button(onClick={client.createChat(newProject);creating=false},enabled=state.connected && state.pendingFor(null)==null && newProject.isNotBlank()) {Text(tr("创建"))}
+                    Button(onClick={client.createChat(newProject,inheritNewChat,confirmNewChatFullAccess);creating=false},enabled=state.connected && state.pendingFor(null)==null && newProject.isNotBlank() && !(inheritNewChat && newChatOptions?.optString("permission")=="full" && !confirmNewChatFullAccess)) {Text(tr("创建"))}
                     TextButton(onClick={creating=false}) {Text(tr("取消"))}
                 }
             }

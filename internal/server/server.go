@@ -219,7 +219,7 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}()
-	send(Event{Type: "hello", Data: map[string]any{"version": config.Version, "device": d.ID, "capabilities": []string{"chat.attachments", "chat.notifications", "chat.notifications.get", "sessions.browse", "sessions.subscribe", "sessions.list", "operation.get", "operation.acknowledge", "chat.subscribe", "chat.delta", "chat.item", "chat.history", "chat.read", "notifications.subscribe", "chat.send", "chat.steer", "chat.queue", "chat.queue.cancel", "chat.stop", "chat.approve", "chat.catalog", "chat.settings", "chat.goal", "chat.compact", "sessions.create", "sessions.rename", "sessions.archive", "sessions.unarchive"}}})
+	send(Event{Type: "hello", Data: map[string]any{"version": config.Version, "device": d.ID, "capabilities": []string{"chat.attachments", "chat.notifications", "chat.notifications.get", "sessions.browse", "sessions.subscribe", "sessions.list", "operation.get", "operation.acknowledge", "chat.subscribe", "chat.delta", "chat.item", "chat.history", "chat.read", "notifications.subscribe", "chat.send", "chat.steer", "chat.queue", "chat.queue.cancel", "chat.stop", "chat.approve", "chat.catalog", "chat.settings", "chat.goal", "chat.compact", "sessions.create", "sessions.create.settings", "sessions.rename", "sessions.archive", "sessions.unarchive"}}})
 	var listCancel context.CancelFunc
 	defer func() {
 		if listCancel != nil {
@@ -508,6 +508,24 @@ func (s *Server) execute(ctx context.Context, device string, q Command) (any, er
 		result, err = s.Bridge.CancelQueue(ctx, q.Thread, q.RequestID)
 	} else if q.Method == "sessions.rename" {
 		result, err = s.Bridge.Rename(ctx, q.Thread, q.Text)
+	} else if q.Method == "sessions.create" {
+		var created map[string]any
+		created, err = s.Bridge.CreateChat(ctx, q.Project, q.Options)
+		if err == nil && q.Enabled != nil {
+			scope, prefErr := s.Bridge.NotificationScope()
+			if prefErr == nil {
+				_, prefErr = s.Store.SetNotificationPreference(scope, created["id"].(string), *q.Enabled)
+			}
+			created["notificationsApplied"] = prefErr == nil
+			if prefErr == nil {
+				s.Bridge.NotifyChanged(created["id"].(string))
+			}
+			if prefErr != nil {
+				// Creation succeeded: never turn a preference failure into a create retry.
+				created["message"] = "会话已创建，但通知设置未保存，请在会话中手动检查；不要重复创建。"
+			}
+		}
+		result = created
 	} else if strings.HasPrefix(q.Method, "sessions.") {
 		result, err = s.Bridge.Lifecycle(ctx, q.Method, q.Thread, q.Project)
 	} else {

@@ -300,6 +300,13 @@ export function changedSettings(base,draft,group) {
   return Object.fromEntries(fields.filter(key=>draft[key]&&draft[key]!==base[key]).map(key=>[key,draft[key]]));
 }
 
+export function newChatDefaults(snapshot) {
+  const {model,effort,permission}=sessionSettings(snapshot);
+  if(typeof model!=='string'||!model||model.length>200||typeof effort!=='string'||effort.length>32||!['read-only','workspace','auto-review','full'].includes(permission))return null;
+  const preference=snapshot?.notificationPreference;
+  return {options:{model,effort,permission},...(preference?.available!==false&&typeof preference?.enabled==='boolean'?{enabled:preference.enabled}:{})};
+}
+
 // Official turn duration includes tool execution and approval waits, not token speed.
 export function turnElapsed(turn, now, live = false) {
   const duration = turn?.durationMs;

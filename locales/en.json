@@ -763,5 +763,18 @@
   "切换电脑": "Switch computer",
   "电脑": "Computers",
   "选中标记表示当前控制的电脑，其他电脑的提醒状态单独显示。": "The checkmark identifies the computer you control. Notification status for other computers is shown separately.",
-  "仅筛选已加载会话，可继续加载更多。": "Filters loaded conversations only. Load more to include additional conversations."
+  "仅筛选已加载会话，可继续加载更多。": "Filters loaded conversations only. Load more to include additional conversations.",
+  "沿用上次新建会话设置": "Reuse settings from the last new chat",
+  "首次新建使用官方默认设置；连接后会记住本会话的设置。": "The first new chat uses desktop defaults. Its settings are remembered after connecting.",
+  "只记忆当前电脑在此浏览器中新建的会话，不复制审批授权；创建后可在会话中修改。": "Remembers new chats for this computer in this browser only. Approval grants are not copied. Settings remain editable after creation.",
+  "只记忆当前电脑在此客户端中新建的会话，不复制审批授权；创建后可在会话中修改。": "Remembers new chats for this computer in this client only. Approval grants are not copied. Settings remain editable after creation.",
+  "确认新会话使用完全访问 · 无审批（高风险）": "Confirm full access without approvals for the new chat (high risk)",
+  "请先确认新会话的完全访问权限，或取消沿用。": "Confirm full access for the new chat, or turn off reuse.",
+  "请更新网关以沿用新建参数，或取消沿用并使用官方默认设置。": "Update the gateway to reuse chat settings, or turn off reuse to use desktop defaults.",
+  "通知开启": "Notifications on",
+  "通知关闭": "Notifications off",
+  "通知使用默认值": "Default notifications",
+  "新建会话仅支持模型、推理强度和权限设置": "New chat options support only model, reasoning effort and permission mode.",
+  "会话已创建，但沿用设置未确认；请在会话中核对模型、推理强度和权限，不要重复创建。": "Chat created, but reused settings were not confirmed. Check model, effort and permissions in the chat. Do not create it again.",
+  "会话已创建，但通知设置未保存，请在会话中手动检查；不要重复创建。": "Chat created, but notifications were not saved. Check them in the chat. Do not create it again."
 }

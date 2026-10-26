@@ -5,6 +5,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UiModelsTest {
+    @Test fun newChatDefaultsDoNotCopyApprovalsOrExecutionState() {
+        val snapshot=JSONObject("""{"latestModel":"fixture","latestReasoningEffort":"high","latestThreadSettings":{"permissions":":workspace","approvalsReviewer":"auto_review"},"notificationPreference":{"enabled":true},"requests":[{"decision":"acceptForSession"}],"turns":[{}],"controlsRevision":"old"}""")
+        val defaults=newChatDefaults(snapshot)!!
+        assertEquals(setOf("options","enabled"),defaults.keys().asSequence().toSet())
+        assertEquals(setOf("model","effort","permission"),defaults.getJSONObject("options").keys().asSequence().toSet())
+        assertEquals("auto-review",defaults.getJSONObject("options").getString("permission"))
+        assertTrue(defaults.getBoolean("enabled"))
+        snapshot.getJSONObject("notificationPreference").put("available",false)
+        assertFalse(newChatDefaults(snapshot)!!.has("enabled"))
+        assertNull(newChatDefaults(JSONObject()))
+        snapshot.getJSONObject("latestThreadSettings").put("permissions","custom")
+        assertNull(newChatDefaults(snapshot))
+    }
     @Test fun explicitAppearanceOverridesSystemAndUnknownSettingsFollowSystem() {
         for(system in listOf(false,true)) {
             assertFalse(appearanceIsDark("light",system))
