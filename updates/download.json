@@ -1,0 +1,9 @@
+{
+  "version": "0.0.1",
+  "versionCode": 1,
+  "package": "io.github.u702165405.cxpalm.debug",
+  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.1-build1/CXPalm-0.0.1-build1-debug.apk",
+  "size": 9886366,
+  "sha256": "fd9c3556af8369802be8d8a571edc8525a7f119bcb52d31c6915206f62473ff9",
+  "notes": "CXPalm 0.0.1 / build1: Initial release of the new repository version line. Self-hosted Web/Android control of original desktop-owned Codex conversations, device authorization, approvals, attachments, shared read state, opt-in reminders, Android appearance choices and clear computer switching. Keep local redacted desktop diagnostics and strict package/signature/hash/downgrade checks. No credentials or runtime data are included. Existing higher-version installations require an explicit manual transition; no automatic downgrade or phone-data reset is performed."
+}

@@ -1,0 +1,10 @@
+{
+  "listen": "127.0.0.1:18789",
+  "origin": "https://cxpalm.example.com",
+  "dataDir": "C:/CXPalm/data",
+  "codexHome": "C:/Users/YOUR_USER/.codex",
+  "ipcPath": "",
+  "sshHost": "proxy.example.com",
+  "sshRemotePort": 18791,
+  "trustedProxyIP": false
+}
