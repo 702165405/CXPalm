@@ -25,6 +25,21 @@ explicitly described as deployment connectivity or public-byte checks.
   All 12 packaged desktop source/manifest files pass the selected privacy scan.
   Public-byte checks are recorded after release. No physical Android or macOS
   runtime acceptance or real model-error reproduction is claimed.
+- Publication checks pass for all ten public assets and both main-branch feeds.
+  Actual Electron check/download/hash/pre-install verification passes without
+  running an installer; Android's public updater test passes with one test and
+  no skips. The Web entry and three versioned assets match their public hashes.
+- All 76 installed Windows runtime files match the package. The app is reopened
+  through its independent application launcher and restores its gateway using
+  existing preferences. Health reports 0.0.3 and official desktop IPC connects.
+  Desktop/host/listener/tunnel ownership, remote reverse health and public API
+  authorization (401 without a session) are verified. Windows TCP enumeration
+  did not expose this SSH process's sockets; connectivity is established by the
+  actual reverse HTTP check, not inferred from an empty TCP query.
+- Configuration, device authorization, IP policy, desktop preferences, shortcuts
+  and login-startup registration are unchanged across deployment. All 296 staged
+  source blobs pass the selected privacy scan; unrelated local tooling remains
+  uncommitted. No runtime data, diagnostic logs or packages are committed.
 
 ## 0.0.2 / build2
 
