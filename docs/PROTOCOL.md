@@ -162,6 +162,15 @@ available in the normal chat controls.
 
 ## Local desktop boundary
 
+Conversation projection includes `sessionError` items in their original turn.
+They contain only a bounded display message and stable presentation ID, not raw
+error objects, stacks, extra diagnostic fields or response bodies. Common inline
+credentials and error URLs are redacted. Turn errors, item errors and rollout
+`event_msg/error` messages share this presentation path, including lean streams
+and history pages. Failed/interrupted turns without a displayable reason receive
+an explicit fallback notice. Clients render these notices as non-collapsible plain
+text in the conversation, never as global operation failures or automatic retries.
+
 The `desktop-host` exchanges bounded JSON lines over inherited stdin/stdout,
 not a public management listener. Allowlisted operations cover lifecycle,
 authorization revocation, metadata/audit, IP policy, login settings and diagnostics.

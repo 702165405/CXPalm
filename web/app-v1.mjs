@@ -547,12 +547,13 @@ function renderConversation() {
     const signature=JSON.stringify(message);
     if(old?.signature===signature){old.used=true;old.node.dataset.turn=message.turn||'';return old.node;}
     const card = old?.node || document.createElement('article');
-    card.className = `message${message.role === '你' ? ' user' : message.collapsible ? ' activity' : ''}`;
+    card.className = `message${message.role === 'sessionError' ? ' session-error' : message.role === '你' ? ' user' : message.collapsible ? ' activity' : ''}`;
     card.dataset.turn=message.turn||'';card.dataset.role=message.role;
     if (!message.collapsible) {
-      card.replaceChildren(text('div', message.role, 'message-head'));
+      card.replaceChildren(text('div', message.role==='sessionError'?'本轮提示':message.role, 'message-head'));
       const body = document.createElement('div'); body.className = 'message-body';
-      markdown(body, message.text); card.append(body);appendImages(body,message);
+      if(message.role==='sessionError'){body.textContent=message.text;card.setAttribute('role','status');}else markdown(body, message.text);
+      card.append(body);appendImages(body,message);
     } else {
       let details = card.querySelector('details');
       if (!details) {

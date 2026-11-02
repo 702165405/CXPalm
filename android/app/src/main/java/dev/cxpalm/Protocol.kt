@@ -11,7 +11,7 @@ fun normalizeOrigin(value: String): String {
 }
 @androidx.compose.runtime.Immutable
 data class Message(val id: String, val role: String, val text: String, val truncated: Boolean = false, val turn: String = "", val command: String = "", val status: String = "", val deferred: Boolean = false, val bodyRevision: String = "", val images: List<MessageImage> = emptyList()) {
-    val collapsible: Boolean get() = role != "You" && role != "Codex"
+    val collapsible: Boolean get() = role != "You" && role != "Codex" && role != "sessionError"
 }
 fun objects(a: JSONArray?): List<JSONObject> = if (a == null) emptyList() else (0 until a.length()).mapNotNull { a.optJSONObject(it) }
 // Snapshots are replaced, never mutated after arrival, so identity is a safe cache key.

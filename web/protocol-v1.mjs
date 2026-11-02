@@ -66,7 +66,7 @@ export function conversation(turns = []) {
       return {id: item.id || `${item.type}:${itemIndex}`, turn: turn.turnId || turn.id || `turn-${turnIndex}`,
         command: typeof item.command === 'string' ? item.command : '', status: item.status,
         images:Array.isArray(item.images)?item.images:[],
-        collapsible: !['userMessage', 'agentMessage','imageGenerationCall','imageGeneration'].includes(item.type), role: item.type === 'userMessage' ? '你' : ['agentMessage','imageGenerationCall','imageGeneration'].includes(item.type) ? 'Codex' : item.type,
+        collapsible: !['userMessage', 'agentMessage','imageGenerationCall','imageGeneration','sessionError'].includes(item.type), role: item.type === 'userMessage' ? '你' : ['agentMessage','imageGenerationCall','imageGeneration'].includes(item.type) ? 'Codex' : item.type,
         text: typeof text === 'string' ? text : '', truncated: item.truncated === true, deferred:item.deferred===true, bodyRevision:item.bodyRevision||''};
     }).filter(item => item.text||item.deferred||item.images.length);
     conversationCache.set(turn,{index:turnIndex,messages});return messages;

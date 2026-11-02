@@ -1,13 +1,13 @@
 {
   "schema": 1,
   "releaseLine": "fresh-001",
-  "build": 2,
+  "build": 3,
   "appId": "dev.cxpalm.desktop",
   "platform": "win32",
   "arch": "x64",
-  "version": "0.0.2",
-  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.2-build2/CXPalm-Setup-0.0.2-build2-x64.exe",
-  "size": 120740118,
-  "sha256": "7568ef59eda0facd28c879c09028bfa086ad8c9cff364d47740a05d7d2661cb8",
-  "notes": "CXPalm 0.0.2 / build2: Web and Android can reuse the last newly created chat's notification, model, reasoning effort and permission mode, separately for each computer and client. Full access requires fresh confirmation; approval grants, conversation content and execution ownership are never copied. Settings are applied once through the original desktop owner after connection; an unconfirmed setup retains the created chat and warns instead of replaying creation. Existing configuration, authorizations and startup preferences are preserved."
+  "version": "0.0.3",
+  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.3-build3/CXPalm-Setup-0.0.3-build3-x64.exe",
+  "size": 120748910,
+  "sha256": "2008f69cf9476cec63ecc4a500bb3c138b46f4dd98278d7b4baec3bd10e4955b",
+  "notes": "CXPalm 0.0.3 / build3: Web and Android now display conversation errors beside the corresponding turn instead of silently dropping them. Includes tool error messages, read-only historical error events and explicit fallback notices when the desktop supplies no detailed failure reason. Error cards are visible without expanding tool output, rendered as bounded plain text with common credentials and URLs redacted. No automatic retry, message replay or execution-owner change. Existing configuration, device authorization and startup preferences are preserved."
 }

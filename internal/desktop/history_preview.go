@@ -101,7 +101,7 @@ func (b *Bridge) readHistoryValue(ctx context.Context, row Session, complete boo
 	current := map[string]any{}
 	imageCalls := map[string]bool{}
 	flush := func() {
-		if len(items) > 0 {
+		if len(items) > 0 || displayError(current["error"]) != "" || current["status"] == "failed" || current["status"] == "interrupted" {
 			if _, ok := current["turnId"]; !ok {
 				current["turnId"] = "history-" + strconv.Itoa(number)
 			}
@@ -123,7 +123,7 @@ func (b *Bridge) readHistoryValue(ctx context.Context, row Session, complete boo
 		}
 		line := scan.Bytes()
 		message := bytes.Contains(line, []byte(`"response_item"`)) && (bytes.Contains(line, []byte(`"message"`)) || bytes.Contains(line, []byte(`"image_generation_call"`)))
-		timing := bytes.Contains(line, []byte(`"event_msg"`)) && (bytes.Contains(line, []byte(`"task_started"`)) || bytes.Contains(line, []byte(`"task_complete"`)) || bytes.Contains(line, []byte(`"turn_aborted"`)))
+		timing := bytes.Contains(line, []byte(`"event_msg"`)) && (bytes.Contains(line, []byte(`"task_started"`)) || bytes.Contains(line, []byte(`"task_complete"`)) || bytes.Contains(line, []byte(`"turn_aborted"`)) || bytes.Contains(line, []byte(`"error"`)))
 		imageTool := bytes.Contains(line, []byte(`"function_call"`)) && bytes.Contains(line, []byte(`"imagegen"`)) || bytes.Contains(line, []byte(`"function_call_output"`)) && bytes.Contains(line, []byte(`"input_image"`))
 		if !message && !timing && !imageTool {
 			continue
@@ -141,6 +141,8 @@ func (b *Bridge) readHistoryValue(ctx context.Context, row Session, complete boo
 				Role     string           `json:"role"`
 				Result   string           `json:"result"`
 				Content  []map[string]any `json:"content"`
+				Message  string           `json:"message"`
+				Error    any              `json:"error"`
 			} `json:"payload"`
 		}
 		if json.Unmarshal(scan.Bytes(), &event) != nil {
@@ -189,6 +191,20 @@ func (b *Bridge) readHistoryValue(ctx context.Context, row Session, complete boo
 				}
 				if event.Payload.Duration != nil {
 					current["durationMs"] = event.Payload.Duration
+				}
+			case "error":
+				if id, _ := current["turnId"].(string); event.Payload.TurnID != "" && id != "" && event.Payload.TurnID != id {
+					continue
+				}
+				if event.Payload.TurnID != "" {
+					current["turnId"] = event.Payload.TurnID
+				}
+				problem := displayError(event.Payload.Message)
+				if problem == "" {
+					problem = displayError(event.Payload.Error)
+				}
+				if problem != "" {
+					items = append(items, map[string]any{"id": "history-error-" + strconv.Itoa(number) + "-" + strconv.Itoa(len(items)), "type": "sessionError", "text": problem})
 				}
 			}
 			continue

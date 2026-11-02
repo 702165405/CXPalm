@@ -4,6 +4,28 @@ Public verification records exclude real conversation content, device identifier
 private deployment paths, credentials and raw logs. Tests use synthetic data unless
 explicitly described as deployment connectivity or public-byte checks.
 
+## 0.0.3 / build3
+
+- Turn error messages, tool error messages and rollout error events are projected
+  as conversation-local `sessionError` items. Failed/interrupted turns without a
+  detailed reason receive an explicit fallback. Empty failed turns are visible;
+  normal completed turns do not acquire error cards. Native patch bases remain
+  unchanged and lean/history reprojection does not duplicate notices.
+- Error cards are expanded plain text in Web and Android. They do not execute
+  HTML/Markdown or introduce retries, global blocking or execution-owner changes.
+  Messages are limited to 4,000 characters plus a truncation notice; only display
+  messages are selected, with common credentials and URLs redacted. Raw error
+  objects, additional details and stacks are not forwarded.
+- Full Go tests and vet pass. Windows amd64 and macOS amd64/arm64 gateway builds
+  use Go 1.27.3. All 79 Node checks pass. Isolated Chromium verifies error-card
+  text, turn scoping, removal on subsequent state, XSS resistance and layouts.
+- Android reports 85 unit tests: 84 pass and one publication-only updater test is
+  skipped before release. Lint and normal assembly pass; version 0.0.3/code 3,
+  original package/signing identity and absence of rendering probes are verified.
+  All 12 packaged desktop source/manifest files pass the selected privacy scan.
+  Public-byte checks are recorded after release. No physical Android or macOS
+  runtime acceptance or real model-error reproduction is claimed.
+
 ## 0.0.2 / build2
 
 - Web and Android remember the last confirmed newly created chat's notification,

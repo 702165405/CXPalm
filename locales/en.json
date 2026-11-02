@@ -776,5 +776,9 @@
   "通知使用默认值": "Default notifications",
   "新建会话仅支持模型、推理强度和权限设置": "New chat options support only model, reasoning effort and permission mode.",
   "会话已创建，但沿用设置未确认；请在会话中核对模型、推理强度和权限，不要重复创建。": "Chat created, but reused settings were not confirmed. Check model, effort and permissions in the chat. Do not create it again.",
-  "会话已创建，但通知设置未保存，请在会话中手动检查；不要重复创建。": "Chat created, but notifications were not saved. Check them in the chat. Do not create it again."
+  "会话已创建，但通知设置未保存，请在会话中手动检查；不要重复创建。": "Chat created, but notifications were not saved. Check them in the chat. Do not create it again.",
+  "本轮提示": "Turn notice",
+  "本轮执行失败，官方桌面未提供详细原因。": "This turn failed. The official desktop did not provide a detailed reason.",
+  "本轮已中断，官方桌面未提供详细原因。": "This turn was interrupted. The official desktop did not provide a detailed reason.",
+  "[错误信息过长，已截断]": "[Error message truncated]"
 }

@@ -5,6 +5,14 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 class ProtocolTest {
+    @Test fun sessionErrorsAreVisibleAndScopedToTheirTurn() {
+        val snapshot=org.json.JSONObject("""{"turns":[{"turnId":"failed","items":[{"id":"cxpalm:turn-error","type":"sessionError","text":"HTTP 429 <img src=x> **plain**","status":"failed"}]},{"turnId":"ok","items":[]}]}""")
+        val messages=conversationMessages(snapshot)
+        assertEquals(1,messages.size);assertEquals("failed",messages.single().turn)
+        assertEquals("sessionError",messages.single().role);org.junit.Assert.assertFalse(messages.single().collapsible)
+        assertEquals("HTTP 429 <img src=x> **plain**",messages.single().text)
+        org.junit.Assert.assertTrue(conversationMessages(org.json.JSONObject("""{"turns":[{"turnId":"ok","items":[]}]}""")).isEmpty())
+    }
     @Test fun onlyMatchingTerminalReceiptsReleasePendingSend() {
         val receipt=org.json.JSONObject().put("id","original")
         for(status in listOf("confirmed","acknowledged","not_sent","rejected")) {

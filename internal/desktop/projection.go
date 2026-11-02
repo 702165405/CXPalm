@@ -43,6 +43,7 @@ func projectState(s State, lazy bool) State {
 		}
 		items := orderedItems(turn["items"])
 		messages := []any{}
+		errorTexts := map[string]bool{}
 		for itemIndex, entry := range items {
 			item, ok := entry.(map[string]any)
 			if !ok {
@@ -87,18 +88,37 @@ func projectState(s State, lazy bool) State {
 				text = command
 			}
 			images := imageReferences(item)
-			if text == "" && len(images) == 0 {
-				continue
+			if kind == "error" || kind == "sessionError" {
+				kind = "sessionError"
+				if text == "" {
+					text = displayError(item["error"])
+				}
+				if text == "" {
+					text, _ = item["message"].(string)
+				}
+				text = displayError(text)
+				command = ""
+				images = nil
+				if text != "" {
+					errorTexts[text] = true
+				}
 			}
 			id, _ := item["id"].(string)
 			if id == "" {
 				id = fmt.Sprintf("%s:%d", kind, itemIndex)
 			}
+			if text == "" && len(images) == 0 {
+				if problem := displayError(item["error"]); problem != "" && !errorTexts[problem] {
+					messages = append(messages, map[string]any{"id": id + ":error", "type": "sessionError", "text": problem, "status": "failed"})
+					errorTexts[problem] = true
+				}
+				continue
+			}
 			message := map[string]any{"id": id, "type": kind, "text": text, "truncated": false, "status": item["status"], "command": command}
 			if len(images) > 0 {
 				message["images"] = images
 			}
-			if lazy && kind != "userMessage" && kind != "agentMessage" && kind != "imageGenerationCall" && (kind != "reasoning" || len(text) > 8192) {
+			if lazy && kind != "userMessage" && kind != "agentMessage" && kind != "imageGenerationCall" && kind != "sessionError" && (kind != "reasoning" || len(text) > 8192) {
 				message["text"] = ""
 				message["command"] = commandPreview(command)
 				message["deferred"] = true
@@ -106,6 +126,15 @@ func projectState(s State, lazy bool) State {
 				message["textBytes"] = len(text)
 			}
 			messages = append(messages, message)
+			if kind != "sessionError" {
+				if problem := displayError(item["error"]); problem != "" && !errorTexts[problem] {
+					messages = append(messages, map[string]any{"id": id + ":error", "type": "sessionError", "text": problem, "status": "failed"})
+					errorTexts[problem] = true
+				}
+			}
+		}
+		if problem := turnDisplayError(turn); problem != "" && !errorTexts[problem] && (len(errorTexts) == 0 || displayError(turn["error"]) != "") {
+			messages = append(messages, map[string]any{"id": "cxpalm:turn-error", "type": "sessionError", "text": problem, "status": turn["status"]})
 		}
 
 		id, _ := turn["turnId"].(string)

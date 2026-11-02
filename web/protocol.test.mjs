@@ -11,6 +11,13 @@ test('new chat defaults contain only settings and explicit notification preferen
 });
 
 const secret = 'a'.repeat(64);
+test('session errors remain visible non-collapsible messages scoped to their original turn',()=>{
+ const turns=[{turnId:'failed',items:[{id:'cxpalm:turn-error',type:'sessionError',text:'HTTP 429 <img src=x> **plain**',status:'failed'}]},{turnId:'ok',items:[]}];
+ const messages=conversation(turns);
+ assert.equal(messages.length,1);assert.equal(messages[0].turn,'failed');assert.equal(messages[0].role,'sessionError');assert.equal(messages[0].collapsible,false);
+ assert.equal(messages[0].text,'HTTP 429 <img src=x> **plain**');
+ assert.deepEqual(conversation([{turnId:'ok',items:[]}]),[]);
+});
 test('permission approvals stay turn-scoped and unsupported choices fail closed',()=>{
   const request={method:'item/permissions/requestApproval',params:{permissions:{network:{enabled:true}}}};
   assert.deepEqual(approvalDecisions(request),['accept','decline']);

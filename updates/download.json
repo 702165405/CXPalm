@@ -1,9 +1,9 @@
 {
-  "version": "0.0.2",
-  "versionCode": 2,
+  "version": "0.0.3",
+  "versionCode": 3,
   "package": "io.github.u702165405.cxpalm.debug",
-  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.2-build2/CXPalm-0.0.2-build2-debug.apk",
-  "size": 9903394,
-  "sha256": "4d6afba9e2f49139b2b477de9ba569098b2680da904dbc4bd5fe66550d3a3125",
-  "notes": "CXPalm 0.0.2 / build2: Web and Android can reuse the last newly created chat's notification, model, reasoning effort and permission mode, separately for each computer and client. Full access requires fresh confirmation; approval grants, conversation content and execution ownership are never copied. Settings are applied once through the original desktop owner after connection; an unconfirmed setup retains the created chat and warns instead of replaying creation. Existing configuration, authorizations and startup preferences are preserved."
+  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.3-build3/CXPalm-0.0.3-build3-debug.apk",
+  "size": 9903530,
+  "sha256": "ff6b2306444a14e486af5b10121376b1a30bcdb65cb4d4438bfe06f1a43af95e",
+  "notes": "CXPalm 0.0.3 / build3: Web and Android now display conversation errors beside the corresponding turn instead of silently dropping them. Includes tool error messages, read-only historical error events and explicit fallback notices when the desktop supplies no detailed failure reason. Error cards are visible without expanding tool output, rendered as bounded plain text with common credentials and URLs redacted. No automatic retry, message replay or execution-owner change. Existing configuration, device authorization and startup preferences are preserved."
 }

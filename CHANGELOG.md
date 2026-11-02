@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.3 (build3)
+
+- Show per-turn errors, tool error messages and interrupted/failed fallback notices
+  directly inside Web and Android conversations, including read-only history.
+- Keep errors bounded and plain-text; omit raw diagnostic objects and redact
+  common credentials and error URLs. No automatic message or operation retry.
+
 ## 0.0.2 (build2)
 
 - Web and Android can reuse the last newly created chat's notification, model,

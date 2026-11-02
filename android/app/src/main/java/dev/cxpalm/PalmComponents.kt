@@ -82,6 +82,7 @@ import io.github.u702165405.cxpalm.R
 
 @Composable fun MessageCard(message: Message, loadBody: suspend (Message)->Message, loadImage: suspend (Message,MessageImage)->ByteArray) {
     val you = message.role == "You"
+    val problem = message.role == "sessionError"
     var expanded by rememberSaveable(message.id) { mutableStateOf(false) }
     var detail by remember(message.id) { mutableStateOf<Message?>(null) }
     var loading by remember(message.id) { mutableStateOf(false) }
@@ -99,7 +100,7 @@ import io.github.u702165405.cxpalm.R
     val content=if(message.deferred) detail else message
     val label = when (message.role) {
         "You" -> tr("你"); "Codex" -> "CODEX"; "commandExecution" -> tr("命令")
-        "reasoning" -> tr("思考摘要"); "fileChange" -> tr("文件变更"); else -> tr("工具详情")
+        "reasoning" -> tr("思考摘要"); "fileChange" -> tr("文件变更"); "sessionError" -> tr("本轮提示"); else -> tr("工具详情")
     }
     val status = when (message.status) {
         "inProgress" -> tr("进行中"); "completed" -> tr("已完成"); "failed" -> tr("失败"); "declined" -> tr("已拒绝"); else -> ""
@@ -108,8 +109,8 @@ import io.github.u702165405.cxpalm.R
     // User text is a right-aligned bubble; replies read on the page; tool rows are outlined and quiet.
     Box(Modifier.fillMaxWidth(), contentAlignment = if (you) Alignment.CenterEnd else Alignment.CenterStart) {
     Surface(modifier = if (you) Modifier.fillMaxWidth(0.88f).wrapContentWidth(Alignment.End) else Modifier.fillMaxWidth(),
-        color = when { you -> MaterialTheme.colorScheme.primaryContainer; message.collapsible -> MaterialTheme.colorScheme.surface; else -> Color.Transparent },
-        contentColor = if (you) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+        color = when { problem -> MaterialTheme.colorScheme.errorContainer; you -> MaterialTheme.colorScheme.primaryContainer; message.collapsible -> MaterialTheme.colorScheme.surface; else -> Color.Transparent },
+        contentColor = if (problem) MaterialTheme.colorScheme.onErrorContainer else if (you) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
         shape = if (you) RoundedCornerShape(18.dp, 18.dp, 6.dp, 18.dp) else MaterialTheme.shapes.medium,
         border = if (message.collapsible) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null) {
         Column(if (you) Modifier else Modifier.fillMaxWidth()) {
@@ -128,11 +129,11 @@ import io.github.u702165405.cxpalm.R
             }
             if (!message.collapsible || expanded) {
                 Column((if (you) Modifier else Modifier.fillMaxWidth()).padding(
-                    horizontal = if (message.collapsible) 14.dp else if (you) 14.dp else 2.dp,
-                    vertical = if (you) 10.dp else if (message.collapsible) 12.dp else 4.dp), verticalArrangement = Arrangement.spacedBy(if (you) 2.dp else 8.dp)) {
+                    horizontal = if (message.collapsible || you || problem) 14.dp else 2.dp,
+                    vertical = if (you || problem) 10.dp else if (message.collapsible) 12.dp else 4.dp), verticalArrangement = Arrangement.spacedBy(if (you) 2.dp else 8.dp)) {
                     if (!message.collapsible) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (!you) Box(Modifier.size(18.dp).background(MaterialTheme.colorScheme.primary, RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
-                            Text("‹›", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.labelSmall)
+                            Text(if(problem) "!" else "‹›", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.labelSmall)
                         }
                         Text(label, style = MaterialTheme.typography.labelMedium, color = if (you) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .65f) else MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -145,7 +146,7 @@ import io.github.u702165405.cxpalm.R
                             content?.let { CodeText(it.text) }
                         }
                     }
-                    else if (you) SelectionContainer { Text(message.text, style = MaterialTheme.typography.bodyLarge) }
+                    else if (you || problem) SelectionContainer { Text(message.text, style = MaterialTheme.typography.bodyLarge) }
                     else content?.let { MarkdownMessage(it.text) }
                     MessageImages(content?:message,loadImage)
                 }
