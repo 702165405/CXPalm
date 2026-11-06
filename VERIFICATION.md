@@ -40,6 +40,18 @@ explicitly described as deployment connectivity or public-byte checks.
   public native feeds reported 0.0.3/build3 at this initial deployment.
   Native publication is recorded separately after public-byte verification.
   No phone installation or server/firewall change occurred.
+- After explicit publication authorization, release `v0.0.8-build8` and its
+  corresponding source commit are public. Both fixed native feeds now return
+  0.0.8/build8 and match the staged manifests exactly. All ten assets were fetched
+  through their public release URLs and allowed repository CDN redirects; sizes
+  and SHA-256 values match the local artifacts. The downloaded APK retains its
+  original package identity, code8 and development signer. Gateway archives
+  contain only the tested binary, build metadata and README.
+- The previously skipped Android publication check passes separately using the
+  production update transport and fixed public feed, without account credentials.
+  An isolated Electron desktop updater verifies discovery from an older version,
+  the real installer download and the installation preflight hash. No installer
+  is executed and no phone installation or physical-device acceptance is claimed.
 
 ## 0.0.7 / build7
 
