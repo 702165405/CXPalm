@@ -40,7 +40,7 @@ async function main() {
   let holdHistory=false;const heldHistory=[];let sentTurn=null;let offlineSession=false;
   let sessionStatus=0;let holdSelected=false;let holdStartup=false;const heldStartup=[];
   let projects=[{id:'project-fixture',name:'项目 / Research'}];
-  const sessionPage=q=>({items:q.archived&&!restored?[{id:'archive-fixture',title:'归档示例',archived:true,projectId:'project-fixture',projectName:'项目 / Research',status:'unknown',updated:1791648000}]:!q.archived?[{id:'main-fixture',title:'网页控制端 · 安全检查',cwd:'/isolated/chat-directory',projectId:'project-fixture',projectName:'项目 / Research',status:active?'running':'completed',live:!listHistorical,statusSource:listHistorical?'history':'desktop',unread:desktopReadToken!==replyToken,readToken:replyToken,lastReplyAt:1791648000,updated:1791648000}]:[],projects,hasMore:false,sync:{total:502,checked:502,live:1,scanning:false,error:listError}});
+  const sessionPage=q=>({observedAtMs:Date.now(),items:q.archived&&!restored?[{id:'archive-fixture',title:'归档示例',archived:true,projectId:'project-fixture',projectName:'项目 / Research',status:'unknown',updated:1791648000}]:!q.archived?[{id:'main-fixture',title:'网页控制端 · 安全检查',cwd:'/isolated/chat-directory',projectId:'project-fixture',projectName:'项目 / Research',status:active?'running':'completed',live:!listHistorical,statusSource:listHistorical?'history':'desktop',latestTurn:{turnId:'t69',status:active?'inProgress':'completed',turnStartedAtMs,...(active?{}:{durationMs:764351})},unread:desktopReadToken!==replyToken,readToken:replyToken,lastReplyAt:1791648000,updated:1791648000}]:[],projects,hasMore:false,sync:{total:502,checked:502,live:1,scanning:false,error:listError}});
   let queuedMessages=[];
   let notificationPreference={enabled:false};let uploadNumber=0;let rejectUpload=false;let holdUpload=false;let finishUpload;
   let nativeSyncedAtMs=Date.now()-5000;
@@ -189,6 +189,36 @@ async function main() {
     // Await the debounced server filter before injecting session-state fixtures.
     const resetSearch=once(commands,'sessions.subscribe');
     await page.locator('#search').fill('');await resetSearch;
+    // Timers work before any chat is opened, with an intentionally skewed gateway clock.
+    const listClock=1000000000000;
+    const originalRow=sessionPage({}).items[0];
+    const runningRow={...originalRow,status:'running',latestTurn:{turnId:'list-turn',status:'inProgress',turnStartedAtMs:listClock-65000}};
+    const pushList=(items,observedAtMs=listClock)=>currentSocket.send(JSON.stringify({type:'sessions.page',data:{subscription:listSubscription,page:{...sessionPage({}),items,observedAtMs}}}));
+    const listTimer=page.locator('.session-item[data-thread="main-fixture"] .session-elapsed');
+    pushList([runningRow,{...runningRow,id:'waiting-fixture',title:'等待确认的会话',status:'waiting'}]);
+    await listTimer.filter({hasText:'运行中 · 1:05'}).waitFor();
+    await page.locator('.session-item[data-thread="waiting-fixture"] .session-elapsed').filter({hasText:'待确认 · 1:05'}).waitFor();
+    const originalButton=await page.locator('.session-item[data-thread="main-fixture"]').elementHandle();
+    await originalButton.focus();
+    const beforeTick=await listTimer.innerText();
+    await page.waitForFunction(previous=>document.querySelector('.session-elapsed').textContent!==previous,beforeTick);
+    assert(await originalButton.evaluate(node=>node===document.activeElement),'timer refresh replaced the focused row');
+    assert.equal(sent.filter(q=>q.method.startsWith('chat.')).length,0,'list timer opened a chat or requested model work');
+    await capture('list-runtime-desktop.png');
+    await page.setViewportSize({width:390,height:844});await page.locator('#show-list').click();
+    await listTimer.waitFor({state:'visible'});await capture('list-runtime-mobile.png');
+    assert(await page.locator('#session-list').evaluate(node=>node.scrollWidth<=node.clientWidth),'mobile list overflows horizontally');
+    await page.locator('#close-list').click();await page.setViewportSize({width:1440,height:960});
+    pushList([{...runningRow,latestTurn:{status:'completed',durationMs:5000}}]);
+    await listTimer.filter({hasText:'运行中 · 计时待同步'}).waitFor();
+    pushList([{...runningRow,latestTurn:{status:'inProgress',turnStartedAtMs:listClock}}]);
+    await listTimer.filter({hasText:'运行中 · 0:00'}).waitFor();
+    pushList([{...runningRow,live:false,status:'unknown'}]);
+    await listTimer.waitFor({state:'hidden'});
+    pushList([{...originalRow,status:'interrupted',latestTurn:{status:'interrupted',durationMs:0}}]);
+    await listTimer.filter({hasText:'用时 0 秒'}).waitFor();
+    pushList([originalRow],Date.now());
+    await listTimer.filter({hasText:'用时 12 分 44 秒'}).waitFor();
     await page.evaluate(()=>localStorage.setItem('cxpalm:read:ui-fixture-device:main-fixture','a'.repeat(64)));
     assert.equal(await page.locator('.session-item.is-unread').count(),1);
     await page.locator('#session-list .session-item').click();

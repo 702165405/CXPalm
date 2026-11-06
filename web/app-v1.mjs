@@ -1,5 +1,5 @@
 import {markdown} from './markdown-v1.mjs';
-import {seedHistoryIndex, Bridge, conversation, approvalDecisions, contextUsage, NotificationInbox, StateSequence, sessionSettings, changedSettings, newChatDefaults, turnElapsed, activeQuestionIndex, computerAddress, mergeHistoryTurns, extendHistory, sessionIndicator, effortLabel, ReadingCache, connectionPresentation, operationLabel, AttachmentUploads, suggestionTurn, suggestionSuffix, activeTurnId} from './protocol-v1.mjs';
+import {seedHistoryIndex, Bridge, conversation, approvalDecisions, contextUsage, NotificationInbox, StateSequence, sessionSettings, changedSettings, newChatDefaults, turnElapsed, sessionElapsed, activeQuestionIndex, computerAddress, mergeHistoryTurns, extendHistory, sessionIndicator, effortLabel, ReadingCache, connectionPresentation, operationLabel, AttachmentUploads, suggestionTurn, suggestionSuffix, activeTurnId} from './protocol-v1.mjs';
 
 const $ = id => document.getElementById(id);
 const state = {page:'chat',device:null,version:'',sessions:[],projects:[],archived:false,project:'',listLimit:100,listSubscription:null,hasMore:false,settingsBase:null,editGroup:null,selected:null,snapshot:null,desktop:false,reconnect:null,openTools:new Set(),catalog:{models:[],skills:[]},skills:new Set()};
@@ -71,6 +71,7 @@ async function uploadFiles(input) {
     saved:uploaded=>{const saved=JSON.parse(localStorage.getItem(key)||'[]');saved.push(uploaded);localStorage.setItem(key,JSON.stringify(saved));}});
 }
 let timingAnchor = {server:Date.now(), local:performance.now()};
+let listTimingAnchor = null;
 let questionSignature = "";
 state.history = null;
 state.historyPage = null;
@@ -517,7 +518,11 @@ function renderLists() {
       const stamp=item.lastReplyAt||item.updated;
       let time=top.querySelector('time');
       if(stamp){const date=new Date(stamp*1000);if(!time){time=text('time','');top.append(time);}time.textContent=`${date.getMonth()+1}/${String(date.getDate()).padStart(2,'0')}`;time.dateTime=date.toISOString();time.title=`${item.lastReplyAt?'最后回复':'最近活动'} · ${date.toLocaleString()}`;}else time?.remove();
-      if(!top.parentNode)button.append(top);button.onclick=()=>run(()=>selectChat({id:item.id,title:item.title||item.id,archived:!!item.archived}));
+      if(!top.parentNode)button.append(top);
+      const elapsed=button.querySelector('.session-elapsed')||text('small','','session-elapsed');
+      elapsed.dataset.thread=item.id;elapsed.dataset.status=item.status;
+      if(!elapsed.parentNode)button.append(elapsed);
+      button.onclick=()=>run(()=>selectChat({id:item.id,title:item.title||item.id,archived:!!item.archived}));
       if(!button.parentNode)row.append(button);nodes.push(row);
     }
   }
@@ -525,6 +530,7 @@ function renderLists() {
   const list=$('session-list'),wanted=new Set(nodes);
   for(const node of [...list.children])if(!wanted.has(node))node.remove();
   nodes.forEach((node,index)=>{if(list.children[index]!==node)list.insertBefore(node,list.children[index]||null);});
+  updateSessionTimers();
   const sync=state.sessionSync;
   const syncError=bridge.connected&&typeof sync?.error==='string'?sync.error.trim():'';
   $('session-sync').hidden=!syncError;
@@ -534,6 +540,7 @@ function renderLists() {
   $('load-more').textContent=state.listLimit>=5000?'已加载 5000 条 · 请用项目或搜索缩小范围':'加载更多';
 }
 function applySessionPage(page){
+  listTimingAnchor=Number.isFinite(page.observedAtMs)&&page.observedAtMs>0?{server:page.observedAtMs,local:performance.now()}:null;
   state.sessionSync=page.sync;state.sessions=page.items||[];state.projects=page.projects||[];state.hasMore=page.hasMore;saveReadingSoon();
   const fill=(id,includeAll)=>{const node=$(id),selected=node.value;const options=[];
     if(includeAll){const all=text('option','全部项目');all.value='';options.push(all);}
@@ -572,8 +579,19 @@ async function selectChat(selected,navigate=true,reconnecting=false){
   if(navigate)showPage('chat');drawer(false);renderLists();renderHeading();renderConversation();renderCatalog();renderControls();renderPending();
   if(bridge.connected)await bridge.command('chat.subscribe',{thread:selected.id,stream:true});
 }
+function updateSessionTimers() {
+  const rows=new Map(state.sessions.map(row=>[row.id,row]));
+  const now=listTimingAnchor?listTimingAnchor.server+performance.now()-listTimingAnchor.local:NaN;
+  for(const node of $('session-list').querySelectorAll('.session-elapsed')){
+    const value=sessionElapsed(rows.get(node.dataset.thread),now,bridge.connected);
+    if(node.textContent!==value)node.textContent=value;
+    node.hidden=!value;
+  }
+}
 function updateTurnTimers() {
-  if (document.hidden || state.page !== 'chat') return;
+  if (document.hidden) return;
+  updateSessionTimers();
+  if (state.page !== 'chat') return;
   const turns = displayedTurns();
   const byID = new Map(turns.map(turn => [turn.turnId, turn]));
   const live = bridge.connected && state.desktop && !state.cached;

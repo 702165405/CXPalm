@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {SnapshotStream,Bridge, conversation, approvalDecisions, contextUsage, StateSequence, NotificationInbox, sessionSettings, changedSettings, newChatDefaults, turnElapsed, activeQuestionIndex, computerAddress, extendHistory, mergeHistoryTurns, sessionIndicator, effortLabel, ReadingCache, offlineReading, connectionPresentation, operationLabel, AttachmentUploads, suggestionTurn, suggestionSuffix, activeTurnId} from './protocol-v1.mjs';
+import {SnapshotStream,Bridge, conversation, approvalDecisions, contextUsage, StateSequence, NotificationInbox, sessionSettings, changedSettings, newChatDefaults, turnElapsed, sessionElapsed, activeQuestionIndex, computerAddress, extendHistory, mergeHistoryTurns, sessionIndicator, effortLabel, ReadingCache, offlineReading, connectionPresentation, operationLabel, AttachmentUploads, suggestionTurn, suggestionSuffix, activeTurnId} from './protocol-v1.mjs';
 
 test('output-only messages retain bounded file identities without manufacturing local URLs',()=>{
   const file={id:'a'.repeat(64),name:'review.xlsx',kind:'xlsx'};
@@ -395,6 +395,22 @@ test('official turn durations and live elapsed never invent missing timestamps',
   assert.equal(turnElapsed({status:'completed',durationMs:-2}, 66000), '');
   assert.equal(turnElapsed({turnStartedAtMs:1000}, 500, true), '');
   assert.equal(turnElapsed({}, 66000, true), '');
+});
+
+test('list timers require live official timing and never reuse a previous turn or activity date',()=>{
+  const row={status:'running',live:true,statusSource:'desktop',updated:1,lastReplyAt:1,latestTurn:{status:'inProgress',turnStartedAtMs:1000}};
+  assert.equal(sessionElapsed(row,66000,true),'运行中 · 1:05');
+  assert.equal(sessionElapsed({...row,status:'waiting'},3666000,true),'待确认 · 1:01:05');
+  for(const change of [{live:false},{status:'unknown'},{statusSource:'history'}])assert.equal(sessionElapsed({...row,...change},66000,true),'');
+  assert.equal(sessionElapsed(row,66000,false),'');
+  for(const turn of [null,{status:'completed',durationMs:5000},{status:'inProgress'},{status:'inProgress',turnStartedAtMs:67000}]){
+    assert.equal(sessionElapsed({...row,latestTurn:turn},66000,true),'运行中 · 计时待同步');
+  }
+  assert.equal(sessionElapsed(row,NaN,true),'运行中 · 计时待同步');
+  assert.equal(sessionElapsed({...row,status:'completed',latestTurn:{status:'completed',durationMs:764351}},66000,true),'用时 12 分 44 秒');
+  assert.equal(sessionElapsed({...row,status:'interrupted',latestTurn:{status:'interrupted',durationMs:0}},66000,true),'用时 0 秒');
+  assert.equal(sessionElapsed({...row,status:'completed'},66000,true),'');
+  assert.equal(sessionElapsed({...row,status:'failed',latestTurn:{status:'failed',durationMs:-1}},66000,true),'');
 });
 
 test('read disconnect is not an uncertain write; stale socket events cannot close a replacement',async()=>{

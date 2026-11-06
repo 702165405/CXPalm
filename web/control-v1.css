@@ -145,6 +145,9 @@ label{display:block;margin:14px 0 6px;font-size:13px;font-weight:500}
 .session-item:hover:not(:disabled){background:color-mix(in srgb,var(--surface) 65%,transparent);border-color:transparent}
 .session-item.selected,.session-item.selected:hover:not(:disabled){background:var(--surface);border-color:var(--line);box-shadow:var(--shadow-sm)}
 .session-item small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.session-item .session-elapsed{font-variant-numeric:tabular-nums}
+.session-elapsed[data-status=running]{color:color-mix(in srgb,#1f9a6e 75%,var(--ink))}
+.session-elapsed[data-status=waiting]{color:color-mix(in srgb,#b58a2d 75%,var(--ink))}
 .session-title{display:flex;align-items:center;gap:8px}
 .session-title strong{flex:1;min-width:0;display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .session-title time{font:12px var(--sans);font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}

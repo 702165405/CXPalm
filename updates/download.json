@@ -1,9 +1,9 @@
 {
-  "version": "0.0.8",
-  "versionCode": 8,
+  "version": "0.0.9",
+  "versionCode": 9,
   "package": "io.github.u702165405.cxpalm.debug",
-  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.8-build8/CXPalm-0.0.8-build8-debug.apk",
-  "size": 9939274,
-  "sha256": "120dd0a54e76c503d7873d0f43b2d6fa9873ef4570b74818cb1c44454b87f015",
-  "notes": "CXPalm 0.0.8 / build8: Show downloadable document cards for Codex file citations and local Markdown links. Download Excel, PDF, HTML and other allowed documents in Web or save through the Android system picker. Files remain private, message-bound, rooted and limited to 20 MiB; original files must still exist on the computer. HTML is downloaded rather than executed in the chat page. Clicking message controls no longer arms automatic history pagination. Retains guidance positioning fixes, optional input suggestions and earlier security/UX fixes. Existing configuration and authorizations are preserved; no main-chat executor change or automatic message replay."
+  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.9-build9/CXPalm-0.0.9-build9-debug.apk",
+  "size": 9939278,
+  "sha256": "4e66aacb0ff4e9bc04cabd0d201573c35558cf50293a4fde19e5bc6d02f9e39b",
+  "notes": "CXPalm 0.0.9 / build9: Web session lists show live elapsed time for running and approval-waiting turns without opening a chat, and actual duration for completed, interrupted or failed turns when official timing is available. Timers use the gateway clock, update in place and stop showing live elapsed time when disconnected. Missing timing is labelled as pending synchronization. Reuses passive official desktop subscriptions; no additional model request or main-chat executor. Retains document downloads, input suggestions and earlier fixes. Existing configuration and authorizations are preserved."
 }

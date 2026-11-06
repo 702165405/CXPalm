@@ -4,6 +4,34 @@ Public verification records exclude real conversation content, device identifier
 private deployment paths, credentials and raw logs. Tests use synthetic data unless
 explicitly described as deployment connectivity or public-byte checks.
 
+## 0.0.9 / build9
+
+- Web list rows display independent live runtime and approval-waiting elapsed
+  time before a chat is opened. Terminal rows show normalized official duration
+  when available. Missing or inconsistent timing stays pending; disconnected
+  rows do not keep a live clock. Tool execution and approval waits are included.
+- The gateway projects only the latest visible official turn identity, status,
+  start and duration into list summaries. Existing passive subscriptions are
+  reused. Clock observations do not make unchanged lists stream every second,
+  and body-only patches do not wake catalogue scans.
+- Full Go tests and vet pass. Windows amd64 and macOS amd64/arm64 cross-builds
+  succeed. All 100 Node tests pass. Isolated Chromium desktop/mobile checks cover
+  simultaneous running/waiting rows without opening chats, a skewed gateway
+  clock, new-turn reset, stale/missing timing, interruption with zero duration,
+  offline hiding, stable focus and mobile width. Screenshots were reviewed.
+- A passive read of the real official desktop confirms latest-turn timing in
+  the list projection; the inspected snapshot contained 11 turns with start
+  times and 10 completed durations. No model request, message or native mutation
+  was sent.
+- Android unit tests: 92 total, 91 pass, one opt-in publication check skipped.
+  Lint reports zero errors and ten warnings. APK build succeeds with version
+  0.0.9/code9 and the existing development signer. The complete Windows package
+  contains 76 files; packaged application sources and the gateway match the
+  reviewed source and tested binary. All three standalone gateway archives
+  match the tested cross-builds and contain only a binary and two metadata files.
+- Android physical-device installation and macOS runtime acceptance have not
+  been performed. Deployment/public-updater results are recorded after checks.
+
 ## 0.0.8 / build8
 
 - Web and Android expose document cards for assistant file citations and local

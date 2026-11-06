@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 var errPaging = errors.New("limit must be 1-5000 and offset must be non-negative")
@@ -96,16 +97,17 @@ func projectComparisonPath(value string) string {
 }
 
 type SessionPage struct {
-	Items    []Session   `json:"items"`
-	Projects []Project   `json:"projects"`
-	HasMore  bool        `json:"hasMore"`
-	Sync     SessionSync `json:"sync"`
+	ObservedAtMS int64       `json:"observedAtMs,omitempty"`
+	Items        []Session   `json:"items"`
+	Projects     []Project   `json:"projects"`
+	HasMore      bool        `json:"hasMore"`
+	Sync         SessionSync `json:"sync"`
 }
 
 // Body-only deltas must not cause catalogue scans on every streamed token.
 type sessionSignal struct {
 	connected, archived, removed, known, unread, waiting bool
-	runtime, terminal                                    string
+	runtime, timing                                      string
 }
 
 func sessionListSignal(s State) sessionSignal {
@@ -116,13 +118,28 @@ func sessionListSignal(s State) sessionSignal {
 	requests, _ := raw["requests"].([]any)
 	out := sessionSignal{connected: s.Connected, archived: s.Archived, removed: s.removed,
 		known: known, unread: unread, waiting: len(requests) > 0, runtime: kind}
-	if kind == "idle" {
-		turns := orderedTurns(raw)
-		if len(turns) > 0 {
-			last, _ := turns[len(turns)-1].(map[string]any)
-			out.terminal, _ = last["status"].(string)
-		}
+	out.timing = string(mustJSON(latestSessionTurn(raw)))
+	return out
+}
+
+func latestSessionTurn(raw map[string]any) map[string]any {
+	turns := orderedTurns(raw)
+	if len(turns) == 0 {
+		return nil
 	}
+	last, ok := turns[len(turns)-1].(map[string]any)
+	if !ok {
+		return nil
+	}
+	status, _ := last["status"].(string)
+	switch status {
+	case "inProgress", "completed", "failed", "interrupted":
+	default:
+		return nil
+	}
+	id, _ := last["turnId"].(string)
+	out := map[string]any{"status": status, "turnId": id}
+	projectTiming(last, out)
 	return out
 }
 
@@ -196,6 +213,7 @@ func (b *Bridge) Browse(ctx context.Context, query string, archived bool, projec
 		}
 		return out.Projects[i].Name < out.Projects[j].Name
 	})
+	out.ObservedAtMS = time.Now().UnixMilli()
 	return out, nil
 }
 func enrichSession(row *Session, s State) {
@@ -224,6 +242,7 @@ func enrichSession(row *Session, s State) {
 	if !s.Connected {
 		return
 	}
+	row.LatestTurn = latestSessionTurn(raw)
 	if unread, ok := raw["hasUnreadTurn"].(bool); ok {
 		row.Unread = &unread
 	}

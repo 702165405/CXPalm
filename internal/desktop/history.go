@@ -17,20 +17,21 @@ import (
 )
 
 type Session struct {
-	StatusSource string `json:"statusSource,omitempty"`
-	ReadToken    string `json:"readToken,omitempty"`
-	RolloutPath  string `json:"-"`
-	ID           string `json:"id"`
-	Title        string `json:"title"`
-	CWD          string `json:"cwd"`
-	Updated      int64  `json:"updated"`
-	Archived     bool   `json:"archived"`
-	ProjectID    string `json:"projectId"`
-	ProjectName  string `json:"projectName"`
-	Status       string `json:"status"`
-	Unread       *bool  `json:"unread"`
-	LastReplyAt  int64  `json:"lastReplyAt"`
-	Live         bool   `json:"live"`
+	LatestTurn   map[string]any `json:"latestTurn,omitempty"`
+	StatusSource string         `json:"statusSource,omitempty"`
+	ReadToken    string         `json:"readToken,omitempty"`
+	RolloutPath  string         `json:"-"`
+	ID           string         `json:"id"`
+	Title        string         `json:"title"`
+	CWD          string         `json:"cwd"`
+	Updated      int64          `json:"updated"`
+	Archived     bool           `json:"archived"`
+	ProjectID    string         `json:"projectId"`
+	ProjectName  string         `json:"projectName"`
+	Status       string         `json:"status"`
+	Unread       *bool          `json:"unread"`
+	LastReplyAt  int64          `json:"lastReplyAt"`
+	Live         bool           `json:"live"`
 }
 
 var errSessionNotFound = errors.New("desktop session not found")

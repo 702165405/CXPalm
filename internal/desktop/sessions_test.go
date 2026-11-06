@@ -34,6 +34,9 @@ func TestProjectMembershipBeforePaginationAndLiveSummary(t *testing.T) {
 		t.Fatalf("membership: %+v %v", page, e)
 	}
 	s := page.Items[0]
+	if page.ObservedAtMS <= 0 {
+		t.Fatal("list clock observation missing")
+	}
 	if s.Status != "completed" || s.Unread == nil || !*s.Unread || s.LastReplyAt != 1790000000 || !s.Live {
 		t.Fatalf("live summary: %+v", s)
 	}

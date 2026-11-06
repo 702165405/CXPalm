@@ -434,6 +434,18 @@ export function turnElapsed(turn, now, live = false) {
   return `执行中 · ${clock}`;
 }
 
+export function sessionElapsed(session, now, connected = false) {
+  const turn=session?.latestTurn;
+  if(['running','waiting'].includes(session?.status)){
+    if(!connected||!session.live||session.statusSource!=='desktop')return '';
+    const label=session.status==='waiting'?'待确认':'运行中';
+    const elapsed=turn?.status==='inProgress'?turnElapsed(turn,now,true):'';
+    return `${label} · ${elapsed?elapsed.replace(/^执行中 · /,''):'计时待同步'}`;
+  }
+  if(!['completed','failed','interrupted'].includes(session?.status)||turn?.status!==session.status)return '';
+  return turnElapsed(turn,now);
+}
+
 export function activeQuestionIndex(questions, positions, anchor, atBottom, latest) {
   if (!questions.length) return -1;
   if (atBottom && latest) return questions.length - 1;

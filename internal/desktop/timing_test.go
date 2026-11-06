@@ -41,6 +41,47 @@ func TestTimingVariantsAndImmutableBase(t *testing.T) {
 	}
 }
 
+func TestSessionTimingUsesLatestOfficialTurnWithoutStreamingBodies(t *testing.T) {
+	state := State{Connected: true, Snapshot: json.RawMessage(`{"threadRuntimeStatus":{"type":"active"},"turns":[{"turnId":"old","status":"completed","durationMs":5000},{"turnId":"new","status":"inProgress","turnStartedAtMs":1000,"items":[{"text":"first"}]}]}`)}
+	base := string(state.Snapshot)
+	row := Session{Status: "unknown"}
+	enrichSession(&row, state)
+	if row.LatestTurn["turnId"] != "new" || row.LatestTurn["turnStartedAtMs"] != float64(1000) || row.LatestTurn["durationMs"] != nil || row.LatestTurn["items"] != nil {
+		t.Fatalf("wrong or unbounded summary: %v", row.LatestTurn)
+	}
+	if string(state.Snapshot) != base {
+		t.Fatal("native base mutated")
+	}
+	before := sessionListSignal(state)
+	raw := state.snapshotValue()
+	last := raw["turns"].([]any)[1].(map[string]any)
+	last["items"] = []any{map[string]any{"text": "more streamed output"}}
+	state.Snapshot = mustJSON(raw)
+	if sessionListSignal(state) != before {
+		t.Fatal("body-only delta refreshes the catalogue")
+	}
+	last["turnStartedAtMs"] = float64(2000)
+	state.Snapshot = mustJSON(raw)
+	if sessionListSignal(state) == before {
+		t.Fatal("new timing did not refresh the catalogue")
+	}
+	last["status"] = "interrupted"
+	last["turnCompletedAtMs"] = float64(4500)
+	raw["threadRuntimeStatus"] = map[string]any{"type": "idle"}
+	state.Snapshot = mustJSON(raw)
+	row = Session{Status: "unknown"}
+	enrichSession(&row, state)
+	if row.Status != "interrupted" || row.LatestTurn["durationMs"] != float64(2500) {
+		t.Fatalf("terminal duration not normalized: %v", row)
+	}
+	state.Connected = false
+	row = Session{Status: "unknown"}
+	enrichSession(&row, state)
+	if row.LatestTurn != nil || row.Live || row.Status != "unknown" {
+		t.Fatal("disconnected snapshot supplied current timing")
+	}
+}
+
 func TestRolloutTimingSurvivesHistoryPaging(t *testing.T) {
 	home := t.TempDir()
 	path := filepath.Join(home, "rollout.jsonl")
@@ -138,6 +179,11 @@ func TestLiveOfficialTurnTimingReadOnly(t *testing.T) {
 			if counts["normalizedCompleted"] == 0 {
 				t.Fatalf("no real completed timing in %d turns: %v", len(turns), counts)
 			}
+			row := Session{Status: "unknown"}
+			enrichSession(&row, state)
+			if row.LatestTurn == nil || row.LatestTurn["turnStartedAtMs"] == nil {
+				t.Fatal("official latest-turn timing missing from list summary")
+			}
 
 			rollout, err := b.readHistory(ctx, rows[0], true)
 			if err != nil {
@@ -160,7 +206,7 @@ func TestLiveOfficialTurnTimingReadOnly(t *testing.T) {
 			if timed == 0 {
 				t.Fatal("official rollout lost all completed durations")
 			}
-			t.Logf("official timing: turns=%d fields=%v rolloutCompleted=%d nativeWrites=false", len(turns), counts, timed)
+			t.Logf("official timing: turns=%d fields=%v rolloutCompleted=%d listTiming=true nativeWrites=false", len(turns), counts, timed)
 			return
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())

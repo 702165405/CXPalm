@@ -315,7 +315,10 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 					page, err := s.Bridge.Browse(listCtx, q.Text, q.Archived, q.Project, q.Limit, q.Offset)
 					nextRefresh = time.Now().Add(100 * time.Millisecond)
 					if err == nil {
-						raw, _ := json.Marshal(page)
+						// Clock observations anchor client timers without making unchanged lists stream every second.
+						signature := page
+						signature.ObservedAtMS = 0
+						raw, _ := json.Marshal(signature)
 						if string(raw) != previous {
 							previous = string(raw)
 							if !send(Event{Type: "sessions.page", Data: map[string]any{"subscription": q.ID, "page": page}}) {

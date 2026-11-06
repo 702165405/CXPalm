@@ -1,13 +1,13 @@
 {
   "schema": 1,
   "releaseLine": "fresh-001",
-  "build": 8,
+  "build": 9,
   "appId": "dev.cxpalm.desktop",
   "platform": "win32",
   "arch": "x64",
-  "version": "0.0.8",
-  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.8-build8/CXPalm-Setup-0.0.8-build8-x64.exe",
-  "size": 120803175,
-  "sha256": "d78984419433b5309a88cad57e1179e5e778c73b651ff94161f47bcfe7e47784",
-  "notes": "CXPalm 0.0.8 / build8: Show downloadable document cards for Codex file citations and local Markdown links. Download Excel, PDF, HTML and other allowed documents in Web or save through the Android system picker. Files remain private, message-bound, rooted and limited to 20 MiB; original files must still exist on the computer. HTML is downloaded rather than executed in the chat page. Clicking message controls no longer arms automatic history pagination. Retains guidance positioning fixes, optional input suggestions and earlier security/UX fixes. Existing configuration and authorizations are preserved; no main-chat executor change or automatic message replay."
+  "version": "0.0.9",
+  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.9-build9/CXPalm-Setup-0.0.9-build9-x64.exe",
+  "size": 120803268,
+  "sha256": "363560136594a3c2ed56fc522289c8f782c2f4917a7d1cc48cf5a6b3953a09e1",
+  "notes": "CXPalm 0.0.9 / build9: Web session lists show live elapsed time for running and approval-waiting turns without opening a chat, and actual duration for completed, interrupted or failed turns when official timing is available. Timers use the gateway clock, update in place and stop showing live elapsed time when disconnected. Missing timing is labelled as pending synchronization. Reuses passive official desktop subscriptions; no additional model request or main-chat executor. Retains document downloads, input suggestions and earlier fixes. Existing configuration and authorizations are preserved."
 }
