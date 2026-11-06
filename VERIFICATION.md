@@ -46,6 +46,12 @@ explicitly described as deployment connectivity or public-byte checks.
   installer and passes installation preflight; it does not execute the installer.
 - Android physical-device installation and macOS runtime acceptance have not
   been performed.
+- The README gallery is refreshed from the actual build9 Web client with
+  isolated synthetic sessions. The desktop view shows running, waiting and
+  completed list timing; mobile views show list timing, conversation and
+  approval. All four images are visually reviewed, have no horizontal page
+  overflow or error banner, and contain no real chat or authorization data.
+  Mobile images represent the responsive Web client, not Android-device tests.
 
 ## 0.0.8 / build8
 
