@@ -1,10 +1,50 @@
 package desktop
 
 import (
+	"cxpalm/internal/config"
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestPhoneStateSyncTimeComesOnlyFromNativeEvents(t *testing.T) {
+	nativeTime := time.UnixMilli(1793750000000)
+	state := State{ID: "thread", Connected: true, lastNative: nativeTime, Snapshot: json.RawMessage(`{"id":"thread","turns":[],"nativeSyncedAtMs":1,"observedAtMs":1}`)}
+	bridge := NewBridge(config.Config{CodexHome: t.TempDir()})
+	defer bridge.Close()
+	for _, projected := range []State{PhoneState(state), bridge.PhoneState(state), bridge.StreamState(state)} {
+		if projected.NativeSyncedAtMS != nativeTime.UnixMilli() {
+			t.Fatal("presentation changed the native sync time")
+		}
+		encoded, err := json.Marshal(projected)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var wire map[string]any
+		if err = json.Unmarshal(encoded, &wire); err != nil {
+			t.Fatal(err)
+		}
+		if wire["nativeSyncedAtMs"] != float64(nativeTime.UnixMilli()) {
+			t.Fatal("native sync time missing from the wire state")
+		}
+	}
+	state.Connected = false
+	state.Sequence++
+	if PhoneState(state).NativeSyncedAtMS != nativeTime.UnixMilli() {
+		t.Fatal("disconnect replaced the last real native sync time")
+	}
+	state.lastNative = time.Time{}
+	state.NativeSyncedAtMS = nativeTime.UnixMilli()
+	projected := PhoneState(state)
+	encoded, err := json.Marshal(projected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if projected.NativeSyncedAtMS != 0 || strings.Contains(string(encoded), "nativeSyncedAtMs") {
+		t.Fatal("a historical snapshot or presentation timestamp fabricated native freshness")
+	}
+}
 
 func TestPhoneProjectionDoesNotMutatePatchBase(t *testing.T) {
 	raw := json.RawMessage(`{"id":"thread","turns":[{"turnId":"turn","status":"completed","items":[{"id":"item","type":"agentMessage","text":"` + strings.Repeat("a", 12000) + `"}]}]}`)

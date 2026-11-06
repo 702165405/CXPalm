@@ -84,6 +84,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/ws", s.ws)
 	mux.HandleFunc("POST /api/v1/attachments", s.upload)
 	mux.HandleFunc("POST /api/v1/chat/image", s.image)
+	mux.HandleFunc("POST /api/v1/chat/file", s.file)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -219,7 +220,7 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}()
-	send(Event{Type: "hello", Data: map[string]any{"version": config.Version, "device": d.ID, "capabilities": []string{"chat.attachments", "chat.notifications", "chat.notifications.get", "sessions.browse", "sessions.subscribe", "sessions.list", "operation.get", "operation.acknowledge", "chat.subscribe", "chat.delta", "chat.item", "chat.history", "chat.read", "notifications.subscribe", "chat.send", "chat.steer", "chat.queue", "chat.queue.cancel", "chat.stop", "chat.approve", "chat.catalog", "chat.settings", "chat.goal", "chat.compact", "sessions.create", "sessions.create.settings", "sessions.rename", "sessions.archive", "sessions.unarchive"}}})
+	send(Event{Type: "hello", Data: map[string]any{"version": config.Version, "device": d.ID, "capabilities": []string{"chat.steer.turn", "chat.suggest", "chat.attachments", "chat.notifications", "chat.notifications.get", "sessions.browse", "sessions.subscribe", "sessions.list", "operation.get", "operation.acknowledge", "chat.subscribe", "chat.delta", "chat.item", "chat.history", "chat.read", "notifications.subscribe", "chat.send", "chat.steer", "chat.queue", "chat.queue.cancel", "chat.stop", "chat.approve", "chat.catalog", "chat.settings", "chat.goal", "chat.compact", "sessions.create", "sessions.create.settings", "sessions.rename", "sessions.archive", "sessions.unarchive"}}})
 	var listCancel context.CancelFunc
 	defer func() {
 		if listCancel != nil {
@@ -239,6 +240,8 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	var subCancel context.CancelFunc
+	var suggestionScope context.Context
+	var selectedThread string
 	defer func() {
 		if subCancel != nil {
 			subCancel()
@@ -246,6 +249,7 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 	}()
 	commands := readCommands(ctx, c, cancel)
 	readSlots := make(chan struct{}, 4)
+	suggestionSlots := make(chan struct{}, 1)
 	for {
 		var b []byte
 		select {
@@ -265,6 +269,16 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 			dispatchRead(ctx, readSlots, q, func(call context.Context, command Command) (any, error) {
 				return s.execute(call, d.ID, command)
 			}, send)
+			continue
+		}
+		if q.Method == "chat.suggest" {
+			if suggestionScope == nil || q.Thread != selectedThread {
+				send(Event{ID: q.ID, Type: "error", Error: "suggestion requires the selected chat"})
+				continue
+			}
+			dispatchSuggestion(suggestionScope, suggestionSlots, q,
+				func() bool { return s.Store.Valid(d.ID) && s.Store.IPAllowed(ip) },
+				func(call context.Context, command Command) (any, error) { return s.execute(call, d.ID, command) }, send)
 			continue
 		}
 		if q.Method == "sessions.subscribe" {
@@ -337,6 +351,7 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if q.Method == "chat.subscribe" {
+			selectedThread, suggestionScope = "", nil
 			latest.reset(q.ID)
 			if subCancel != nil {
 				subCancel()
@@ -355,6 +370,7 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			subCancel = stop
+			selectedThread, suggestionScope = q.Thread, subCtx
 			unsubscribe = remove
 			go s.Bridge.OpenSelectedChat(subCtx, q.Thread)
 			send(Event{ID: q.ID, Type: "result", Data: map[string]bool{"subscribed": true}})
@@ -419,6 +435,8 @@ func (s *Server) execute(ctx context.Context, device string, q Command) (any, er
 	ctx, cancel := context.WithTimeout(ctx, 50*time.Second)
 	defer cancel()
 	switch q.Method {
+	case "chat.suggest":
+		return s.Bridge.Suggest(ctx, q.Thread, q.Turn, q.ReadToken)
 	case "chat.notifications.get":
 		if _, err := s.Bridge.History.Get(ctx, q.Thread); err != nil {
 			return nil, err

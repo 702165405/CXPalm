@@ -13,6 +13,10 @@ accepts file drops. No broad storage or camera permission is required.
 - The draft lists each uploaded filename/size and lets you remove it before
   sending. Removing it from the draft does not delete a file already referenced
   by another operation or queued message.
+- Upload feedback remains visible beside the draft, including the current
+  filename and a cancel action. Progress is indeterminate when exact transport
+  progress is unavailable. Cancel stops the client upload attempt; a server file
+  may already exist, and cancellation does not delete it or resend the message.
 - Uploads live under the configured gateway data directory, not the repository
   or project workspace. Device/chat-bound opaque IDs are resolved on the
   computer; clients cannot supply local paths or download arbitrary files.
@@ -69,3 +73,33 @@ not enable remote/blob image loads or unsanitized HTML. Android samples previews
 and large images to bound bitmap memory and does not persist image bytes in the
 reading cache. Returning image references in a cached transcript does not bypass
 server authorization or promise offline image availability.
+
+## Returned documents
+
+Assistant output references in `:codex-file-citation{path="..." purpose="output"}`
+or local Markdown links become file cards in Web and Android. Web saves through
+the browser download manager; Android uses the system document picker and needs
+no broad storage permission. Existing history is projected the same way, so
+older output messages do not need to be regenerated.
+
+`POST /api/v1/chat/file` accepts only `{thread,turn,item,file}` opaque identities.
+The server re-resolves the original assistant message, opens through an
+`os.Root` under the chat's working directory or the configured Codex home's
+`artifacts` / `visualizations`, and checks authorization/IP policy again after
+reading. Remote URLs, caller paths, private configuration/hidden directories,
+unreferenced files, root/symlink escapes and files over 20 MiB are rejected.
+Each message exposes at most 16 document references.
+
+Allowed formats are XLSX/XLS/ODS, CSV/TSV, PDF, DOCX/DOC/ODT, PPTX/PPT/ODP,
+TXT/MD/JSON, HTML/HTM and ZIP. Responses always use attachment disposition,
+`application/octet-stream`, no-store and a sandbox policy. Executables, scripts,
+SVG, key material, databases and raw conversation logs are not served. A filename
+allowlist is not a content/secret audit of a document or archive.
+
+HTML is downloaded, not executed or embedded into the authenticated chat page;
+Excel and other documents open in the user's chosen application. Downloading a
+single HTML file does not bundle its relative resources. Missing files show an
+error and remain on the computer; download/save failures do not resend a message.
+File contents are not included in the reading cache. Late Web results are dropped
+when the message, chat or authorization changes; Android binds the save request
+to the original computer/chat and rechecks it before returning bytes.

@@ -70,7 +70,48 @@ owner. No main thread is independently resumed. Native execution snapshots are
 separate from phone projections, lazy history and versioned delta streams.
 A stream gap requests another read-only subscription, never a mutation replay.
 
+`chat.state` may include top-level `nativeSyncedAtMs`, the gateway timestamp of
+the last validated original-owner snapshot or patch. It is omitted until such
+an event arrives. Heartbeats, history reads and presentation overlays do not
+advance it; a disconnected state may retain the last timestamp as stale evidence,
+not permission to send. Older gateways omit the field, so clients must show an
+unknown sync time rather than substitute `observedAtMs` or their current clock.
+
 ## Input and controls
+
+`chat.steer.turn` requires `chat.steer.options.expectedTurn`, captured from the
+client's displayed active turn. The gateway checks it before construction and
+again immediately before original-owner dispatch. Missing/stale bindings return
+a terminal, definitely-unexecuted `steer_turn_changed` rejection. Clients keep
+the draft for manual inspection/retry. Older clients must update for guidance;
+new clients refuse guidance when the gateway lacks this capability. Main chat
+ownership and the native owner's own `expectedTurnId` arbitration remain intact.
+
+History questions include optional `item` alongside `turn`, allowing each
+guidance message in one task turn to be selected separately. Clients fall back
+to turn-only navigation for older history indexes. User-message index refreshes
+are coalesced across a pending history read.
+
+`chat.suggest {thread,turn,readToken}` is available only for the chat selected on
+that socket. Both clients require explicit opt-in because generation uses the
+configured Codex provider/current model quota. The gateway requires a fresh,
+idle original-owner snapshot, a completed latest reply, its exact content token,
+no pending approval, active goal or queued message. Results are
+`{thread,turn,readToken,text}`; empty text means no suggestion. No send follows
+acceptance. Suggestions are not part of native snapshots or offline caches.
+
+Generation starts a separate ephemeral identity with bounded recent user and
+assistant text, never `thread/resume`, `thread/fork` or a turn on the main ID.
+Execution features, plugins, MCP, project instructions and environment access
+are disabled; read-only/never-approve policy is verified before its prediction
+turn. Any interactive request aborts the helper. The current CLI still exposes
+the harmless request-user-input schema; the gateway never answers it. Attempts
+are coalesced per reply in a bounded memory cache, one generation runs at a time,
+and new attempts are limited to one per 30 seconds. Failed attempts do not replay.
+A separate socket lane preserves chat controls; selection/disconnection,
+revocation and deadlines cancel generation. Late or mismatched source/owner
+results are discarded. This independently generated text can differ from the
+official desktop's predictions.
 
 Messages are bounded to 100,000 UTF-8 bytes and at most 8 unique catalog Skill
 IDs. Skill paths are resolved locally. `chat.send`, `chat.steer` and `chat.queue`
@@ -81,6 +122,12 @@ upload route, rooted storage and image/file conversion.
 `POST /api/v1/chat/image` reads only a raster image identified by its authorized
 chat/turn/item/reference ID. It does not accept a path, expose a public URL or
 fetch remote origins. See attachment documentation for allowed roots and limits.
+
+`POST /api/v1/chat/file` downloads an allowed document already referenced by an
+assistant message. Requests contain only `{thread,turn,item,file}`; paths and
+anonymous file URLs are not accepted. Both clients render projected `files`
+metadata and request bytes only on an explicit download/save action. Responses
+are attachment-only and bounded to 20 MiB; HTML is not executed in the chat.
 
 `chat.settings` accepts explicitly selected model/effort/mode/permission fields
 and the current controls revision. Stale revisions fail. Permissions include

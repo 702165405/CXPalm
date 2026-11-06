@@ -1,6 +1,7 @@
 // Isolated Electron UI acceptance. No real Agent, account store, network or model.
 process.env.CXPALM_DESKTOP_FIXTURE='1';process.env.CXPALM_DESKTOP_SMOKE='1';
-const {app}=require('electron');const path=require('node:path');const fs=require('node:fs/promises');const assert=require('node:assert/strict');
+const {app,dialog}=require('electron');const path=require('node:path');const fs=require('node:fs/promises');const assert=require('node:assert/strict');
+dialog.showMessageBox=async()=>({response:1});
 const output=path.resolve(__dirname,'../../.local/desktop-ui-tests');
 app.setPath('userData',path.resolve(__dirname,'../../.local/desktop-ui-profile-'+process.pid));app.disableHardwareAcceleration();
 const fixture=require('./fixture.cjs'),createFixture=fixture.create;

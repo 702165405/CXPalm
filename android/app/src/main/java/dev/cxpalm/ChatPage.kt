@@ -43,6 +43,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.content.ReceiveContentListener
 import androidx.compose.foundation.content.contentReceiver
 import androidx.compose.foundation.content.consume
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 
 fun sessionStatusLabel(value: String): String = when(value) {
     "running" -> tr("进行中"); "completed" -> tr("已完成"); "failed" -> tr("失败"); "interrupted" -> tr("已中断")
@@ -147,8 +152,10 @@ fun sessionDate(session: JSONObject): String {
     val attachmentPicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri -> uri?.let(client::upload)}
     val attachments=remember(state.current?.id,state.thread,state.draftRevision) {client.attachmentDraft()}
     val receiveContent=remember(client) {ReceiveContentListener {content -> content.consume {item -> item.uri?.takeIf {it.scheme=="content"}?.let {client.upload(it);true}?:false}}}
-    var draft by remember(state.current?.id, state.thread) { mutableStateOf(client.draft()) }
-    LaunchedEffect(state.draftRevision) { draft = client.draft() }
+    var draftInput by remember(state.current?.id, state.thread) { mutableStateOf(client.draft().let {TextFieldValue(it,TextRange(it.length))}) }
+    val draft=draftInput.text
+    val inputFocus=remember {FocusRequester()}
+    LaunchedEffect(state.draftRevision) { val saved=client.draft();draftInput=TextFieldValue(saved,TextRange(saved.length)) }
     val renderedState=remember(state.current?.id,state.thread) { mutableStateOf(RenderedConversation(emptyList(),emptyMap(),emptySet())) }
     LaunchedEffect(state.current?.id,state.thread,state.historyPage,state.snapshot) {
         val rendered=kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { renderConversationData(state.historyPage,state.snapshot) }
@@ -160,8 +167,7 @@ fun sessionDate(session: JSONObject): String {
     val questions=remember(state.historyIndex) { objects(state.historyIndex?.optJSONArray("questions")) }
     var questionPosition by remember(state.current?.id,state.thread) { mutableFloatStateOf(0f) }
     var questionScrubbing by remember { mutableStateOf(false) }
-    var questionPending by remember(state.current?.id,state.thread) { mutableStateOf<String?>(null) }
-    LaunchedEffect(state.historyLoading,messages,questionPending) { if(!state.historyLoading && messages.any {it.turn==questionPending}) questionPending=null }
+    var questionPending by remember(state.current?.id,state.thread) { mutableStateOf<JSONObject?>(null) }
     val questionList = rememberLazyListState()
     val timings=renderedState.value.timings
     val footerIndices=renderedState.value.footers
@@ -169,7 +175,7 @@ fun sessionDate(session: JSONObject): String {
     val activeQuestion by remember(list, messages, questions, state.historyPage) {
         derivedStateOf {
             val first = list.layoutInfo.visibleItemsInfo.firstNotNullOfOrNull { item -> messages.indexOfFirst { "message:${it.id}" == item.key }.takeIf { it >= 0 } } ?: 0
-            activeQuestionIndex(questions.map { it.optString("turn") }, messages, first,
+            activeQuestionIndex(questions, messages, first,
                 list.layoutInfo.visibleItemsInfo.isNotEmpty() && !list.canScrollForward, atLatest)
         }
     }
@@ -217,6 +223,24 @@ fun sessionDate(session: JSONObject): String {
     val scope = rememberCoroutineScope()
     val active = state.connected && state.desktopConnected && state.snapshot?.optJSONObject("threadRuntimeStatus")?.optString("type") == "active"
     val allowed = state.connected && state.desktopConnected && !state.threadArchived && state.snapshot != null && !state.cached && state.pending == null
+    val suggestionTurn=suggestionTurn(state.snapshot)
+    val suggestionKey="${state.current?.id}:${state.thread}:$suggestionTurn:${state.readToken}"
+    var dismissedSuggestion by remember(suggestionKey) {mutableStateOf(false)}
+    val suggestionAllowed=allowed&&resumed&&state.suggestionsEnabled&&state.suggestionsSupported&&!state.uploadBusy&&attachments.isEmpty()&&state.skills.isEmpty()&&!state.goalDraft&&atLatest&&suggestionTurn!=null
+    LaunchedEffect(suggestionKey,suggestionAllowed,draft.isEmpty()) {
+        if(suggestionAllowed&&draft.isEmpty()) {
+            kotlinx.coroutines.delay(700)
+            client.suggest(suggestionTurn!!,state.readToken)
+        }
+    }
+    val suggestion=state.inputSuggestion?.takeIf {suggestionAllowed&&!dismissedSuggestion&&it.optString("thread")==state.thread&&it.optString("turn")==suggestionTurn&&it.optString("readToken")==state.readToken}?.optString("text").orEmpty()
+    val suggestionSuffix=suggestionSuffix(suggestion,draft,draftInput.selection.start,draftInput.selection.end,draftInput.composition!=null)
+    val acceptSuggestion: () -> Unit = {
+        if(suggestionSuffix.isNotEmpty()) {
+            draftInput=TextFieldValue(suggestion,TextRange(suggestion.length));client.draft(suggestion)
+            dismissedSuggestion=true;inputFocus.requestFocus()
+        }
+    }
     val title = state.sessions.firstOrNull { it.optString("id") == state.thread }?.optString("title").orEmpty().ifBlank { tr("桌面会话") }
     var renaming by remember(state.current?.id,state.thread) { mutableStateOf(false) }
     var renameDraft by remember(state.current?.id,state.thread) { mutableStateOf("") }
@@ -228,7 +252,8 @@ fun sessionDate(session: JSONObject): String {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.weight(1f).padding(top = 8.dp)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(if (!state.connected) tr("离线缓存 · 等待同步") else if (state.threadArchived) tr("已归档 · 只读历史") else if (active) tr("Codex 正在工作…") else if (!state.connected) tr("离线预览 · 当前会话") else if (!state.desktopConnected) tr("正在同步官方桌面 · 历史暂为只读") else tr("已同步 · 空闲"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                Text(conversationConnectionLabel(state)+(if(active) " · "+tr("Codex 正在工作…") else ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                Text(nativeSyncLabel(state.lastNativeSyncAt),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(onClick={renameDraft=title;renaming=true},enabled=state.connected&&state.pending==null) {
                 Icon(painterResource(R.drawable.ic_rename),tr("重命名会话"))
@@ -241,13 +266,13 @@ fun sessionDate(session: JSONObject): String {
     }
     var queueInspection by remember(state.current?.id,state.thread) { mutableStateOf<String?>(null) }
     var attachmentMenu by remember(state.current?.id,state.thread) { mutableStateOf(false) }
-    queueInspection?.let { id -> AlertDialog(onDismissRequest={queueInspection=null},title={Text(tr("核对排队消息"))},text={Text(tr("请先在官方桌面核对。移除后继续后面的队列，不会撤回已发送的消息，也不会重发本条。"))},confirmButton={TextButton(onClick={client.mutate("chat.queue.cancel",request=id);queueInspection=null}){Text(tr("核对后移除"))}},dismissButton={TextButton(onClick={queueInspection=null}){Text(tr("取消"))}}) }
+    queueInspection?.let { id -> AlertDialog(onDismissRequest={queueInspection=null},title={Text(tr("核对排队消息"))},text={Text(tr("请先在官方桌面核对。移除后继续后面的队列，不会撤回已发送的消息，也不会重发本条。"))},confirmButton={TextButton(onClick={client.mutate(state,"chat.queue.cancel",request=id);queueInspection=null}){Text(tr("核对后移除"))}},dismissButton={TextButton(onClick={queueInspection=null}){Text(tr("取消"))}}) }
     val composer: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             val requests=objects(state.snapshot?.optJSONArray("requests"))
             if(requests.isNotEmpty()) Column(Modifier.fillMaxWidth().heightIn(max=200.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(6.dp)) {
                 requests.forEach { request -> androidx.compose.runtime.key(state.thread,request.toString()) {
-                    ApprovalCard(request, allowed) { decision -> client.mutate("chat.approve", request=request.optString("id"),decision=decision) }
+                    ApprovalCard(request, allowed) { decision -> client.mutate(state,"chat.approve", request=request.optString("id"),decision=decision) }
                 } }
             }
             state.operationNotice(state.thread)?.takeUnless { it.optBoolean("legacy") }?.let { PendingNotice(it,state.connected,client) }
@@ -272,7 +297,7 @@ fun sessionDate(session: JSONObject): String {
                                 Text(item.optString("text"),maxLines=2,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodySmall)
                                 if(item.optString("error").isNotBlank()) Text(tr(item.optString("error")),maxLines=2,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.error)
                             }
-                            if(status=="queued") IconButton(onClick={client.mutate("chat.queue.cancel",request=item.optString("id"))},enabled=allowed) {Text("×",modifier=Modifier.semantics {contentDescription=tr("取消排队消息")})}
+                            if(status=="queued") IconButton(onClick={client.mutate(state,"chat.queue.cancel",request=item.optString("id"))},enabled=allowed) {Text("×",modifier=Modifier.semantics {contentDescription=tr("取消排队消息")})}
                             if(status=="unknown" || status=="sent") TextButton(onClick={queueInspection=item.optString("id")},enabled=allowed) {Text(tr("核对后移除"))}
                         }
                     }
@@ -281,15 +306,42 @@ fun sessionDate(session: JSONObject): String {
             Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp,
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+                    state.upload?.let { transfer ->
+                        Column(Modifier.fillMaxWidth().padding(horizontal=8.dp,vertical=6.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(transfer.name,maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodySmall)
+                                    Text(tr(when(transfer.phase) {"cancelled" -> "上传已取消 · 不会自动重试";"failed" -> "上传失败 · 不会自动重试";else -> "正在上传…"}),style=MaterialTheme.typography.labelSmall)
+                                }
+                                TextButton(onClick={client.cancelUpload(clear=transfer.phase!="uploading")}) {Text(tr(if(transfer.phase=="uploading") "取消上传" else "关闭提示"))}
+                            }
+                            if(transfer.phase=="uploading") LinearProgressIndicator(Modifier.fillMaxWidth())
+                            if(transfer.phase=="cancelled") Text(tr("取消不会删除可能已到达电脑的文件。"),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                            transfer.error?.let {Text(tr(it),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.error)}
+                        }
+                    }
                     attachments.forEach {file -> Row(Modifier.fillMaxWidth().padding(horizontal=8.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
-                        Text("${if(file.optBoolean("image")) "▧" else "↥"} ${file.optString("name")} · ${fileSize(file.optLong("size"))}",modifier=Modifier.weight(1f),maxLines=2,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodySmall)
+                        Text("${if(file.optBoolean("image")) "▧" else "↥"} ${file.optString("name")} · ${fileSize(file.optLong("size"))} · ${tr("已上传")}",modifier=Modifier.weight(1f),maxLines=2,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodySmall)
                         TextButton(onClick={client.removeAttachment(file.optString("id"))},enabled=state.pending==null) {Text(tr("移除附件"))}
                     }}
-                    Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.Bottom) {
+                    TextField(draftInput, { draftInput = it; client.draft(it.text) }, placeholder = { Text(if(suggestionSuffix.isNotEmpty()) suggestion else tr("继续这个桌面会话"),maxLines=4,overflow=TextOverflow.Ellipsis) }, modifier = Modifier.fillMaxWidth().contentReceiver(receiveContent).focusRequester(inputFocus).onPreviewKeyEvent { event ->
+                        if(event.type==KeyEventType.KeyDown&&!event.isShiftPressed&&!event.isCtrlPressed&&!event.isAltPressed&&!event.isMetaPressed&&draftInput.composition==null&&suggestionSuffix.isNotEmpty()) {
+                            when(event.key) {Key.Tab -> {acceptSuggestion();true};Key.Escape -> {dismissedSuggestion=true;true};else -> false}
+                        } else false
+                    }, minLines = 1, maxLines = 4,
+                        textStyle=MaterialTheme.typography.bodyMedium,
+                        colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent))
+                    if(suggestionSuffix.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(horizontal=8.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
+                        Text(tr("AI 建议 · Tab 或点击填入"),Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(onClick=acceptSuggestion) {Text(tr("填入建议"))}
+                        TextButton(onClick={dismissedSuggestion=true}) {Text(tr("忽略"))}
+                    } else if(suggestionAllowed&&state.suggestionBusy) Text(tr("正在生成输入建议…"),Modifier.padding(horizontal=8.dp),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
                         val attachAllowed=allowed&&!state.uploadBusy&&!state.goalDraft&&attachments.size<8
                         Box {
-                            IconButton(onClick={attachmentMenu=true},enabled=attachAllowed || allowed&&active) {
-                                Icon(painterResource(R.drawable.ic_attach),tr("附件与更多操作"),Modifier.size(22.dp))
+                            IconButton(onClick={attachmentMenu=true},enabled=attachAllowed) {
+                                Icon(painterResource(R.drawable.ic_attach),tr("添加附件"),Modifier.size(22.dp))
                             }
                             DropdownMenu(expanded=attachmentMenu,onDismissRequest={attachmentMenu=false}) {
                                 DropdownMenuItem(text={Text(tr(if(state.uploadBusy) "正在上传…" else "图片 / 文件"))},enabled=attachAllowed,
@@ -300,19 +352,18 @@ fun sessionDate(session: JSONObject): String {
                                     val uri=clipboard.primaryClip?.let {clip -> (0 until clip.itemCount).mapNotNull {clip.getItemAt(it).uri}.firstOrNull {it.scheme=="content"}}
                                     if(uri!=null)client.upload(uri) else client.reportError("剪贴板没有可读取的图片，请使用图片 / 文件选择器。")
                                 })
-                                if(active) DropdownMenuItem(text={Text(tr("引导"))},enabled=allowed&&!state.uploadBusy&&(draft.isNotBlank()||attachments.isNotEmpty()),
-                                    onClick={attachmentMenu=false;client.mutate("chat.steer",draft)})
                             }
                         }
-                    TextField(draft, { draft = it; client.draft(it) }, placeholder = { Text(tr("继续这个桌面会话"),maxLines=1,overflow=TextOverflow.Ellipsis) }, modifier = Modifier.weight(1f).contentReceiver(receiveContent), minLines = 1, maxLines = 4,
-                        textStyle=MaterialTheme.typography.bodyMedium,
-                        colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent))
-                        if(active) IconButton(onClick = { client.mutate("chat.stop") }, enabled = allowed) {
-                            Icon(painterResource(R.drawable.ic_stop),tr("停止"),Modifier.size(20.dp),tint=MaterialTheme.colorScheme.error)
+                        if(active) {
+                            IconButton(onClick = { client.mutate(state,"chat.stop") }, enabled = allowed) {
+                                Icon(painterResource(R.drawable.ic_stop),tr("停止"),Modifier.size(20.dp),tint=MaterialTheme.colorScheme.error)
+                            }
+                            TextButton(onClick={client.mutate(state,"chat.steer",draft)},enabled=allowed&&!state.uploadBusy&&(draft.isNotBlank()||attachments.isNotEmpty())) {Text(tr("引导"))}
                         }
-                        FilledIconButton(onClick = { client.mutate(messageSendMethod(active,queued.isNotEmpty()), draft) }, enabled = allowed && !state.uploadBusy && !(state.goalDraft&&attachments.isNotEmpty()) && (!(active || queued.isNotEmpty()) || state.snapshot?.optBoolean("queueAvailable")==true) && !((active || queued.isNotEmpty()) && state.goalDraft) && (draft.isNotBlank()||attachments.isNotEmpty()),modifier=Modifier.padding(bottom=4.dp)) {
-                            Icon(painterResource(R.drawable.ic_send),tr(if(active || queued.isNotEmpty()) "排队发送" else "发送消息"),Modifier.size(22.dp))
+                        Spacer(Modifier.weight(1f))
+                        FilledTonalButton(onClick = { client.mutate(state,messageSendMethod(active,queued.isNotEmpty()), draft) }, enabled = allowed && !state.uploadBusy && !(state.goalDraft&&attachments.isNotEmpty()) && (!(active || queued.isNotEmpty()) || state.snapshot?.optBoolean("queueAvailable")==true) && !((active || queued.isNotEmpty()) && state.goalDraft) && (draft.isNotBlank()||attachments.isNotEmpty()),modifier=Modifier.padding(bottom=4.dp,end=4.dp),contentPadding=PaddingValues(horizontal=12.dp)) {
+                            Icon(painterResource(R.drawable.ic_send),null,Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp));Text(tr(if(active || queued.isNotEmpty()) "排队发送" else "发送消息"),maxLines=1)
                         }
                     }
                 }
@@ -324,6 +375,7 @@ fun sessionDate(session: JSONObject): String {
     var lastHistoryTarget by rememberSaveable(state.current?.id, state.thread) { mutableStateOf("") }
     val historyTarget = "${state.historyTarget}:${state.sendScrollRevision}"
     LaunchedEffect(state.thread, messages.isNotEmpty(), historyTarget) {
+        if(questionPending!=null)return@LaunchedEffect
         if (messages.isNotEmpty() && (!positioned || lastHistoryTarget != historyTarget)) {
             followLatest=state.historyPage==null
             withFrameNanos { }
@@ -332,6 +384,17 @@ fun sessionDate(session: JSONObject): String {
             positioned = true
             lastHistoryTarget = historyTarget
         }
+    }
+    LaunchedEffect(state.historyLoading,renderedState.value,questionPending,state.historyTarget) {
+        val target=questionPending ?: return@LaunchedEffect
+        if(state.historyLoading || renderedState.value.sourcePage!==state.historyPage || renderedState.value.sourceSnapshot!==state.snapshot)return@LaunchedEffect
+        val index=questionMessageIndex(target,messages)
+        if(index<0) {questionPending=null;return@LaunchedEffect}
+        followLatest=false
+        withFrameNanos { }
+        if(questionPending!==target)return@LaunchedEffect
+        list.scrollToItem(1+index+footerIndices.count {it<index})
+        positioned=true;lastHistoryTarget=historyTarget;questionPending=null
     }
     val currentState by rememberUpdatedState(state)
     var historyEdgeArmed by remember(state.current?.id,state.thread) { mutableStateOf(true) }
@@ -374,7 +437,7 @@ fun sessionDate(session: JSONObject): String {
             }
             itemsIndexed(messages, key = { _, message -> "message:${message.id}" }) { index, message ->
                 Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                    MessageCard(message,client::item,client::image)
+                    MessageCard(message,client::item,client::image,{message,file -> client.file(state,message,file)})
                     if(index in footerIndices) CompletedTurnTime(timings[message.turn])
                 }
             }
@@ -393,11 +456,11 @@ fun sessionDate(session: JSONObject): String {
             Column(Modifier.padding(3.dp)) {
                 TextButton(onClick={questionsOpen=!questionsOpen},contentPadding=PaddingValues(0.dp),modifier=Modifier.fillMaxWidth()) {Text(if(questionsOpen) tr("我的问题")+" ×" else "≡")}
                 if(questionsOpen && questions.size>1) Slider(value=questionPosition.coerceIn(0f,(questions.size-1).toFloat()),onValueChange={questionScrubbing=true;questionPosition=it},onValueChangeFinished={
-                    questionAtPosition(questions,questionPosition)?.let { turn -> questionPending=turn;client.history(cursor=turn) }
+                    questionAtPosition(questions,questionPosition)?.let {question -> questionPending=question;client.history(cursor=question.optString("turn"),item=question.optString("item").takeIf {it.isNotBlank()})}
                     questionScrubbing=false
                 },valueRange=0f..(questions.size-1).toFloat(),modifier=Modifier.semantics {contentDescription=tr("滑动定位我的问题")})
                 LazyColumn(state=questionList) {itemsIndexed(questions) { index,question ->
-                    TextButton(onClick={questionPosition=index.toFloat();questionPending=question.getString("turn");client.history(cursor=questionPending)},contentPadding=PaddingValues(horizontal=3.dp,vertical=2.dp),modifier=Modifier.fillMaxWidth().background(if(index==activeQuestion) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent,MaterialTheme.shapes.small).semantics {contentDescription=question.optString("text");selected=index==activeQuestion}) {
+                    TextButton(onClick={questionPosition=index.toFloat();questionPending=question;client.history(cursor=question.getString("turn"),item=question.optString("item").takeIf {it.isNotBlank()})},contentPadding=PaddingValues(horizontal=3.dp,vertical=2.dp),modifier=Modifier.fillMaxWidth().background(if(index==activeQuestion) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent,MaterialTheme.shapes.small).semantics {contentDescription=question.optString("text");selected=index==activeQuestion}) {
                         Text(if(questionsOpen) "${index+1}  ${question.optString("text")}" else "${index+1}",maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall,textAlign=if(questionsOpen) TextAlign.Start else TextAlign.Center,modifier=Modifier.fillMaxWidth())
                     }
                 }}
@@ -422,7 +485,7 @@ fun sessionDate(session: JSONObject): String {
     var mode by remember(state.current?.id,state.thread,panel) { mutableStateOf(base["mode"].orEmpty()) }
     val goalDraft=state.goalDraft
     var confirmFull by remember(state.current?.id,state.thread,panel) { mutableStateOf(false) }
-    val permissionLabel=when(current["permission"]) {"read-only" -> tr("只读");"workspace" -> tr("手动批准"); "auto-review" -> tr("帮我批准");"full" -> tr("完全访问");else -> tr("自定义权限")}
+    val permissionLabel=when(current["permission"]) {"read-only" -> tr("只读");"workspace" -> tr("手动批准"); "auto-review" -> tr("帮我批准");"full" -> tr("完全访问 · 无审批");else -> tr("自定义权限")}
     val modelLabel=current["model"].orEmpty().ifBlank { tr("模型未读取") }
     val plan=current["mode"]=="plan"
     val goal=goalDraft || snapshot?.optJSONObject("threadGoal")?.optString("status")=="active"
@@ -430,24 +493,28 @@ fun sessionDate(session: JSONObject): String {
     val usage=remember(snapshot) { contextUsage(snapshot) }
     val running=snapshot?.optJSONObject("threadRuntimeStatus")?.optString("type")=="active"
     var confirmCompact by remember(state.current?.id,state.thread,panel) { mutableStateOf(false) }
+    var more by remember(state.current?.id,state.thread) { mutableStateOf(false) }
     val usageColor=if((usage?.percent ?: 0)>=85) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
-      Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
-        FilterChip(selected = panel == "context", onClick = { panel = if (panel == "context") null else "context" }, enabled = snapshot != null,
-            modifier = Modifier.semantics { contentDescription = usage?.let { tr("上下文已使用 {0}%", it.percent) } ?: tr("上下文用量尚未提供") },
-            leadingIcon = { if (usage != null) CircularProgressIndicator(progress = { usage.percent / 100f }, modifier = Modifier.size(16.dp), color = usageColor, strokeWidth = 2.dp, trackColor = MaterialTheme.colorScheme.outlineVariant)
-                else Box(Modifier.size(16.dp).border(1.5.dp, MaterialTheme.colorScheme.outline, CircleShape)) },
-            label = { Text(usage?.let { "${it.percent}%" } ?: "—", maxLines = 1, style = MaterialTheme.typography.labelSmall) })
-        listOf("model" to modelLabel, "permission" to permissionLabel, "plan" to if(goal) tr("目标模式") else if (plan) tr("计划模式") else tr("默认模式"), "skill" to "Skill${if (state.skills.isEmpty()) "" else " · ${state.skills.size}"}").forEach { (id, label) ->
-            FilterChip(selected = panel == id || (id == "plan" && (plan||goal)), onClick = { panel = if (panel == id) null else id }, enabled = snapshot != null,
-                leadingIcon = when(id) { "permission" -> ({ Icon(painterResource(R.drawable.ic_shield), null, Modifier.size(16.dp)) }); "plan" -> ({ Icon(painterResource(if(plan) R.drawable.ic_plan else R.drawable.ic_chat_mode), tr("默认 / 计划 / 目标"), Modifier.size(20.dp)) }); else -> null },
-                label = { if(id != "plan") Text(label, maxLines = 1, overflow=TextOverflow.Ellipsis,modifier=Modifier.widthIn(max=120.dp),style = MaterialTheme.typography.labelSmall) })
-        }
-      }
+      FilterChip(selected = panel == "permission", onClick = { panel = if (panel == "permission") null else "permission" }, enabled = snapshot != null,modifier=Modifier.weight(1f,fill=false),
+          leadingIcon = { Icon(painterResource(R.drawable.ic_shield), null, Modifier.size(16.dp),tint=if(current["permission"]=="full") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) },
+          label = {Text(permissionLabel,maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall)})
+      if(plan||goal) Text(tr(if(goal) "目标模式" else "计划模式"),Modifier.padding(start=8.dp).widthIn(max=80.dp),maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall)
       val notify=snapshot?.optJSONObject("notificationPreference")?.optBoolean("enabled")==true
       val notifyAvailable=snapshot?.optJSONObject("notificationPreference")?.optBoolean("available",true)!=false
-      IconToggleButton(checked=notify,onCheckedChange=client::notifications,enabled=state.connected&&!state.cached&&state.pending==null&&notifyAvailable) {
-          Icon(painterResource(R.drawable.ic_bell),tr(if(!notifyAvailable) "会话通知：暂不可用，正常聊天不受影响" else if(notify) "会话通知：开" else "会话通知：关"),Modifier.size(22.dp),tint=if(notify) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+      Box {
+        TextButton(onClick={more=true},enabled=snapshot!=null) {Text(tr("更多"))}
+        DropdownMenu(expanded=more,onDismissRequest={more=false}) {
+            listOf("model" to tr("模型与思考深度"),"context" to tr("上下文用量"),"plan" to tr("协作模式"),"skill" to "Skill").forEach { (id,label) ->
+                DropdownMenuItem(text={Text(label)},onClick={more=false;panel=id},
+                    trailingIcon={when(id) {"model" -> Text(modelLabel,maxLines=1,modifier=Modifier.widthIn(max=100.dp),overflow=TextOverflow.Ellipsis);"context" -> Text(usage?.let {"${it.percent}%"}?:"—");"skill" -> Text(state.skills.size.toString());else -> Unit}})
+            }
+            HorizontalDivider()
+            DropdownMenuItem(text={Column {Text(tr(if(state.suggestionsEnabled) "输入建议：开" else "输入建议：关"));Text(tr("使用 Codex 额度，只填入草稿"),style=MaterialTheme.typography.labelSmall)}},
+                enabled=state.suggestionsSupported,onClick={more=false;client.suggestionsEnabled(!state.suggestionsEnabled)})
+            DropdownMenuItem(text={Text(tr(if(!notifyAvailable) "会话通知：暂不可用，正常聊天不受影响" else if(notify) "会话通知：开" else "会话通知：关"))},
+                enabled=state.connected&&!state.cached&&state.pending==null&&notifyAvailable,onClick={more=false;client.notifications(!notify)})
+        }
       }
     }
     if (panel != null) Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
@@ -499,7 +566,7 @@ fun sessionDate(session: JSONObject): String {
                     else {
                         Text(tr("让官方桌面压缩当前会话上下文？这会生成上下文摘要，不是删除聊天历史。"), style = MaterialTheme.typography.bodySmall)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { client.mutate("chat.compact"); confirmCompact = false; panel = null }, enabled = allowed && !running) { Text(tr("确认")) }
+                            Button(onClick = { client.mutate(state,"chat.compact"); confirmCompact = false; panel = null }, enabled = allowed && !running) { Text(tr("确认")) }
                             TextButton(onClick = { confirmCompact = false }) { Text(tr("取消")) }
                         }
                     }

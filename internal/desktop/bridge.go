@@ -13,24 +13,29 @@ import (
 )
 
 type State struct {
-	listSignal sessionSignal
-	removed    bool
-	lastNative time.Time
-	lastFollow time.Time
-	lastOpen   time.Time
-	document   *nativeDocument
-	ReadToken  string          `json:"readToken,omitempty"`
-	Archived   bool            `json:"archived"`
-	ID         string          `json:"id"`
-	Owner      string          `json:"-"`
-	Connected  bool            `json:"connected"`
-	Revision   json.RawMessage `json:"revision,omitempty"`
-	Sequence   uint64          `json:"sequence"`
-	Snapshot   json.RawMessage `json:"snapshot,omitempty"`
-	Error      string          `json:"error,omitempty"`
+	listSignal       sessionSignal
+	removed          bool
+	lastNative       time.Time
+	lastFollow       time.Time
+	lastOpen         time.Time
+	document         *nativeDocument
+	ReadToken        string          `json:"readToken,omitempty"`
+	NativeSyncedAtMS int64           `json:"nativeSyncedAtMs,omitempty"`
+	Archived         bool            `json:"archived"`
+	ID               string          `json:"id"`
+	Owner            string          `json:"-"`
+	Connected        bool            `json:"connected"`
+	Revision         json.RawMessage `json:"revision,omitempty"`
+	Sequence         uint64          `json:"sequence"`
+	Snapshot         json.RawMessage `json:"snapshot,omitempty"`
+	Error            string          `json:"error,omitempty"`
 }
 type Bridge struct {
 	Uploads           *attachments.Manager
+	suggestionMu      sync.Mutex
+	suggestions       map[string]*suggestionAttempt
+	suggestionBusy    bool
+	suggestionNext    time.Time
 	historyMu         sync.Mutex
 	historyCache      []historyRecord
 	queueMu           sync.Mutex
@@ -473,6 +478,7 @@ func (b *Bridge) ControlActionFiles(ctx context.Context, id, operation, action, 
 	}
 	p := map[string]any{"hostId": "local", "conversationId": id}
 	method := ""
+	expectedTurn := ""
 	switch action {
 	case "chat.goal":
 		activate, err := b.prepareGoal(ctx, id, text, options, raw)
@@ -533,16 +539,20 @@ func (b *Bridge) ControlActionFiles(ctx context.Context, id, operation, action, 
 			return nil, errors.New("thread is active; use steer or wait")
 		}
 		if action == "chat.steer" && !active {
-			return nil, errors.New("thread is idle; use send")
+			return nil, &Rejected{Code: "steer_turn_changed", Message: "引导未发送：当前任务已经结束，请核对会话后手动发送。"}
 		}
 		if action == "chat.send" {
 			method = "thread-follower-start-turn"
 			p["turnStart"] = map[string]any{"request": request, "context": map[string]any{"inheritThreadSettings": true, "attachments": []any{}, "commentAttachments": []any{}}}
 		} else {
+			expectedTurn = activeTurn(raw)
+			if expectedTurn == "" || options.ExpectedTurn == "" || expectedTurn != options.ExpectedTurn {
+				return nil, &Rejected{Code: "steer_turn_changed", Message: "引导未发送：任务轮次已改变或客户端尚未更新，请刷新当前会话后手动重试。"}
+			}
 			method = "thread-follower-steer-turn"
 			p["input"] = input
 			p["clientUserMessageId"] = operation
-			p["expectedTurnId"] = activeTurn(raw)
+			p["expectedTurnId"] = expectedTurn
 			p["attachments"] = []any{}
 			p["restoreMessage"] = map[string]any{"request": request, "context": map[string]any{"attachments": []any{}, "commentAttachments": []any{}}}
 		}
@@ -601,6 +611,13 @@ func (b *Bridge) ControlActionFiles(ctx context.Context, id, operation, action, 
 			return nil, &Rejected{Code: "approval_changed", Message: "approval request changed before dispatch; refresh and review again"}
 		}
 	}
+	var anchor *store.SteerAnchor
+	if action == "chat.steer" {
+		if activeTurn(latest.snapshotValue()) != expectedTurn {
+			return nil, &Rejected{Code: "steer_turn_changed", Message: "引导未发送：任务轮次已改变，请刷新当前会话后手动重试。"}
+		}
+		anchor = steerAnchor(latest.snapshotValue(), expectedTurn, inputText(attachments.Input(text, files)))
+	}
 	if options.newChatOnly && (len(orderedTurns(latest.snapshotValue())) > 0 || activeTurn(latest.snapshotValue()) != "") {
 		return nil, errors.New("new chat is no longer empty; settings not dispatched")
 	}
@@ -618,7 +635,7 @@ func (b *Bridge) ControlActionFiles(ctx context.Context, id, operation, action, 
 		var acknowledgement map[string]any
 		_ = json.Unmarshal(r.Result, &acknowledgement)
 		for depth := 0; depth < 5; depth++ {
-			if turn, ok := acknowledgement["turnId"].(string); ok && turn != activeTurn(raw) {
+			if turn, ok := acknowledgement["turnId"].(string); ok && turn != expectedTurn {
 				return nil, errors.New("guidance acknowledgement belongs to another turn; inspect desktop")
 			}
 			next, _ := acknowledgement["result"].(map[string]any)
@@ -633,7 +650,7 @@ func (b *Bridge) ControlActionFiles(ctx context.Context, id, operation, action, 
 				images = append(images, file.Path)
 			}
 		}
-		if err := b.ReadStore.SaveSteer(id, store.SteerMessage{ID: operation, Turn: activeTurn(raw), Text: body, Images: images}); err != nil {
+		if err := b.ReadStore.SaveSteer(id, store.SteerMessage{ID: operation, Turn: expectedTurn, Text: body, Images: images, Anchor: anchor}); err != nil {
 			return nil, errors.New("guidance accepted but its display receipt could not be saved; inspect desktop")
 		}
 		b.NotifyChanged(id)
@@ -651,21 +668,35 @@ func fmtID(v any) string {
 	return ""
 }
 func activeTurn(v map[string]any) string {
-	if turns, ok := v["turns"].([]any); ok {
-		for i := len(turns) - 1; i >= 0; i-- {
-			if t, ok := turns[i].(map[string]any); ok && t["status"] == "inProgress" {
-				return fmtID(t["turnId"])
+	turns := orderedTurns(v)
+	if len(turns) > 0 {
+		for index := len(turns) - 1; index >= 0; index-- {
+			if turn, ok := turns[index].(map[string]any); ok && turn["status"] == "inProgress" {
+				id := fmtID(turn["turnId"])
+				if id == "" {
+					id = fmtID(turn["id"])
+				}
+				return id
 			}
 		}
+		return ""
 	}
 	if h, ok := v["turnHistory"].(map[string]any); ok {
 		if history, ok := h["history"].(map[string]any); ok {
 			if entities, ok := history["entitiesByKey"].(map[string]any); ok {
+				active := ""
 				for _, entry := range entities {
 					if t, ok := entry.(map[string]any); ok && t["status"] == "inProgress" {
-						return fmtID(t["turnId"])
+						if active != "" {
+							return ""
+						}
+						active = fmtID(t["turnId"])
+						if active == "" {
+							active = fmtID(t["id"])
+						}
 					}
 				}
+				return active
 			}
 		}
 	}

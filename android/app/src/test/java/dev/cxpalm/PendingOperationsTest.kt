@@ -6,6 +6,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PendingOperationsTest {
+    @Test fun pendingSummaryUsesHumanActionTitleAndKnownTimeWithoutInventingLegacyMetadata() {
+        val operation=JSONObject().put("id","technical-id").put("method","chat.send").put("title","Planning the release").put("createdAtMs",1000L)
+        assertEquals(tr("发送消息"),operationLabel(operation.getString("method")))
+        assertEquals("Planning the release",operationTitle(operation))
+        assertFalse(operationTime(operation).contains("technical-id"))
+        val legacy=JSONObject().put("id","legacy").put("method","previous-version")
+        assertEquals(tr("待核对操作"),operationLabel(legacy.getString("method")))
+        assertEquals(tr("所属会话未记录"),operationTitle(legacy))
+        assertEquals(tr("操作时间未记录"),operationTime(legacy))
+        val failure=operationFailure(operation,JSONObject().put("id","technical-id").put("status","not_sent"))!!
+        assertEquals(1000L,failure.getLong("createdAtMs"));assertEquals(operationTitle(operation),operationTitle(failure))
+        assertEquals(tr("新会话"),operationTitle(JSONObject().put("method","sessions.create")))
+    }
+
     @Test fun rejectionIsNotUnknownAndDoesNotBlockAnotherConversation() {
         val original=JSONObject("""{"id":"archive","method":"sessions.archive","thread":"a"}""")
         val receipt=JSONObject("""{"id":"archive","status":"rejected","result":{"code":"active_writer","error":"not executed"}}""")

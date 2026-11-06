@@ -19,7 +19,9 @@ import java.util.concurrent.TimeUnit
 data class Computer(val id: String, val name: String, val origin: String, val token: String, val remember: Boolean = true, val expires: Long = Long.MAX_VALUE) {
     override fun toString() = "Computer(id=$id, origin=$origin, token=<redacted>)"
 }
-data class ViewState(val operationFailures: Map<String, JSONObject> = emptyMap(), val pendingOperations: Map<String, JSONObject> = emptyMap(), val sessionSync: JSONObject? = null, val uploadBusy: Boolean = false, val goalDraft: Boolean = false, val cached: Boolean = false, val readToken: String = "", val sharedReadSync: Boolean = false, val computers: List<Computer> = emptyList(), val current: Computer? = null, val status: String = "Disconnected", val sessions: List<JSONObject> = emptyList(), val projects: List<JSONObject> = emptyList(), val archived: Boolean = false, val project: String = "", val sessionSearch: String = "", val sessionLimit: Int = 100, val hasMore: Boolean = false, val threadArchived: Boolean = false, val thread: String? = null, val snapshot: JSONObject? = null, val historyPage: JSONObject? = null, val historyIndex: JSONObject? = null, val historyLoading: Boolean = false, val historyTarget: String? = null, val connected: Boolean = false, val error: String? = null, val pending: String? = null, val desktopConnected: Boolean = false, val catalog: JSONObject? = null, val skills: Set<String> = emptySet(), val draftRevision: Long = 0, val sendScrollRevision: Long = 0, val sendUserBefore: String? = null, val sequence: Long = -1, val notificationStatus: Map<String, String?> = emptyMap(), val notificationNavigation: Long = 0)
+data class ViewState(val steerTurnSupported: Boolean = false, val suggestionsSupported: Boolean = false, val suggestionsEnabled: Boolean = false,
+    val inputSuggestion: JSONObject? = null, val suggestionBusy: Boolean = false,
+    val lastNativeSyncAt: Long = 0, val reconnecting: Boolean = false, val upload: AttachmentTransfer? = null, val operationFailures: Map<String, JSONObject> = emptyMap(), val pendingOperations: Map<String, JSONObject> = emptyMap(), val sessionSync: JSONObject? = null, val uploadBusy: Boolean = false, val goalDraft: Boolean = false, val cached: Boolean = false, val readToken: String = "", val sharedReadSync: Boolean = false, val computers: List<Computer> = emptyList(), val current: Computer? = null, val status: String = "Disconnected", val sessions: List<JSONObject> = emptyList(), val projects: List<JSONObject> = emptyList(), val archived: Boolean = false, val project: String = "", val sessionSearch: String = "", val sessionLimit: Int = 100, val hasMore: Boolean = false, val threadArchived: Boolean = false, val thread: String? = null, val snapshot: JSONObject? = null, val historyPage: JSONObject? = null, val historyIndex: JSONObject? = null, val historyLoading: Boolean = false, val historyTarget: String? = null, val connected: Boolean = false, val error: String? = null, val pending: String? = null, val desktopConnected: Boolean = false, val catalog: JSONObject? = null, val skills: Set<String> = emptySet(), val draftRevision: Long = 0, val sendScrollRevision: Long = 0, val sendUserBefore: String? = null, val sequence: Long = -1, val notificationStatus: Map<String, String?> = emptyMap(), val notificationNavigation: Long = 0)
 
 class BridgeClient(context: Context) {
     private val store = SecureStore(context.applicationContext)
@@ -34,6 +36,7 @@ class BridgeClient(context: Context) {
     private var socket: WebSocket? = null
     private var stream=SnapshotStream()
     private val bodyCache=linkedMapOf<String,Message>()
+    private var uploadTicket: AttachmentUploadTicket? = null
     @Volatile private var generation = 0
     private var retry = 0
     private var wanted = false
@@ -43,6 +46,8 @@ class BridgeClient(context: Context) {
     private var historyCall: String? = null
     private var historyAttempt = ""
     private var readAttempt = ""
+    private val suggestionAttempts = linkedSetOf<String>()
+    private val suggestionResults = linkedMapOf<String,JSONObject>()
     private val calls = mutableMapOf<String, (JSONObject) -> Unit>()
     private val receiptQueries = mutableMapOf<String, String>()
     var loginBusy by androidx.compose.runtime.mutableStateOf(false)
@@ -61,7 +66,7 @@ class BridgeClient(context: Context) {
         val target = mutable.value.computers.firstOrNull { it.id == computer } ?: return false
         store.put("thread:${target.id}", thread)
         if (mutable.value.current?.id == target.id && mutable.value.connected) subscribe(thread)
-        else { connect(target); update { it.copy(thread = thread, snapshot = null, desktopConnected = false) } }
+        else { connect(target); update { it.copy(thread = thread, snapshot = null, desktopConnected = false,lastNativeSyncAt=if(it.thread==thread) it.lastNativeSyncAt else 0) } }
         update { it.copy(notificationNavigation = it.notificationNavigation + 1) }
         return true
     }
@@ -75,7 +80,7 @@ class BridgeClient(context: Context) {
     }
     init { main.post { restore.run(); startMonitoring() } }
     private fun update(fn: (ViewState) -> ViewState) {
-        val old=mutable.value;val changed=fn(old);val next=changed.copy(pending=changed.pendingFor(changed.thread)?.optString("id"));mutable.value=next
+        val old=mutable.value;val changed=fn(old);val next=changed.copy(reconnecting=changed.reconnecting&&!changed.connected,pending=changed.pendingFor(changed.thread)?.optString("id"));mutable.value=next
         if(next.snapshot!==old.snapshot || next.historyPage!==old.historyPage || next.historyIndex!==old.historyIndex || next.sessions!==old.sessions) {
             reading.memory.remember(next)
             saveReading?.let(main::removeCallbacks)
@@ -90,6 +95,34 @@ class BridgeClient(context: Context) {
             val current=mutable.value
             if(restoreTicket==cacheRestoreTicket && current.current?.let(::readingScope)==scope && current.thread==ticket.thread && (current.snapshot==null || current.cached)) update { reading.memory.get(it) }
         } }
+    }
+    fun suggestionsEnabled(enabled: Boolean) {
+        store.put("composerSuggestions",enabled.toString())
+        update { it.copy(suggestionsEnabled=enabled,inputSuggestion=null,suggestionBusy=false) }
+    }
+    fun suggest(turn: String, token: String) {
+        val current=mutable.value
+        val key="${current.current?.id}:${current.thread}:$turn:$token"
+        if(!current.suggestionsEnabled || !current.suggestionsSupported || !current.connected || !current.desktopConnected ||
+            current.cached || current.threadArchived || current.pending!=null || suggestionTurn(current.snapshot)!=turn ||
+            current.readToken!=token || token.isBlank()) return
+        suggestionResults[key]?.let { cached -> update { it.copy(inputSuggestion=cached,suggestionBusy=false) };return }
+        if(!suggestionAttempts.add(key))return
+        if(suggestionAttempts.size>128) { val oldest=suggestionAttempts.first();suggestionAttempts.remove(oldest);suggestionResults.remove(oldest) }
+        val connection=generation
+        update { it.copy(inputSuggestion=null,suggestionBusy=true) }
+        command("chat.suggest",JSONObject().put("thread",current.thread).put("turn",turn).put("readToken",token)) { event ->
+            val fresh=mutable.value
+            val data=event.optJSONObject("data")
+            if(data==null) { if(connection==generation) update { it.copy(suggestionBusy=false) };return@command }
+            if(connection==generation && fresh.suggestionsEnabled && fresh.current?.id==current.current?.id &&
+                fresh.thread==current.thread && fresh.connected && fresh.desktopConnected && !fresh.cached &&
+                fresh.readToken==token && suggestionTurn(fresh.snapshot)==turn && data.optString("thread")==current.thread &&
+                data.optString("turn")==turn && data.optString("readToken")==token) {
+                suggestionResults[key]=data
+                update { it.copy(inputSuggestion=data,suggestionBusy=false) }
+            } else if(connection==generation) update { it.copy(suggestionBusy=false) }
+        }
     }
     fun clearError() = update { it.copy(error = null) }
     fun reportError(message: String) = update { it.copy(error = message) }
@@ -126,6 +159,7 @@ class BridgeClient(context: Context) {
     fun logout(computer: Computer) {
         if(loginBusy)return
         if(hasPending(computer)){reportError("操作结果未知，请先核对当前电脑，再切换连接。");return}
+        if (mutable.value.current?.id == computer.id) cancelUpload()
         loginBusy=true
         val request=Request.Builder().url("${computer.origin}/api/v1/logout").header("Origin",computer.origin).header("Authorization","Bearer ${computer.token}")
             .post("{}".toRequestBody("application/json".toMediaType())).build()
@@ -145,6 +179,7 @@ class BridgeClient(context: Context) {
     }
     fun connect(computer: Computer) {
         if(computer.expires<=System.currentTimeMillis()/1000){reportError("登录已过期，请使用账号密码重新登录。");return}
+        cancelUpload(clear = true)
         if(computer.id!=mutable.value.current?.id) goalMode(false)
         val current = mutable.value
         val same = current.current?.id == computer.id
@@ -155,7 +190,7 @@ class BridgeClient(context: Context) {
     }
 
     fun disconnect() { stopMonitoring(); disconnectChat() }
-    private fun disconnectChat() { wanted = false; generation++; socket?.close(1000, "disconnect"); socket = null; calls.clear(); receiptQueries.clear(); update { it.copy(connected = false, desktopConnected = false, status = "Disconnected",cached=it.snapshot!=null,readToken="",sharedReadSync=false,sessions=offlineSessions(it.sessions)) } }
+    private fun disconnectChat() { cancelUpload(); wanted = false; generation++; socket?.close(1000, "disconnect"); socket = null; calls.clear(); receiptQueries.clear(); update { it.copy(connected = false, desktopConnected = false, reconnecting = false, status = "Disconnected",cached=it.snapshot!=null,readToken="",sharedReadSync=false,sessions=offlineSessions(it.sessions)) } }
     private fun open() {
         val computer = mutable.value.current ?: return; val gen = ++generation
         val socketStream=SnapshotStream();stream=socketStream
@@ -208,13 +243,22 @@ class BridgeClient(context: Context) {
     private fun lost(gen: Int, message: String) {
         if (gen != generation) return
         val retryGeneration=++generation
-        socket = null; calls.clear(); receiptQueries.clear(); update { it.copy(connected = false, desktopConnected = false, historyLoading = false, status = message,cached=it.snapshot!=null,readToken="",sharedReadSync=false,sessions=offlineSessions(it.sessions)) }
+        cancelUpload(); socket = null; calls.clear(); receiptQueries.clear(); update { it.copy(connected = false, desktopConnected = false, reconnecting = wanted, historyLoading = false, status = message,cached=it.snapshot!=null,readToken="",sharedReadSync=false,sessions=offlineSessions(it.sessions)) }
         if (wanted) { val wait = (1000L shl retry.coerceAtMost(5)).coerceAtMost(30000); retry++; main.postDelayed({ if (wanted && retryGeneration == generation) open() }, wait) }
     }
     private fun receive(event: JSONObject) {
         try {
             when (event.optString("type")) {
-                "hello" -> { createSettingsSupported=event.getJSONObject("data").optJSONArray("capabilities")?.let { caps -> (0 until caps.length()).any { caps.optString(it)=="sessions.create.settings" } } == true; check(event.getJSONObject("data").optString("device").isNotBlank()); val stableGeneration=generation;main.postDelayed({if(stableGeneration==generation && mutable.value.connected)retry=0},30000); update { it.copy(connected = true, status = "Connected", sharedReadSync = event.getJSONObject("data").optJSONArray("capabilities")?.let { caps -> (0 until caps.length()).any { caps.optString(it)=="chat.read" } } == true) }; refresh(); mutable.value.thread?.let { subscribe(it,reconnecting=true) }; mutable.value.pendingOperations.keys.toList().forEach { checkPending(it) } }
+                "hello" -> {
+                    val supported=event.getJSONObject("data").optJSONArray("capabilities")?.let { values -> (0 until values.length()).any {values.optString(it)=="chat.suggest"} }==true
+                    createSettingsSupported=event.getJSONObject("data").optJSONArray("capabilities")?.let { values -> (0 until values.length()).any {values.optString(it)=="sessions.create.settings"} }==true
+                    check(event.getJSONObject("data").optString("device").isNotBlank())
+                    val stableGeneration=generation
+                    main.postDelayed({if(stableGeneration==generation && mutable.value.connected)retry=0},30000)
+                    update { it.copy(connected=true,status="Connected",steerTurnSupported=event.getJSONObject("data").optJSONArray("capabilities")?.let {values -> (0 until values.length()).any {values.optString(it)=="chat.steer.turn"}}==true,suggestionsSupported=supported,suggestionsEnabled=store.get("composerSuggestions")=="true",
+                        inputSuggestion=null,suggestionBusy=false,sharedReadSync=event.getJSONObject("data").optJSONArray("capabilities")?.let { values -> (0 until values.length()).any { values.optString(it)=="chat.read" } }==true) }
+                    refresh();mutable.value.thread?.let { subscribe(it,reconnecting=true) };mutable.value.pendingOperations.keys.toList().forEach { checkPending(it) }
+                }
                 "result" -> calls.remove(event.optString("id"))?.invoke(event)
                 "error" -> { val operation=event.optString("id") in mutable.value.pendingOperations || event.optString("id") in receiptQueries; calls.remove(event.optString("id"))?.invoke(event); if(operation)return; val history=event.optString("id")==historyCall; update { it.copy(error = event.optString("error"), historyLoading=if(history) false else it.historyLoading) } }
                 "sessions.error" -> {
@@ -233,8 +277,7 @@ class BridgeClient(context: Context) {
                     if(next.snapshot?.optBoolean("hasUnreadTurn")==false) readAttempt=""
                     update { next }
                     if(next.desktopConnected && !next.cached) rememberNewChat()
-                    val attempt="$subscription:${next.desktopConnected}:${next.threadArchived}:${next.snapshot?.optJSONArray("turns")?.let { it.optJSONObject(it.length()-1)?.optString("turnId") }}"
-                    if ((next.desktopConnected || next.threadArchived) && !next.historyLoading && next.historyPage==null && historyAttempt!=attempt) { historyAttempt=attempt; history(navigate=false) }
+                    refreshQuestionIndex()
                 }
             }
         } catch (_: Exception) { update { it.copy(error = "服务端响应不受支持，请更新或重新连接") } }
@@ -245,6 +288,14 @@ class BridgeClient(context: Context) {
         if(method=="chat.subscribe")stream.reset(fields.optString("thread"),id)
         if (socket?.send(fields.toString()) != true) { calls.remove(id); update { it.copy(error = "未发送，请先检查待确认操作再重试") }; return false }
         return true
+    }
+    private fun refreshQuestionIndex() {
+        val current=mutable.value
+        if(!current.connected || (!current.desktopConnected&&!current.threadArchived) || current.historyLoading || current.historyPage!=null)return
+        val turn=objects(current.snapshot?.optJSONArray("turns")).lastOrNull()?.optString("turnId")
+        val user=current.snapshot?.let(::conversationMessages)?.lastOrNull {it.role=="You"}?.id
+        val attempt="$subscription:${current.desktopConnected}:${current.threadArchived}:$turn:$user"
+        if(historyAttempt!=attempt) {historyAttempt=attempt;history(navigate=false)}
     }
     private fun sessionPage(page: JSONObject) {
         val rows=objects(page.optJSONArray("items"))
@@ -334,10 +385,11 @@ class BridgeClient(context: Context) {
     fun subscribe(thread: String, reconnecting: Boolean = false) {
         if(thread!=mutable.value.thread) goalMode(false)
         val changed = mutable.value.thread != thread
+        if(changed) cancelUpload(clear = true)
         val ticket = ++subscription
         historyAttempt="";historyCall=null
         mutable.value.current?.let { store.put("thread:${it.id}", thread) }
-        update { it.copy(historyPage=if(reconnecting) it.historyPage else null, historyIndex=if(reconnecting) it.historyIndex else null, historyLoading=false, historyTarget=null, sendUserBefore=null, thread = thread, threadArchived = it.sessions.firstOrNull { row -> row.optString("id")==thread }?.optBoolean("archived") ?: false, sequence = if (changed) -1 else it.sequence, readToken = if (changed) "" else it.readToken, snapshot = if (changed) null else it.snapshot,cached=changed || it.cached,
+        update { it.copy(inputSuggestion=null,suggestionBusy=false,lastNativeSyncAt=if(changed) 0 else it.lastNativeSyncAt,historyPage=if(reconnecting) it.historyPage else null, historyIndex=if(reconnecting) it.historyIndex else null, historyLoading=false, historyTarget=null, sendUserBefore=null, thread = thread, threadArchived = it.sessions.firstOrNull { row -> row.optString("id")==thread }?.optBoolean("archived") ?: false, sequence = if (changed) -1 else it.sequence, readToken = if (changed) "" else it.readToken, snapshot = if (changed) null else it.snapshot,cached=changed || it.cached,
             desktopConnected = if (changed) false else it.desktopConnected,
             catalog = if (changed) null else it.catalog, skills = savedSkills(it.current?.id, thread)) }
         if(changed) restoreCached()
@@ -347,7 +399,7 @@ class BridgeClient(context: Context) {
             if (ticket == subscription && mutable.value.thread == thread) update { it.copy(catalog = event.optJSONObject("data")) }
         }
     }
-    fun history(cursor: String? = "latest", offset: Int = 0, navigate: Boolean = true, extend: Boolean = false) {
+    fun history(cursor: String? = "latest", offset: Int = 0, navigate: Boolean = true, extend: Boolean = false, item: String? = null) {
         if(extend && mutable.value.historyLoading) return
         val current=mutable.value.historyPage ?: mutable.value.historyIndex
         val thread=mutable.value.thread ?: return
@@ -356,6 +408,7 @@ class BridgeClient(context: Context) {
         update { it.copy(historyLoading=true,sendUserBefore=if(navigate) null else it.sendUserBefore) }
         val fields=JSONObject().put("thread",thread).put("lazy",true).put("limit",20).put("offset",offset).put("indexOnly",!navigate && cursor=="latest" && mutable.value.desktopConnected && mutable.value.snapshot?.optString("historySource")!="rollout")
         if(cursor!=null) fields.put("cursor",cursor)
+        if(item!=null) fields.put("item",item)
         command("chat.history",fields,call) { event ->
             if(ticket!=subscription || gen!=generation || thread!=mutable.value.thread || call!=historyCall) return@command
             val page=event.optJSONObject("data")
@@ -367,8 +420,9 @@ class BridgeClient(context: Context) {
                 seedHistoryIndex(page,snapshot,fields.optBoolean("indexOnly"))
                 state.copy(snapshot=snapshot,historyIndex=page,historyLoading=false,
                     historyPage=if(navigate) if(cursor=="latest") null else if(extend) extendHistory(current,page) else page else state.historyPage,
-                    historyTarget=if(navigate && !extend) "${cursor ?: offset}:$call" else state.historyTarget)
+                    historyTarget=if(navigate && !extend) "${cursor ?: offset}:${item.orEmpty()}:$call" else state.historyTarget)
             }
+            refreshQuestionIndex()
         }
         main.postDelayed({if(historyCall==call && mutable.value.historyLoading) { calls.remove(call); update {it.copy(historyLoading=false,error="历史读取超时，请重试。")}}},30000)
     }
@@ -409,6 +463,19 @@ class BridgeClient(context: Context) {
             bytes
         }
     }
+    suspend fun file(source: ViewState,message: Message,file: MessageFile): ByteArray = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        require(composerSourceMatches(source,mutable.value)&&mutable.value.connected&&!mutable.value.cached) {"Reconnect to the original chat"}
+        val computer=source.current!!;val thread=source.thread!!
+        require(file in message.files && file.id.matches(Regex("[a-f0-9]{64}")))
+        val body=JSONObject().put("thread",thread).put("turn",message.turn).put("item",message.id.removePrefix(message.turn+":")).put("file",file.id).toString().toRequestBody("application/json".toMediaType())
+        val request=Request.Builder().url(computer.origin+"/api/v1/chat/file").header("Origin",computer.origin).header("Authorization","Bearer ${computer.token}").post(body).build()
+        client.newBuilder().callTimeout(60,TimeUnit.SECONDS).readTimeout(30,TimeUnit.SECONDS).build().newCall(request).execute().use {response ->
+            require(response.code==200&&response.header("Content-Type")=="application/octet-stream") {"File unavailable"}
+            val bytes=response.body?.byteStream()?.use(::returnedFileBytes)?:error("File unavailable")
+            require(composerSourceMatches(source,mutable.value)&&mutable.value.connected&&!mutable.value.cached) {"Chat changed"}
+            bytes
+        }
+    }
     private fun savedSkills(computer: String?, thread: String?): Set<String> = try {
         val array = JSONArray(store.get("skills:$computer:$thread") ?: "[]")
         (0 until array.length()).map { array.getString(it) }.toSet()
@@ -428,7 +495,7 @@ class BridgeClient(context: Context) {
             else reportError("官方桌面设置发生了变化，未应用；请重新打开设置后再修改。")
         }
     }
-    fun leaveChat() { goalMode(false); subscription++; mutable.value.current?.let { store.put("thread:${it.id}", null) }; update { it.copy(thread = null, snapshot = null, historyPage=null,historyIndex=null,historyLoading=false,historyTarget=null,desktopConnected = false) } }
+    fun leaveChat() { cancelUpload(clear = true); goalMode(false); subscription++; mutable.value.current?.let { store.put("thread:${it.id}", null) }; update { it.copy(thread = null, snapshot = null, historyPage=null,historyIndex=null,historyLoading=false,historyTarget=null,desktopConnected = false,lastNativeSyncAt=0) } }
     fun draft(value: String) { val s = mutable.value; store.put("draft:${s.current?.id}:${s.thread}", value) }
     fun draft(): String { val s = mutable.value; return store.get("draft:${s.current?.id}:${s.thread}").orEmpty() }
     fun attachmentDraft(): List<JSONObject> {val s=mutable.value;return objects(JSONArray(store.get("attachments:${s.current?.id}:${s.thread}")?:"[]"))}
@@ -438,16 +505,33 @@ class BridgeClient(context: Context) {
         if(!s.connected||!s.desktopConnected||s.cached||s.threadArchived||s.pending!=null||s.uploadBusy||s.goalDraft)return
         val key="attachments:${computer.id}:$thread"
         if(attachmentDraft().size>=8){reportError("每条消息最多 8 个附件。");return}
-        update {it.copy(uploadBusy=true)}
+        val ticket = AttachmentUploadTicket(UUID.randomUUID().toString(), readingScope(computer), thread)
+        uploadTicket = ticket
+        update {it.copy(uploadBusy=true,upload=AttachmentTransfer(ticket.id,tr("图片 / 文件")))}
         Thread {
             try {
-                val response=uploadAttachment(client,app.contentResolver,computer,thread,uri)
+                val response=uploadAttachment(client,app.contentResolver,computer,thread,uri,
+                    { name -> main.post { if(uploadTicket === ticket && ticket.matches(mutable.value.current,mutable.value.thread)) update {it.copy(upload=it.upload?.copy(name=name))} } }, ticket::bind)
                 main.post {
-                    val files=objects(JSONArray(store.get(key)?:"[]"));store.put(key,JSONArray(files+response).toString())
-                    update {it.copy(uploadBusy=false,draftRevision=it.draftRevision+1)}
+                    if(uploadTicket !== ticket || !ticket.matches(mutable.value.current,mutable.value.thread)) return@post
+                    try {
+                        val files=objects(JSONArray(store.get(key)?:"[]"));store.put(key,JSONArray(files+response).toString())
+                        uploadTicket=null
+                        update {it.copy(uploadBusy=false,upload=null,draftRevision=it.draftRevision+1)}
+                    } catch (_: Exception) { uploadFailed(ticket,attachmentUploadFailure(0)) }
                 }
-            } catch (error:Exception) {val message=attachmentUploadFailure((error as? AttachmentUploadException)?.status?:0);main.post {update {it.copy(uploadBusy=false,error=message)}}}
+            } catch (error:Exception) {val message=attachmentUploadFailure((error as? AttachmentUploadException)?.status?:0);main.post {uploadFailed(ticket,message)}}
         }.start()
+    }
+    private fun uploadFailed(ticket: AttachmentUploadTicket, message: String) {
+        if(uploadTicket !== ticket || !ticket.matches(mutable.value.current,mutable.value.thread)) return
+        uploadTicket=null
+        update {it.copy(uploadBusy=false,upload=it.upload?.copy(phase="failed",error=message))}
+    }
+    fun cancelUpload(clear: Boolean = false) {
+        val ticket=uploadTicket
+        ticket?.cancel();uploadTicket=null
+        update {it.copy(uploadBusy=false,upload=if(clear) null else if(ticket!=null) it.upload?.copy(phase="cancelled",error=null) else it.upload)}
     }
     fun notifications(enabled: Boolean) {
         val thread=mutable.value.thread?:return
@@ -462,10 +546,18 @@ class BridgeClient(context: Context) {
         mutation("chat.goal",JSONObject().put("thread",s.thread).put("options",JSONObject().put("goalAction",action).put("expectedGoal",s.snapshot?.optString("goalRevision")))) { if(mutable.value.thread==s.thread) s.thread?.let { subscribe(it,reconnecting=true) } }
     }
     fun goalMode(selected: Boolean) { update { it.copy(goalDraft=selected) } }
-    fun mutate(method: String, text: String = "", request: String? = null, decision: String? = null) {
-        val actualMethod=if(method=="chat.send" && mutable.value.goalDraft) "chat.goal" else method
-        val fields = JSONObject().put("thread", mutable.value.thread).put("text", text); if (request != null) fields.put("requestId", request); if (decision != null) fields.put("decision", decision)
+    fun mutate(source: ViewState, method: String, text: String = "", request: String? = null, decision: String? = null) {
         val s = mutable.value
+        if(!composerSourceMatches(source,s)) {reportError("会话已切换，请核对当前会话后重试。");return}
+        val actualMethod=if(method=="chat.send" && source.goalDraft) "chat.goal" else method
+        val fields = JSONObject().put("thread",source.thread).put("text",text)
+        if(request!=null) fields.put("requestId",request)
+        if(decision!=null) fields.put("decision",decision)
+        if(method=="chat.steer") {
+            val turn=activeTurnId(source.snapshot)
+            if(!s.steerTurnSupported || turn.isBlank() || turn!=activeTurnId(s.snapshot)) {reportError("引导未发送：请更新电脑网关并等待当前任务同步后重试。");return}
+            fields.put("options",JSONObject().put("expectedTurn",turn))
+        }
         val key = "draft:${s.current?.id}:${s.thread}"
         if(method in listOf("chat.send","chat.steer","chat.queue")) {
             if(s.uploadBusy){reportError("请等待附件上传完成。");return}
@@ -476,10 +568,10 @@ class BridgeClient(context: Context) {
         if (method in listOf("chat.send", "chat.steer", "chat.goal", "chat.queue")) fields.put("skills", JSONArray(s.skills.toList()))
         if(actualMethod=="chat.goal") fields.put("options",JSONObject().put("expectedGoal",s.snapshot?.optString("goalRevision")))
         mutation(actualMethod, fields) {
-            if(mutable.value.thread==s.thread) goalMode(false)
+            if(composerSourceMatches(source,mutable.value)) goalMode(false)
             if (method in listOf("chat.send", "chat.steer", "chat.goal", "chat.queue") && store.get(key) == text) {
                 store.put(key, null)
-                update { it.copy(draftRevision = it.draftRevision + 1) }
+                update { if(composerSourceMatches(source,it)) it.copy(draftRevision = it.draftRevision + 1) else it }
             }
         }
     }
@@ -489,6 +581,7 @@ class BridgeClient(context: Context) {
         if (s.pendingFor(fields.optString("thread").ifBlank { null }) != null) return
         val id = UUID.randomUUID().toString()
         val operation=JSONObject().put("id",id).put("method",method).put("thread",fields.optString("thread")).put("status","dispatched")
+            .put("createdAtMs",System.currentTimeMillis()).put("title",s.sessions.firstOrNull {it.optString("id")==fields.optString("thread")}?.optString("title").orEmpty().take(120))
         savePending(s.pendingOperations + (id to operation))
         update { it.copy(operationFailures=it.operationFailures-fields.optString("thread")) }
         if(fields.optJSONArray("attachments")?.length()?.let {it>0}==true)store.put("pending-files:${c.id}:$id",JSONObject().put("id",id).put("key","attachments:${c.id}:${s.thread}").put("ids",fields.getJSONArray("attachments")).toString())

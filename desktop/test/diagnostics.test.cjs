@@ -32,3 +32,39 @@ test('rotation is bounded and unavailable disk never interrupts runtime operatio
  const blocked=path.join(root,'not-a-directory');fs.writeFileSync(blocked,'fixture');
  assert.doesNotThrow(()=>{const broken=createDiagnostics(blocked);broken.record('host-connected');broken.finish(0,true);});
 });
+test('write failures are redacted, visible and recover when the disk becomes writable',context=>{
+ const root=directory(context),append=fs.appendFileSync,secret='fixture-private-path';let blocked=true;
+ context.mock.method(fs,'appendFileSync',(...args)=>{
+  if(blocked){const error=new Error(secret);error.code='EPERM';throw error;}
+  return append(...args);
+ });
+ const log=createDiagnostics(root);
+ assert.deepEqual(log.status(),{available:false,failures:{log:'EPERM'}});
+ assert.equal(log.record('heartbeat'),false);assert.ok(!JSON.stringify(log.status()).includes(secret));
+ blocked=false;assert.equal(log.record('heartbeat'),true);
+ assert.deepEqual(log.status(),{available:true,failures:{}});
+});
+test('failed session markers retry rather than silently retaining an older session',context=>{
+ const root=directory(context),rename=fs.renameSync;let blocked=true;
+ context.mock.method(fs,'renameSync',(...args)=>{
+  if(blocked&&args[1]===path.join(root,'session.json')){const error=new Error('private marker error');error.code='EACCES';throw error;}
+  return rename(...args);
+ });
+ const log=createDiagnostics(root);
+ assert.deepEqual(log.status(),{available:false,failures:{marker:'EACCES'}});
+ assert.equal(fs.existsSync(path.join(root,'session.json')),false);
+ blocked=false;log.record('heartbeat');
+ assert.deepEqual(log.status(),{available:true,failures:{}});
+ assert.equal(JSON.parse(fs.readFileSync(path.join(root,'session.json'),'utf8')).clean,false);
+});
+test('session queries remain distinct from actual session end and only fixed reasons reach disk',context=>{
+ const root=directory(context),log=createDiagnostics(root);
+ log.record('system-session-query',{sessionReasons:['close-app','secret','close-app']});
+ log.record('system-session-end',{sessionReasons:['logoff','shutdown','critical','secret']});
+ const rows=records(root);
+ assert.equal(rows[1].event,'system-session-query');assert.deepEqual(rows[1].sessionReasons,['close-app']);
+ assert.equal(rows[2].event,'system-session-end');assert.deepEqual(rows[2].sessionReasons,['shutdown','critical','logoff']);
+ assert.ok(!fs.readFileSync(path.join(root,'lifecycle.jsonl'),'utf8').includes('secret'));
+ log.finish(9,true);assert.equal(records(root).at(-1).clean,false);
+ assert.equal(JSON.parse(fs.readFileSync(path.join(root,'session.json'),'utf8')).clean,false);
+});

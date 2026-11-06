@@ -29,7 +29,10 @@ class HostClient extends EventEmitter {
     this.child.stderr.resume();
     this.child.on('error', () => {this.record('host-spawn-error');this.fail('桌面管理进程无法启动，请检查 Agent 文件。');});
     this.child.on('exit', (code,signal) => {this.record('host-exit',{code,signal});this.fail('桌面管理连接已关闭；本窗口启动的 Agent 将停止。');});
-    this.child.stdin.on('error', () => {this.record('host-pipe-error');this.fail('桌面管理管道已断开。');});
+    const pipeFailed=()=>{if(this.closed)return;this.record('host-pipe-error');this.fail('桌面管理管道已断开。操作结果未确认，请刷新状态，不要重复提交。');};
+    for(const stream of [this.child.stdin,this.child.stdout,this.child.stderr])stream.on('error',pipeFailed);
+    this.child.stdout.on('end',pipeFailed);
+    this.child.stdout.on('close',pipeFailed);
   }
   read(chunk) {
     this.buffer += chunk;
@@ -63,7 +66,7 @@ class HostClient extends EventEmitter {
   async close() {
     this.record('host-close-request');
     try { if (!this.closed) await this.request('shutdown'); }
-    finally { this.child.stdin.end(); this.closed = true; }
+    finally { this.fail('桌面管理连接已关闭。操作结果未确认，请刷新状态，不要重复提交。'); }
   }
 }
 module.exports = {HostClient,validate};

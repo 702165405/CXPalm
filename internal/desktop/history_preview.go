@@ -28,7 +28,12 @@ func (b *Bridge) openRollout(path string) (*os.File, error) {
 	if e != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return nil, errors.New("history path is outside Codex home")
 	}
-	f, e := os.Open(path)
+	directory, e := os.OpenRoot(root)
+	if e != nil {
+		return nil, e
+	}
+	defer directory.Close()
+	f, e := directory.Open(rel)
 	if e != nil {
 		return nil, e
 	}

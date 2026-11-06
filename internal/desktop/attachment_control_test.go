@@ -39,7 +39,7 @@ func TestAttachmentSteerUsesOriginalOwnerAndDurableDisplayReceipt(t *testing.T) 
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if _, err = b.ControlActionFiles(ctx, "thread", "steer-id", "chat.steer", "use these notes", "", nil, Options{}, nil, files); err != nil {
+	if _, err = b.ControlActionFiles(ctx, "thread", "steer-id", "chat.steer", "use these notes", "", nil, Options{ExpectedTurn: "turn-a"}, nil, files); err != nil {
 		t.Fatal(err)
 	}
 	frame := <-observed
@@ -47,7 +47,7 @@ func TestAttachmentSteerUsesOriginalOwnerAndDurableDisplayReceipt(t *testing.T) 
 		t.Fatal("attachment escaped native owner", frame.Method)
 	}
 	messages, err := b.ReadStore.SteerMessages("thread")
-	if err != nil || len(messages) != 1 || messages[0].Turn != "turn-a" {
+	if err != nil || len(messages) != 1 || messages[0].Turn != "turn-a" || messages[0].Anchor == nil {
 		t.Fatal(messages, err)
 	}
 	if !strings.Contains(messages[0].Text, "use these notes") || !strings.Contains(messages[0].Text, files[0].Name) {

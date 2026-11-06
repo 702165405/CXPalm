@@ -31,10 +31,16 @@ func (s *Store) SetNotificationPreference(scope, thread string, enabled bool) (N
 }
 
 type SteerMessage struct {
-	Images []string `json:"images,omitempty"`
-	ID     string   `json:"id"`
-	Turn   string   `json:"turn"`
-	Text   string   `json:"text"`
+	Anchor *SteerAnchor `json:"anchor,omitempty"`
+	Images []string     `json:"images,omitempty"`
+	ID     string       `json:"id"`
+	Turn   string       `json:"turn"`
+	Text   string       `json:"text"`
+}
+type SteerAnchor struct {
+	AfterItem   string `json:"afterItem,omitempty"`
+	Offset      int    `json:"offset"`
+	TextMatches int    `json:"textMatches"`
 }
 
 func (s *Store) SaveSteer(thread string, message SteerMessage) error {

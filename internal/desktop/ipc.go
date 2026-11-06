@@ -152,6 +152,9 @@ func (c *IPC) send(ctx context.Context, f Frame) error {
 	if e = writeAll(c.conn, h[:]); e == nil {
 		e = writeAll(c.conn, b)
 	}
+	if e != nil {
+		c.Close()
+	}
 	return e
 }
 func writeAll(w io.Writer, b []byte) error {

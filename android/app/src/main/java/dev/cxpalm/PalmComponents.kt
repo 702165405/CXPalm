@@ -80,7 +80,7 @@ import io.github.u702165405.cxpalm.R
     }
 }
 
-@Composable fun MessageCard(message: Message, loadBody: suspend (Message)->Message, loadImage: suspend (Message,MessageImage)->ByteArray) {
+@Composable fun MessageCard(message: Message, loadBody: suspend (Message)->Message, loadImage: suspend (Message,MessageImage)->ByteArray, loadFile: suspend (Message,MessageFile)->ByteArray = {_,_ -> error("File download unavailable")}) {
     val you = message.role == "You"
     val problem = message.role == "sessionError"
     var expanded by rememberSaveable(message.id) { mutableStateOf(false) }
@@ -149,6 +149,7 @@ import io.github.u702165405.cxpalm.R
                     else if (you || problem) SelectionContainer { Text(message.text, style = MaterialTheme.typography.bodyLarge) }
                     else content?.let { MarkdownMessage(it.text) }
                     MessageImages(content?:message,loadImage)
+                    MessageFiles(content?:message,loadFile)
                 }
             }
         }

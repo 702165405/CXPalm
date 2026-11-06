@@ -25,6 +25,22 @@ test('malformed replies and child exit fail closed, writes are never replayed',a
  }
  const {client,child}=fixture();const waiting=client.request('start');const rejected=assert.rejects(waiting);child.emit('exit',1);await rejected;await assert.rejects(client.request('start'));
 });
+test('all pipe errors and stdout EOF fail pending operations without crashing or replaying',async()=>{
+ for(const [stream,event] of [['stdin','error'],['stdout','error'],['stderr','error'],['stdout','end'],['stdout','close']]){
+  const {client,child}=fixture();const waiting=client.request('start');const rejected=assert.rejects(waiting,/不要重复提交/);
+  const dispatched=child.stdin.read().toString();
+  assert.doesNotThrow(()=>child[stream].emit(event,new Error('fixture pipe failure')));
+  await rejected;assert.equal(client.closed,true);assert.equal(client.pending.size,0);
+  await assert.rejects(client.request('start'));assert.equal(child.stdin.read(),null);assert.equal(dispatched.trim().split('\n').length,1);
+ }
+});
+test('closing the host clears concurrent pending requests instead of leaving their timers active',async()=>{
+ const {client,child}=fixture(),waiting=client.request('status'),rejected=assert.rejects(waiting,/不要重复提交/);
+ child.stdin.read();const closing=client.close(),shutdown=JSON.parse(child.stdin.read().toString());
+ assert.equal(shutdown.method,'shutdown');child.stdout.write(JSON.stringify({id:shutdown.id,data:{}})+'\n');
+ await closing;await rejected;
+ assert.equal(client.closed,true);assert.equal(client.pending.size,0);
+});
 test('host diagnostics describe exits without recording pipe payloads or credentials',async()=>{
  const child=new EventEmitter();child.stdin=new PassThrough();child.stdout=new PassThrough();child.stderr=new PassThrough();const events=[];
  const client=new HostClient('agent.exe','private.json',()=>child,(event,details)=>events.push({event,...details}));

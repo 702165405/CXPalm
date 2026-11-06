@@ -3,6 +3,8 @@ package desktop
 import (
 	"encoding/json"
 	"strings"
+
+	"cxpalm/internal/store"
 )
 
 func steerAccepted(raw json.RawMessage) bool {
@@ -10,20 +12,21 @@ func steerAccepted(raw json.RawMessage) bool {
 	if json.Unmarshal(raw, &value) != nil {
 		return false
 	}
+	accepted := false
 	for depth := 0; depth < 5 && value != nil; depth++ {
 		status, _ := value["status"].(string)
 		if status == "rejected" || status == "outcome-unknown" || status == "error" || value["error"] != nil {
 			return false
 		}
 		if status == "accepted" || status == "success" || value["applied"] == true {
-			return true
+			accepted = true
 		}
 		if turn, _ := value["turnId"].(string); turn != "" {
-			return true
+			accepted = true
 		}
 		value, _ = value["result"].(map[string]any)
 	}
-	return false
+	return accepted && value == nil
 }
 func inputText(input []any) string {
 	parts := []string{}
@@ -35,6 +38,39 @@ func inputText(input []any) string {
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+func userItemText(item map[string]any) string {
+	if text, _ := item["text"].(string); text != "" {
+		return text
+	}
+	switch content := item["content"].(type) {
+	case string:
+		return content
+	case []any:
+		return inputText(content)
+	}
+	return ""
+}
+
+func steerAnchor(raw map[string]any, turnID, text string) *store.SteerAnchor {
+	for _, entry := range orderedTurns(raw) {
+		turn, _ := entry.(map[string]any)
+		if fmtID(turn["turnId"]) != turnID && fmtID(turn["id"]) != turnID {
+			continue
+		}
+		items := orderedItems(turn["items"])
+		anchor := &store.SteerAnchor{Offset: len(items)}
+		for _, entry := range items {
+			item, _ := entry.(map[string]any)
+			anchor.AfterItem = fmtID(item["id"])
+			if item["type"] == "userMessage" && userItemText(item) == text {
+				anchor.TextMatches++
+			}
+		}
+		return anchor
+	}
+	return nil
 }
 
 // Some owners acknowledge steering before adding a user item to their stream.
@@ -50,7 +86,7 @@ func (b *Bridge) withSteers(id string, raw map[string]any) map[string]any {
 	turns := orderedTurns(raw)
 	out := make([]any, len(turns))
 	copy(out, turns)
-	for i, entry := range turns {
+	for turnIndex, entry := range turns {
 		turn, ok := entry.(map[string]any)
 		if !ok {
 			continue
@@ -60,53 +96,101 @@ func (b *Bridge) withSteers(id string, raw map[string]any) map[string]any {
 			turnID = fmtID(turn["id"])
 		}
 		items := orderedItems(turn["items"])
-		seenIDs := map[string]bool{}
-		nativeText := map[string]int{}
-		for _, entry := range items {
-			if item, ok := entry.(map[string]any); ok && item["type"] == "userMessage" {
-				for _, key := range []string{"id", "clientId", "serverClientUserMessageId"} {
-					if v, ok := item[key].(string); ok {
-						seenIDs[v] = true
-					}
-				}
-				text, _ := item["text"].(string)
-				if text == "" {
-					if content, ok := item["content"].([]any); ok {
-						text = inputText(content)
-					}
-				}
-				nativeText[text]++
+		matching := []store.SteerMessage{}
+		for _, message := range messages {
+			if message.Turn == turnID {
+				matching = append(matching, message)
 			}
 		}
-		extra := []any{}
-		for _, message := range messages {
-			if message.Turn != turnID {
+		if len(matching) == 0 {
+			continue
+		}
+		matched := map[string]int{}
+		used := map[int]bool{}
+		identities := map[string][]int{}
+		textRows := map[string][]int{}
+		itemPositions := map[string]int{}
+		for itemIndex, entry := range items {
+			item, _ := entry.(map[string]any)
+			if id := fmtID(item["id"]); id != "" {
+				itemPositions[id] = itemIndex
+			}
+			if item["type"] != "userMessage" {
 				continue
 			}
-			if seenIDs[message.ID] {
-				if nativeText[message.Text] > 0 {
-					nativeText[message.Text]--
+			for _, key := range []string{"id", "clientId", "clientUserMessageId", "serverClientUserMessageId"} {
+				if id := fmtID(item[key]); id != "" {
+					identities[id] = append(identities[id], itemIndex)
 				}
+			}
+			textRows[userItemText(item)] = append(textRows[userItemText(item)], itemIndex)
+		}
+		for _, message := range matching {
+			for _, identity := range []string{message.ID, "steer:" + message.ID} {
+				for _, itemIndex := range identities[identity] {
+					if !used[itemIndex] {
+						matched[message.ID], used[itemIndex] = itemIndex, true
+						break
+					}
+				}
+				if _, found := matched[message.ID]; found {
+					break
+				}
+			}
+		}
+		for _, message := range matching {
+			if _, exists := matched[message.ID]; exists || message.Text == "" || len(message.Images) > 0 {
 				continue
 			}
-			if nativeText[message.Text] > 0 {
-				nativeText[message.Text]--
+			for occurrence, itemIndex := range textRows[message.Text] {
+				earlier := message.Anchor != nil && occurrence < message.Anchor.TextMatches
+				if !earlier && !used[itemIndex] {
+					matched[message.ID], used[itemIndex] = itemIndex, true
+					break
+				}
+			}
+		}
+		projected := append([]any{}, items...)
+		insertions := map[int][]any{}
+		for _, message := range matching {
+			if itemIndex, exists := matched[message.ID]; exists {
+				item, _ := items[itemIndex].(map[string]any)
+				copyItem := map[string]any{}
+				for key, value := range item {
+					copyItem[key] = value
+				}
+				copyItem["id"] = "steer:" + message.ID
+				projected[itemIndex] = copyItem
 				continue
+			}
+			position := len(items)
+			if message.Anchor != nil {
+				position = max(0, min(message.Anchor.Offset, len(items)))
+				if message.Anchor.AfterItem != "" {
+					if itemIndex, found := itemPositions[message.Anchor.AfterItem]; found {
+						position = itemIndex + 1
+					}
+				}
 			}
 			content := []any{}
 			for _, path := range message.Images {
 				content = append(content, map[string]any{"type": "localImage", "path": path})
 			}
-			extra = append(extra, map[string]any{"id": "steer:" + message.ID, "type": "userMessage", "text": message.Text, "content": content, "delivery": "accepted"})
+			insertions[position] = append(insertions[position], map[string]any{"id": "steer:" + message.ID, "type": "userMessage", "text": message.Text, "content": content, "delivery": "accepted"})
 		}
-		if len(extra) > 0 {
-			copyTurn := map[string]any{}
-			for key, value := range turn {
-				copyTurn[key] = value
+		ordered := []any{}
+		for position := 0; position <= len(projected); position++ {
+			ordered = append(ordered, insertions[position]...)
+			if position < len(projected) {
+				ordered = append(ordered, projected[position])
 			}
-			copyTurn["items"] = append(append([]any{}, items...), extra...)
-			out[i] = copyTurn
 		}
+		copyTurn := map[string]any{}
+		for key, value := range turn {
+			copyTurn[key] = value
+		}
+		copyTurn["items"] = ordered
+		out[turnIndex] = copyTurn
 	}
 	copyRaw := map[string]any{}
 	for key, value := range raw {

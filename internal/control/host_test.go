@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func fixture(t *testing.T) *Host {
@@ -85,6 +86,42 @@ func TestOwnedLifecycleAndExternalPortSafety(t *testing.T) {
 	if conn, err := net.Dial("tcp", h.config.Listen); err == nil {
 		conn.Close()
 		t.Fatal("owned listener survived close")
+	}
+}
+func TestExplicitDiagnosticsTimestampAndLifecycleReset(t *testing.T) {
+	host := fixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	initial, err := host.Execute(ctx, Request{Method: "status"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if initial.(map[string]any)["diagnosedAt"] != int64(0) {
+		t.Fatal("status claimed a diagnostic probe")
+	}
+	before := time.Now().UnixMilli()
+	checked, err := host.Execute(ctx, Request{Method: "diagnose"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamp := checked.(map[string]any)["diagnosedAt"].(int64)
+	if stamp < before || stamp > time.Now().UnixMilli() || host.desktopOK == nil || *host.desktopOK {
+		t.Fatal("missing IPC endpoint was not recorded as a timed failed check")
+	}
+	refreshed, err := host.Execute(ctx, Request{Method: "status"})
+	if err != nil || refreshed.(map[string]any)["diagnosedAt"] != stamp {
+		t.Fatal("status silently refreshed diagnostic evidence", err)
+	}
+	started, err := host.Execute(ctx, Request{Method: "start"})
+	if err != nil || started.(map[string]any)["diagnosedAt"] != int64(0) || host.desktopOK != nil {
+		t.Fatal("starting a new gateway retained old diagnostic evidence", err)
+	}
+	if _, err = host.Execute(ctx, Request{Method: "diagnose"}); err != nil {
+		t.Fatal(err)
+	}
+	stopped, err := host.Execute(ctx, Request{Method: "stop"})
+	if err != nil || stopped.(map[string]any)["diagnosedAt"] != int64(0) || host.desktopOK != nil {
+		t.Fatal("stopping the gateway retained old diagnostic evidence", err)
 	}
 }
 func TestRevocationAndProtocolBoundary(t *testing.T) {

@@ -72,7 +72,22 @@ async function ensureConnection(){
   await reconnecting;
   return !!client&&!client.closed;
 }
-function snapshot(state){lastState=state;updateTray();return {...state,configPath,fixture,startupError};}
+function startupIssue(){return startupError||(diagnostics?.status().available===false?'本地诊断日志无法写入，请检查磁盘空间和日志目录权限；网关不会因此停止。':'');}
+function snapshot(state){lastState=state;updateTray();return {...state,configPath,fixture,startupError:startupIssue()};}
+async function stopGateway(){
+  return lockedSettings(async()=>{
+    if(!await ensureConnection())throw new Error('请先选择有效的 CXPalm 配置。');
+    const stoppingClient=client,current=snapshot(await stoppingClient.request('status'));
+    if(!current.owned)throw new Error('No Agent owned by this window; external processes are never stopped');
+    const answer=await dialog.showMessageBox(win,{type:'warning',title:tr('停止网关？'),message:tr('手机和 Web 将断开连接。'),detail:tr('仅停止本窗口管理的 CXPalm 网关和隧道，不停止官方 Codex 中正在运行的任务。配置和设备授权保留。'),buttons:[tr('取消'),tr('停止网关')],defaultId:0,cancelId:0});
+    if(answer.response!==1)return {...current,stopCancelled:true};
+    if(client!==stoppingClient||stoppingClient.closed)throw new Error('桌面管理连接已改变，请刷新状态后再操作。');
+    const latest=snapshot(await stoppingClient.request('status'));
+    if(!latest.owned)throw new Error('No Agent owned by this window; external processes are never stopped');
+    try{const stopped=snapshot(await stoppingClient.request('stop'));record('agent-action',{method:'stop',success:true});return stopped;}
+    catch(error){record('agent-action',{method:'stop',success:false});throw error;}
+  });
+}
 function updateTray(){
   if(!tray)return;
   const owned=lastState?.owned;
@@ -86,8 +101,8 @@ function updateTray(){
   ]));
 }
 async function trayAction(method){
-  try{if(settingsBusy)throw new Error('设置正在保存');snapshot(await client.request(method));record('agent-action',{method,success:true});win.webContents.send('desktop:changed');}
-  catch{record('agent-action',{method,success:false});dialog.showErrorBox('CXPalm',tr('操作未完成。请打开控制台刷新状态；不要重复提交。'));}
+  try{if(settingsBusy)throw new Error('设置正在保存');if(method==='stop')await stopGateway();else{snapshot(await client.request(method));record('agent-action',{method,success:true});}win.webContents.send('desktop:changed');}
+  catch{if(method!=='stop')record('agent-action',{method,success:false});dialog.showErrorBox('CXPalm',tr('操作未完成。请打开控制台刷新状态；不要重复提交。'));}
 }
 const ready=hasLock?app.whenReady().then(async()=>{
   languageUI=create(messages,preferences().language||(fixture?'zh-CN':choose(app.getLocale())));
@@ -108,8 +123,8 @@ const ready=hasLock?app.whenReady().then(async()=>{
   win.on('hide',()=>record('window-hidden'));
   win.on('show',()=>record('window-shown'));
   win.on('closed',()=>record('window-destroyed'));
-  win.on('query-session-end',()=>record('system-session-end'));
-  win.on('session-end',()=>record('system-session-end'));
+  win.on('query-session-end',event=>record('system-session-query',{sessionReasons:event?.reasons}));
+  win.on('session-end',event=>record('system-session-end',{sessionReasons:event?.reasons}));
   win.webContents.session.setPermissionRequestHandler((_contents,_permission,callback)=>callback(false));
   win.webContents.session.setPermissionCheckHandler(()=>false);
   win.webContents.session.on('will-download',event=>event.preventDefault());
@@ -119,7 +134,8 @@ const ready=hasLock?app.whenReady().then(async()=>{
     trusted(event);validate(method,args);
     if(settingsBusy)throw new Error('设置正在保存，请稍后再试。');
     if(method==='shutdown')throw new Error('请通过托盘退出桌面端。');
-    if(!await ensureConnection()){if(method!=='status')throw new Error('请先选择有效的 CXPalm 配置。');return {state:connectionError?'error':'unconfigured',fixture,configPath,error:connectionError,startupError};}
+    if(method==='stop')return stopGateway();
+    if(!await ensureConnection()){if(method!=='status')throw new Error('请先选择有效的 CXPalm 配置。');return {state:connectionError?'error':'unconfigured',fixture,configPath,error:connectionError,startupError:startupIssue()};}
     let data;
     try{data=await client.request(method,args);if(['start','stop'].includes(method))record('agent-action',{method,success:true});}
     catch(error){if(['start','stop'].includes(method))record('agent-action',{method,success:false});throw error;}
@@ -227,7 +243,7 @@ const ready=hasLock?app.whenReady().then(async()=>{
   }catch(error){record('agent-action',{method:'start',success:false});startupError='自动启动网关未完成：'+error.message;}
   // Decide only after configuration and optional Agent startup finish. First run
   // and failures must stay visible; explicitly reopening the app still shows it.
-  if(!smoke&&settings.shouldShowOnStartup({loginLaunch:loggedIn,startMinimized:preferences().startMinimized,configured:!!configPath&&!!client,failed:!!startupError||!!connectionError}))win.show();
+  if(!smoke&&settings.shouldShowOnStartup({loginLaunch:loggedIn,startMinimized:preferences().startMinimized,configured:!!configPath&&!!client,failed:!!startupIssue()||!!connectionError}))win.show();
   win.webContents.send('desktop:changed');
   record('startup-ready',{configured:!!configPath&&!!client,owned:lastState?.owned===true,visible:win.isVisible(),success:!startupError&&!connectionError});
   if(!fixture)void updater.check(true).catch(()=>{});

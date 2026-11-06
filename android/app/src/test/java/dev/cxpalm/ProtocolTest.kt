@@ -5,6 +5,18 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 class ProtocolTest {
+    @Test fun outputOnlyMessagesRetainFileIdentity() {
+        val file=org.json.JSONObject().put("id","a".repeat(64)).put("name","review.xlsx").put("kind","xlsx")
+        val item=org.json.JSONObject().put("id","output").put("type","agentMessage").put("files",org.json.JSONArray().put(file))
+        val snapshot=org.json.JSONObject().put("turns",org.json.JSONArray().put(org.json.JSONObject().put("turnId","turn").put("items",org.json.JSONArray().put(item))))
+        val message=conversationMessages(snapshot).single()
+        assertEquals("turn:output",message.id);assertEquals("review.xlsx",message.files.single().name)
+        assertEquals("a".repeat(64),message.files.single().id)
+        assertEquals(0,returnedFileBytes(java.io.ByteArrayInputStream(byteArrayOf())).size)
+        assertEquals("fixture",String(returnedFileBytes(java.io.ByteArrayInputStream("fixture".toByteArray()))))
+        try {returnedFileBytes(java.io.ByteArrayInputStream(ByteArray(MAX_ATTACHMENT_SIZE.toInt()+1)));fail("Oversized download accepted")}
+        catch(_:IllegalArgumentException) {}
+    }
     @Test fun sessionErrorsAreVisibleAndScopedToTheirTurn() {
         val snapshot=org.json.JSONObject("""{"turns":[{"turnId":"failed","items":[{"id":"cxpalm:turn-error","type":"sessionError","text":"HTTP 429 <img src=x> **plain**","status":"failed"}]},{"turnId":"ok","items":[]}]}""")
         val messages=conversationMessages(snapshot)

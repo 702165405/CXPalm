@@ -15,9 +15,14 @@ test('shared catalogue has English values and retains numbered substitutions',()
    const slots=value=>[...value.matchAll(/\{(\d+)\}/g)].map(match=>match[1]).sort();assert.deepEqual(slots(en),slots(zh),zh);
  }
 });
+test('diagnostic evidence and guidance dynamic text keys are translated',()=>{
+ const {view}=require('../ui/diagnostics.js'),now=1900000000000;
+ const states=[{}, {origin:'https://fixture.test',state:'stopped',sshConfigured:true}, {origin:'https://fixture.test',state:'occupied'}, {state:'running',owned:true}, ...[true,false,null].map(desktopConnected=>({state:'running',owned:true,desktopConnected,diagnosedAt:now-1000})), {state:'running',owned:true,desktopConnected:true,diagnosedAt:now-300000}];
+ for(const state of states){const model=view(state,now);for(const key of [model.guidance,...model.rows.flatMap(row=>[row.label,row.value,row.detail])])assert.ok(Object.hasOwn(messages,key),key);}
+});
 test('desktop and Android explicit UI text keys are covered; user content is not swept',()=>{
  const root=path.resolve(__dirname,'../..');
- const files=['desktop/ui/app.js','android/app/src/main/java/dev/cxpalm/SettingsPage.kt','android/app/src/main/java/dev/cxpalm/PalmApp.kt','android/app/src/main/java/dev/cxpalm/ChatPage.kt','android/app/src/main/java/dev/cxpalm/PalmComponents.kt','android/app/src/main/java/dev/cxpalm/ConnectionService.kt','android/app/src/main/java/dev/cxpalm/UiModels.kt','android/app/src/main/java/dev/cxpalm/TaskTiming.kt','android/app/src/main/java/dev/cxpalm/PendingNotice.kt'];
+ const files=['desktop/ui/app.js','android/app/src/main/java/dev/cxpalm/SettingsPage.kt','android/app/src/main/java/dev/cxpalm/PalmApp.kt','android/app/src/main/java/dev/cxpalm/ChatPage.kt','android/app/src/main/java/dev/cxpalm/PalmComponents.kt','android/app/src/main/java/dev/cxpalm/MessageFiles.kt','android/app/src/main/java/dev/cxpalm/ConnectionService.kt','android/app/src/main/java/dev/cxpalm/UiModels.kt','android/app/src/main/java/dev/cxpalm/TaskTiming.kt','android/app/src/main/java/dev/cxpalm/PendingNotice.kt'];
  for(const file of files){const source=fs.readFileSync(path.join(root,file),'utf8');for(const match of source.matchAll(/tr\((['"])((?:\\.|(?!\1).)*?)\1/gs)){
    const key=match[2].replace(/\\n/g,'\n');if(/[\p{Script=Han}]/u.test(key))assert.ok(Object.hasOwn(messages,key),file+': '+key);
  }}

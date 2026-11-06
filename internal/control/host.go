@@ -30,10 +30,11 @@ type Response struct {
 	Error string `json:"error,omitempty"`
 }
 type Host struct {
-	config    config.Config
-	db        *store.Store
-	runtime   *agent.Runtime
-	desktopOK *bool
+	config      config.Config
+	db          *store.Store
+	runtime     *agent.Runtime
+	desktopOK   *bool
+	diagnosedAt int64
 }
 
 func New(c config.Config, db *store.Store) *Host { return &Host{config: c, db: db} }
@@ -41,6 +42,8 @@ func (h *Host) Close() {
 	if h.runtime != nil {
 		h.runtime.Stop()
 		h.runtime = nil
+		h.desktopOK = nil
+		h.diagnosedAt = 0
 	}
 }
 func (h *Host) owned() bool {
@@ -51,6 +54,8 @@ func (h *Host) owned() bool {
 	case <-h.runtime.Done:
 		h.runtime.Stop()
 		h.runtime = nil
+		h.desktopOK = nil
+		h.diagnosedAt = 0
 		return false
 	default:
 		return true
@@ -102,7 +107,7 @@ func (h *Host) status(ctx context.Context) (any, error) {
 			active++
 		}
 	}
-	return map[string]any{"version": config.Version, "state": state, "owned": state == "running", "origin": h.config.Origin, "listen": h.config.Listen, "codexHome": h.config.CodexHome, "sshConfigured": h.config.SSHHost != "", "desktopConnected": h.desktopOK, "sessions": counts, "devices": active, "trustedProxyIP": h.config.TrustedProxyIP}, nil
+	return map[string]any{"version": config.Version, "state": state, "owned": state == "running", "origin": h.config.Origin, "listen": h.config.Listen, "codexHome": h.config.CodexHome, "sshConfigured": h.config.SSHHost != "", "desktopConnected": h.desktopOK, "diagnosedAt": h.diagnosedAt, "sessions": counts, "devices": active, "trustedProxyIP": h.config.TrustedProxyIP}, nil
 }
 func (h *Host) Execute(ctx context.Context, q Request) (any, error) {
 	if q.Login != nil && q.Method != "login.set" {
@@ -124,6 +129,8 @@ func (h *Host) Execute(ctx context.Context, q Request) (any, error) {
 				return nil, err
 			}
 			h.runtime = r
+			h.desktopOK = nil
+			h.diagnosedAt = 0
 		}
 		return h.status(ctx)
 	case "stop":
@@ -132,6 +139,8 @@ func (h *Host) Execute(ctx context.Context, q Request) (any, error) {
 		}
 		h.runtime.Stop()
 		h.runtime = nil
+		h.desktopOK = nil
+		h.diagnosedAt = 0
 		return h.status(ctx)
 	case "login.get":
 		return h.db.LoginSettings()
@@ -174,6 +183,7 @@ func (h *Host) Execute(ctx context.Context, q Request) (any, error) {
 		conn, err := desktop.Connect(ctx, h.config.IPCPath)
 		ok := err == nil
 		h.desktopOK = &ok
+		h.diagnosedAt = time.Now().UnixMilli()
 		if conn != nil {
 			conn.Close()
 		}

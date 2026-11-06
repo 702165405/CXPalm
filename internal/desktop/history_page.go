@@ -10,6 +10,7 @@ import (
 
 type Question struct {
 	Turn   string `json:"turn"`
+	Item   string `json:"item,omitempty"`
 	Offset int    `json:"offset"`
 	Text   string `json:"text"`
 }
@@ -93,7 +94,7 @@ func historyPageProjection(raw map[string]any, cursor string, offset, limit int,
 			offset = i
 			found = true
 		}
-		for _, entry := range orderedItems(turn["items"]) {
+		for itemIndex, entry := range orderedItems(turn["items"]) {
 			item, ok := entry.(map[string]any)
 			if !ok || item["type"] != "userMessage" {
 				continue
@@ -120,7 +121,11 @@ func historyPageProjection(raw map[string]any, cursor string, offset, limit int,
 			if len(title) > 160 {
 				title = append(title[:160], '.', '.', '.')
 			}
-			page.Questions = append(page.Questions, Question{Turn: id, Offset: i, Text: string(title)})
+			itemID, _ := item["id"].(string)
+			if itemID == "" {
+				itemID = fmt.Sprintf("userMessage:%d", itemIndex)
+			}
+			page.Questions = append(page.Questions, Question{Turn: id, Item: itemID, Offset: i, Text: string(title)})
 		}
 	}
 	if !found {

@@ -4,6 +4,189 @@ Public verification records exclude real conversation content, device identifier
 private deployment paths, credentials and raw logs. Tests use synthetic data unless
 explicitly described as deployment connectivity or public-byte checks.
 
+## 0.0.8 / build8
+
+- Web and Android expose document cards for assistant file citations and local
+  Markdown links, including existing history. Web saves with the browser download
+  manager; Android uses the system document picker. HTML and office documents
+  remain downloads, with no script execution or embedded office editor.
+- Tests cover opaque message-bound IDs, citation/link deduplication, private and
+  remote path rejection, outside-root and oversized reads, missing files,
+  attachment response headers, Origin/authentication checks and revocation.
+  Rooted opens retain traversal protection. Symlink fixtures run only when the
+  host grants symlink creation; this Windows account does not grant that privilege.
+- Two existing locally generated documents (XLSX and HTML) are
+  located through read-only original history and downloaded through an isolated
+  local HTTP server with a temporary authentication store. Both SHA-256 values
+  match the original local files. No chat resumes, model calls, production device
+  authorization changes or edits to those files occur.
+- Chromium checks pass under the existing strict CSP, including desktop/mobile
+  file cards, Unicode filenames, exact saved bytes, HTML downloads, missing-file
+  errors and dropped late results after message removal. Clicking message
+  controls no longer arms automatic history loading. Screenshots were reviewed.
+- Full Go tests and vet pass; Windows amd64 and macOS amd64/arm64 cross-builds
+  pass. All 99 Node checks pass. Android reports 92 tests: 91 pass and one
+  publication-only updater check skips. Lint has zero errors and ten warnings.
+  APK identity is 0.0.8/code8 and retains the existing development signer.
+  Physical Android saving and macOS runtime acceptance have not been performed.
+- All 12 desktop source/UI files and extra resources match their tested inputs;
+  selected privacy checks report no findings. All 76 installed runtime files
+  match the package. After restart the gateway reports 0.0.8 and completes the
+  official desktop IPC handshake. Configuration, authorizations, account
+  settings, preferences, shortcuts and login startup are unchanged.
+- The initial Web entry and three immutable build8 resources are deployed and fresh
+  HTTPS bytes match staged sizes/hashes. The public file endpoint returns 401
+  without authorization. Native packages/manifests are staged locally; both
+  public native feeds reported 0.0.3/build3 at this initial deployment.
+  Native publication is recorded separately after public-byte verification.
+  No phone installation or server/firewall change occurred.
+
+## 0.0.7 / build7
+
+- Guidance captures its insertion anchor before dispatch, persists it with the
+  accepted receipt and retains a stable presentation identity on the native echo.
+  Synthetic regressions cover later output, repeated identical prompts, multiple
+  guidance receipts, delayed/out-of-order echoes, idempotent projection and
+  unchanged native patch bases. Legacy receipts without anchors are preserved;
+  their original positions cannot be reconstructed.
+- Guidance requires the client's displayed task turn and rechecks it immediately
+  before original-owner dispatch. Missing/stale bindings are rejected, not
+  replayed. Visible paginated turn order takes priority over unordered entities.
+  Android actions retain their captured computer/chat, and late Web receipts
+  retain their originating chat. Guidance requires updated build7 clients/gateway.
+- Question indexes identify individual user items, including multiple guidance
+  messages within one turn. Web and Android use this identity for navigation and
+  refresh indexes for new same-turn user messages. Chromium desktop and 390px
+  mobile fixtures verify exact second-guidance positioning, active markers and
+  no accidental send; screenshots were visually reviewed.
+- Full Go tests and vet pass. Windows amd64 and macOS amd64/arm64 cross-builds
+  pass. All 98 Node checks pass. Android reports 91 tests: 90 pass and one
+  publication-only updater check skips; lint has zero errors and ten warnings.
+  APK identity is 0.0.7/code7, retaining the existing development signer.
+- All 12 packaged desktop source/UI files and extra resources match tested
+  inputs; selected privacy checks report no findings. All 76 installed runtime
+  files match the package. The restarted gateway reports 0.0.7 and completes the
+  official desktop IPC handshake. Configuration, device authorizations, account
+  settings, preferences, shortcuts and login startup remain unchanged.
+- The Web entry and three immutable build7 resources are deployed; fresh HTTPS
+  downloads match staged sizes and SHA-256 values. The public API still requires
+  authorization. Android/desktop packages and manifests are staged locally; both
+  public native feeds still report 0.0.3/build3. No source commit/push, native feed
+  promotion, phone installation or service/firewall configuration change occurred.
+  No real guidance was sent to a private chat, and no physical Android or macOS
+  runtime acceptance is claimed.
+
+## 0.0.6 / build6
+
+- Web and Android add opt-in input suggestions, disabled by default with a Codex
+  quota notice. Tab/tap fills a draft; Escape/dismiss hides the current suggestion.
+  A suggestion never sends a message. Existing drafts, caret selections, IME
+  composition, stale reply identities and offline state gate acceptance.
+- Full Go tests and vet pass. Windows amd64 and macOS amd64/arm64 cross-builds
+  pass. All 97 Node checks pass. Isolated Chromium covers desktop/mobile
+  suggestions, prefix completion, IME and Shift-Tab preservation, caret selection,
+  Escape dismissal, late results and acceptance without sending. Screenshots
+  were visually reviewed.
+- The installed official CLI and the CLI selected by the gateway both pass a
+  localhost synthetic-provider integration. Each prediction uses a new ephemeral
+  identity with a verified read-only/never-approve policy, no persistent rollout
+  and no main-chat resume. The test checks that executable tools are absent,
+  configured MCP commands do not run and an interactive request aborts without
+  another model request. No external model or real chat is used in these tests.
+- Suggestions contain only bounded recent user/assistant text. Execution
+  features, plugins, MCP, project instructions and environment access are
+  disabled. Interactive requests are never answered. Selection changes,
+  authorization revocation and deadlines cancel the bounded background lane.
+  Child process trees are stopped when generation ends. Independent predictions
+  can differ from the official desktop; real-model quality was not evaluated.
+- Android reports 90 tests: 89 pass and one publication-only updater check skips.
+  Lint has zero errors and ten warnings. APK identity is 0.0.6/code6, with the
+  existing development signer. No physical Android or macOS runtime acceptance
+  is claimed.
+- All 12 packaged desktop source/UI files and extra resources match their tested
+  inputs; privacy candidate checks report no findings. All 76 installed runtime
+  files match the package. After restart, the local gateway reports 0.0.6 and
+  completes the official desktop IPC handshake. Configuration, authorizations,
+  account settings, preferences, shortcuts and login startup remain unchanged.
+- The Web entry and three immutable build6 resources are deployed; fresh HTTPS
+  downloads match staged sizes and SHA-256 values. The public API requires
+  authorization. Android/desktop packages and manifests are staged locally;
+  both public native update feeds still report 0.0.3/build3. No source commit,
+  push, native feed promotion, phone installation or service/firewall
+  configuration change was performed.
+
+## 0.0.5 / build5
+
+- First-batch UX changes cover connection/sync/read-only presentation, compact
+  mobile controls with visible permission warnings, cancellable attachment
+  uploads, readable pending-operation cards and confirmed desktop gateway stop.
+  Unknown writes and interrupted uploads are not automatically replayed.
+- Native sync time comes only from validated original-owner snapshots/patches.
+  Projection/read overlays and transport heartbeats do not renew it; old gateways
+  remain compatible and show an unknown sync time. Focused Go tests cover this.
+- Full uncached Go tests and vet pass; Windows amd64 and macOS amd64/arm64 builds
+  use Go 1.27.3. All 96 Node checks pass. Isolated Chromium covers 320/390px and
+  desktop layouts, upload cancellation/late replies, stable cancel-button focus,
+  pending details and native sync evidence. Screenshots were visually reviewed.
+- Isolated Electron tests cover both stop entry points, default cancellation,
+  ownership loss after confirmation, duplicate requests, diagnostic staleness
+  and English layouts. These tests do not stop a real official desktop task.
+- Android reports 89 tests: 88 pass and one publication-only updater check skips.
+  Lint has zero errors and ten warnings; two new warnings are existing icon
+  resources no longer used by the compact controls. The normal APK builds with
+  version 0.0.5/code5, retains the existing development signer and excludes
+  rendering-probe code. No physical Android or macOS runtime acceptance is claimed.
+- All 12 packaged desktop source/UI files and extra resources match the tested
+  inputs; the selected privacy checks report zero findings. All 76 installed
+  runtime files match the package. Configuration, device authorizations, account
+  settings, preferences, shortcuts and login startup remain unchanged.
+- The updated local gateway reports 0.0.5, writes fresh lifecycle diagnostics and
+  passes the official desktop IPC handshake. It starts hidden according to the
+  existing preference. Public API connectivity returns 401 without authorization.
+  No real message, approval or model execution was used to verify the deployment.
+- The Web entry and three immutable build5 assets are deployed; fresh HTTPS
+  downloads match staged sizes and SHA-256 values. The Android package and native
+  manifests are staged, but both public native feeds still report 0.0.3/build3.
+  No Git commit/push, phone installation, service installation or server/firewall
+  configuration change was performed. Native feed promotion still requires a
+  separately authorized commit; a staged manifest is not a published update.
+
+## 0.0.4 / build4
+
+- Web mutation tests reproduce the old cross-connection dispatch race. Writes
+  and manual unknown-result acknowledgements now require the original socket
+  and authorization; late receipts settle only their original pending journal.
+- Desktop pipe error/EOF tests confirm pending calls fail without an uncaught
+  stream error or replay. Shutdown clears concurrent pending calls. Partial
+  native IPC header/payload write tests fail against the old implementation and
+  pass after closing the damaged connection.
+- History opens use an `os.Root` handle after normalized containment checks.
+  Boundary and Windows long/extended-path tests pass. The concurrent symlink
+  replacement test skips because this Windows account lacks symlink privilege;
+  no permission or system setting was changed to enable it.
+- Diagnostics report unavailable log/marker writes without stopping the gateway,
+  retry failed markers and distinguish Windows session query/end notifications.
+  Unit tests and isolated Electron clean/abrupt/unwritable-path checks pass.
+  These fixtures do not reproduce or prove a fix for the earlier update shutdown.
+- Full uncached Go tests and vet pass. Windows amd64 and macOS amd64/arm64 builds
+  use Go 1.27.3. All 88 Node checks pass, including version consistency. Isolated
+  Chromium UI checks pass. Android has 84 passing tests and one publication-only
+  updater check skipped; lint has zero errors and eight warnings, and APK build
+  succeeds with version 0.0.4/code4 and the same development signer as build3.
+- Packaged desktop identity, all 11 packaged source files and extra resources
+  match the tested inputs; the selected privacy checks report zero findings.
+  This is not a complete binary-secret audit or physical Android/macOS acceptance.
+- The Web entry and three immutable build4 assets are deployed and freshly
+  downloaded HTTPS bytes match staged sizes/SHA-256 values. Native installers and
+  local update manifests are staged only. The desktop launch approval timed out,
+  so the running installation was not stopped/replaced and its health remains
+  0.0.3. Both public native feeds still report 0.0.3/build3. No Git commit/push,
+  service installation, authorization or server/firewall configuration change
+  was performed. Native feed promotion requires a separately authorized commit.
+- An online npm advisory scan was not authorized because it would send dependency
+  metadata to a third party. The source review is not a claim of zero remaining
+  vulnerabilities or current upstream dependency/advisory coverage.
+
 ## 0.0.3 / build3
 
 - Turn error messages, tool error messages and rollout error events are projected

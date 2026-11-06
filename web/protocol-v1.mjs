@@ -1,3 +1,18 @@
+export function suggestionTurn(snapshot) {
+  const latest=snapshot?.turns?.at(-1);
+  return snapshot?.threadRuntimeStatus?.type==='idle' && Array.isArray(snapshot.requests) && !snapshot.requests.length &&
+    !snapshot.queuedMessages?.length && snapshot.threadGoal?.status!=='active' && latest?.status==='completed' &&
+    typeof latest.turnId==='string' && latest.items?.some(item=>item.type==='agentMessage'&&item.text?.trim()) ? latest.turnId : null;
+}
+export function activeTurnId(snapshot) {
+  const turn=snapshot?.turns?.findLast(turn=>turn.status==='inProgress');
+  return turn?.turnId||turn?.id||'';
+}
+export function suggestionSuffix(text,draft,start=draft.length,end=start,composing=false) {
+  return !composing && typeof text==='string' && [...text].length<=280 && text.startsWith(draft) &&
+    start===draft.length && end===start ? text.slice(draft.length) : '';
+}
+
 export class SnapshotStream {
   reset(thread=null,id=null){this.thread=thread;this.id=id;this.current=null;this.revision=0;this.broken=false;}
   constructor(){this.reset();}
@@ -66,9 +81,10 @@ export function conversation(turns = []) {
       return {id: item.id || `${item.type}:${itemIndex}`, turn: turn.turnId || turn.id || `turn-${turnIndex}`,
         command: typeof item.command === 'string' ? item.command : '', status: item.status,
         images:Array.isArray(item.images)?item.images:[],
+        files:Array.isArray(item.files)?item.files:[],
         collapsible: !['userMessage', 'agentMessage','imageGenerationCall','imageGeneration','sessionError'].includes(item.type), role: item.type === 'userMessage' ? '你' : ['agentMessage','imageGenerationCall','imageGeneration'].includes(item.type) ? 'Codex' : item.type,
         text: typeof text === 'string' ? text : '', truncated: item.truncated === true, deferred:item.deferred===true, bodyRevision:item.bodyRevision||''};
-    }).filter(item => item.text||item.deferred||item.images.length);
+    }).filter(item => item.text||item.deferred||item.images.length||item.files.length);
     conversationCache.set(turn,{index:turnIndex,messages});return messages;
   });
 }
@@ -99,6 +115,82 @@ export function contextUsage(snapshot) {
   if (!Number.isFinite(used) || !Number.isFinite(limit) || limit <= 0) return null;
   return {used, limit, percent: Math.min(100, Math.max(0, Math.round(used / limit * 100)))};
 }
+export function connectionPresentation({device,connecting,connected,selected,desktop,cached,writable,pending,nativeSyncedAtMs}) {
+  let label='未登录',kind='offline';
+  if(device){
+    if(connecting&&!connected)label=connecting==='reconnecting'||cached?'正在重连网关':'正在连接网关';
+    else if(!connected)label=cached?'离线只读':'网关已断开';
+    else if(!selected)label='网关已连接 · 请选择会话';
+    else if(selected.archived)label='已归档 · 只读';
+    else if(cached)label='网关已连接 · 缓存只读';
+    else if(!desktop)label='正在同步官方桌面';
+    else if(pending)label='已连接 · 操作待核对';
+    else label=writable?'可发送':'已连接 · 只读';
+    kind=label==='可发送'?'ready':connected?'limited':'offline';
+  }
+  return {label,kind,nativeSyncedAtMs:Number.isSafeInteger(nativeSyncedAtMs)&&nativeSyncedAtMs>0&&Number.isFinite(new Date(nativeSyncedAtMs).getTime())?nativeSyncedAtMs:null};
+}
+export function operationLabel(method) {
+  return ({'chat.send':'发送消息','chat.steer':'引导当前任务','chat.queue':'加入消息队列','chat.queue.cancel':'移除排队消息','chat.stop':'停止当前任务','chat.approve':'答复审批','chat.settings':'修改会话设置','chat.goal':'修改原生目标','chat.compact':'压缩上下文','chat.notifications':'修改会话通知','sessions.create':'新建会话','sessions.rename':'重命名会话','sessions.archive':'归档会话','sessions.unarchive':'取消归档'})[method]||'会话操作';
+}
+export class AttachmentUploads {
+  constructor({storage,changed=()=>{},request=(url,options)=>fetch(url,options),timeout=65000}){Object.assign(this,{storage,changed,request,timeout});this.jobs=new Map();this.loaded=new Set();}
+  list(scope){
+    if(!scope)return [];
+    if(!this.loaded.has(scope)){
+      this.loaded.add(scope);
+      try{for(const saved of JSON.parse(this.storage?.getItem('cxpalm:upload-status:'+scope)||'[]')){
+        if(typeof saved.id!=='string'||typeof saved.name!=='string'||!['queued','uploading','failed','cancelled','interrupted'].includes(saved.status))continue;
+        const job={...saved,scope};
+        if(['queued','uploading'].includes(job.status)){job.status='interrupted';job.error='页面已重新打开，上传结果未确认；不会自动重传。';}
+        this.jobs.set(job.id,job);
+      }}catch{}
+    }
+    return [...this.jobs.values()].filter(job=>job.scope===scope);
+  }
+  busy(scope){return this.list(scope).some(job=>['queued','uploading'].includes(job.status));}
+  publish(scope){
+    const completed=this.list(scope).filter(job=>!['queued','uploading'].includes(job.status));
+    for(const job of completed.slice(0,-16))this.jobs.delete(job.id);
+    const rows=this.list(scope).filter(job=>job.status!=='uploaded').slice(-24).map(({id,name,size,status,error})=>({id,name,size,status,error}));
+    try{this.storage?.setItem('cxpalm:upload-status:'+scope,JSON.stringify(rows));}catch{}
+    this.changed();
+  }
+  cancel(id){const job=this.jobs.get(id);if(!job||!['queued','uploading'].includes(job.status))return;job.status='cancelled';job.error='已取消本次上传；电脑可能已收到文件，不会自动重传或发送消息。';job.controller?.abort();this.publish(job.scope);}
+  cancelAll(){for(const job of this.jobs.values())this.cancel(job.id);}
+  dismiss(id){const job=this.jobs.get(id);if(job&&!['queued','uploading'].includes(job.status)){this.jobs.delete(id);this.publish(job.scope);}}
+  async upload(scope,files,{thread,valid,saved}){
+    if(this.busy(scope))throw new Error('请等待当前附件上传完成。');
+    const batch=files.map(file=>({id:crypto.randomUUID(),scope,name:file.name||'clipboard.png',size:file.size,status:'queued',controller:new AbortController()}));
+    for(const job of batch)this.jobs.set(job.id,job);
+    this.publish(scope);
+    let failure;
+    for(const [index,job] of batch.entries()){
+      if(!valid())this.cancel(job.id);
+      if(job.status==='cancelled')continue;
+      job.status='uploading';this.publish(scope);
+      const timer=setTimeout(()=>job.controller.abort(new DOMException('Upload timed out','TimeoutError')),this.timeout);
+      try{
+        const body=new FormData();body.append('file',files[index],job.name);
+        const response=await this.request(`/api/v1/attachments?thread=${encodeURIComponent(thread)}`,{method:'POST',credentials:'same-origin',cache:'no-store',redirect:'error',body,signal:job.controller.signal});
+        if(response.status===413)throw new Error(`服务器反向代理拒绝上传（HTTP 413）。本次文件 ${(job.size/1024/1024).toFixed(2)} MiB，单个文件上限 20 MiB；服务器请求上限为 20M（含表单头），接近上限时请缩小文件后重试。`);
+        if(!response.ok)throw new Error(`附件上传失败（HTTP ${response.status}），请检查连接、20 MiB 限制及电脑存储配额。`);
+        const uploaded=await response.json();
+        if(!/^[a-f0-9]{64}$/.test(uploaded.id)||typeof uploaded.name!=='string'||!Number.isSafeInteger(uploaded.size)||uploaded.size<1||uploaded.size>20*1024*1024)throw new Error('附件响应无法验证，请在电脑核对；不会自动重传。');
+        if(job.controller.signal.aborted||!valid()){this.cancel(job.id);continue;}
+        saved(uploaded);job.status='uploaded';this.jobs.delete(job.id);
+      }catch(error){
+        if(job.status!=='cancelled'){
+          job.status='failed';job.error=job.controller.signal.reason?.name==='TimeoutError'?'附件上传超时，结果未确认；不会自动重传。':error.message;
+          failure=new Error(job.error);
+          for(const waiting of batch.slice(index+1))this.cancel(waiting.id);
+        }
+      }finally{clearTimeout(timer);delete job.controller;this.publish(scope);}
+      if(failure)break;
+    }
+    if(failure)throw failure;
+  }
+}
 export class Bridge {
   constructor({storage, lock, socket, changed = () => {}, event = () => {}, digest = async text => {
     const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -111,11 +203,13 @@ export class Bridge {
     this.device = null;
     this.socket = null;
     this.receipt = null;
+    this.receiptThread = null;
     this.failures = new Map();
   }
   get pendingKey() { return `cxpalm:pending:${this.device.id}`; }
-  get pendings() {
-    const raw = this.device && this.storage.getItem(this.pendingKey);
+  get pendings() { return this.pendingOperations(this.device); }
+  pendingOperations(device) {
+    const raw = device && this.storage.getItem(`cxpalm:pending:${device.id}`);
     const saved = raw ? JSON.parse(raw) : [];
     return Array.isArray(saved) ? saved : [saved];
   }
@@ -126,11 +220,12 @@ export class Bridge {
     for(const [scope,operation] of this.failures)if(operation.id===id)this.failures.delete(scope);
     this.changed();
   }
-  savePending(operation, remove = false) {
-    const operations = this.pendings.filter(op => op.id !== operation.id);
+  savePending(operation, remove = false, device = this.device) {
+    const key = `cxpalm:pending:${device.id}`;
+    const operations = this.pendingOperations(device).filter(op => op.id !== operation.id);
     if (!remove) operations.push(operation);
-    if (operations.length) this.storage.setItem(this.pendingKey, JSON.stringify(operations));
-    else this.storage.removeItem(this.pendingKey);
+    if (operations.length) this.storage.setItem(key, JSON.stringify(operations));
+    else this.storage.removeItem(key);
   }
   receiptFor(pending) { return pending?.receipt || null; }
   draftKey(thread, side = false) { return `cxpalm:draft:${this.device.id}:${side ? 'side' : 'main'}:${thread}`; }
@@ -141,6 +236,7 @@ export class Bridge {
     if(this.device?.id!==device.id)this.failures.clear();
     this.device = device;
     this.receipt = null;
+    this.receiptThread = null;
     const socket = this.socket = this.socketFactory();
     this.helloTimer = setTimeout(() => { if (this.socket === socket && !this.connected) socket.close(); }, 12000);
     this.helloTimer.unref?.();
@@ -201,12 +297,15 @@ export class Bridge {
       catch (error) { clearTimeout(timer); this.calls.delete(id); reject(error); }
     });
   }
-  async applyReceipt(receipt) {
-    return this.lock(`cxpalm:write:${this.device.id}`, async acquired => {
+  assertConnection(device, socket) {
+    if (this.device !== device || this.socket !== socket || !this.connected) throw new Error('连接已改变，请重新核对当前电脑后再操作。');
+  }
+  async applyReceipt(receipt, device = this.device) {
+    return this.lock(`cxpalm:write:${device.id}`, async acquired => {
     if (!acquired) throw new Error('另一个标签页正在核对回执，请重试。');
-    const pending = this.pendings.find(op => op.id === receipt.id);
+    const pending = this.pendingOperations(device).find(op => op.id === receipt.id);
     if (!pending) throw new Error('操作回执不匹配。');
-    this.receipt = receipt;
+    if (this.device?.id === device.id) {this.receipt = receipt;this.receiptThread=pending.thread;}
     if (['confirmed', 'acknowledged', 'not_sent', 'rejected'].includes(receipt.status)) {
       if(receipt.status==='confirmed'&&pending.attachmentKey&&pending.attachmentIDs){
         const files=JSON.parse(this.storage.getItem(pending.attachmentKey)||'[]');
@@ -215,12 +314,12 @@ export class Bridge {
       if (receipt.status === 'confirmed' && pending.draftKey && pending.draftDigest) {
         const text = this.storage.getItem(pending.draftKey);
         if (text !== null && await this.digest(text) === pending.draftDigest &&
-            this.storage.getItem(pending.draftKey) === text && this.pendings.some(op => op.id === pending.id)) this.storage.removeItem(pending.draftKey);
+            this.storage.getItem(pending.draftKey) === text && this.pendingOperations(device).some(op => op.id === pending.id)) this.storage.removeItem(pending.draftKey);
       }
       // A late response must not clear another tab's newer pending operation.
-      if (this.pendings.some(op => op.id === pending.id)) this.savePending(pending, true);
-      if(['rejected','not_sent'].includes(receipt.status))this.failures.set(pending.thread||null,{...pending,receipt});
-    } else this.savePending({...pending, receipt});
+      if (this.pendingOperations(device).some(op => op.id === pending.id)) this.savePending(pending, true, device);
+      if(this.device?.id === device.id && ['rejected','not_sent'].includes(receipt.status))this.failures.set(pending.thread||null,{...pending,receipt});
+    } else this.savePending({...pending, receipt}, false, device);
     this.changed();
     return receipt;
     }, true);
@@ -228,9 +327,12 @@ export class Bridge {
   async mutate(method, fields, draft) {
     if (!mutationMethods.has(method)) throw new Error('不支持此写操作。');
     if (['chat.send','chat.steer'].includes(method) && (typeof fields.text!=='string' || (!fields.text.trim()&&!fields.attachments?.length) || new TextEncoder().encode(fields.text).length>100000)) throw new Error('消息不能为空且 UTF-8 长度不能超过 100,000 字节。');
+    const device = this.device, socket = this.socket;
     const draftDigest = draft ? await this.digest(draft.text) : null;
+    this.assertConnection(device, socket);
     // Hold the shared storage lock only while reserving an operation, not across network I/O.
-    const pending = await this.lock(`cxpalm:write:${this.device.id}`, async acquired => {
+    const pending = await this.lock(`cxpalm:write:${device.id}`, async acquired => {
+      this.assertConnection(device, socket);
       if (!acquired || this.pendingFor(fields.thread)) throw new Error('此会话还有未确认的操作，请先查看原操作结果。');
       if (!this.connected) throw new Error('请先连接电脑。');
       const pending = {id: crypto.randomUUID(), method, thread: fields.thread, created: Date.now()};
@@ -239,27 +341,37 @@ export class Bridge {
       this.savePending(pending);
       this.failures.delete(fields.thread||null);
       this.receipt = null;
+      this.receiptThread = null;
       this.changed();
       return pending;
     });
-    try { return await this.applyReceipt(await this.command(method, fields, pending.id)); }
+    let dispatched = false;
+    try {
+      this.assertConnection(device, socket);
+      const result = this.command(method, fields, pending.id);
+      dispatched = true;
+      return await this.applyReceipt(await result, device);
+    }
     catch (error) {
-      if (!this.pendings.some(op => op.id === pending.id)) throw error;
-      await this.applyReceipt({id:pending.id,status:'unknown',result:{error:error.message}});
+      if (!this.pendingOperations(device).some(op => op.id === pending.id)) throw error;
+      await this.applyReceipt({id:pending.id,status:dispatched?'unknown':'not_sent',result:{error:error.message}}, device);
       throw Object.assign(error,{operation:pending.id});
     } finally { this.changed(); }
   }
   async checkPending(id = this.pending?.id) {
+    const device = this.device;
     const pending = this.pendings.find(op => op.id === id);
     if (!pending) return null;
-    try { return await this.applyReceipt(await this.command('operation.get', {requestId: pending.id})); }
+    try { return await this.applyReceipt(await this.command('operation.get', {requestId: pending.id}), device); }
     catch(error) { throw Object.assign(error,{operation:pending.id}); }
   }
   async acknowledge(id = this.pending?.id) {
+    const device = this.device, socket = this.socket;
     try {
       const receipt = await this.checkPending(id);
       if (receipt?.status !== 'unknown') throw new Error('只能在人工核对后解除未知结果；正在执行的操作不能解除。');
-      return await this.applyReceipt(await this.command('operation.acknowledge', {requestId: receipt.id, text: 'inspected'}));
+      this.assertConnection(device, socket);
+      return await this.applyReceipt(await this.command('operation.acknowledge', {requestId: receipt.id, text: 'inspected'}), device);
     } catch(error) { throw Object.assign(error,{operation:id}); }
   }
 }
@@ -326,7 +438,7 @@ export function activeQuestionIndex(questions, positions, anchor, atBottom, late
   if (!questions.length) return -1;
   if (atBottom && latest) return questions.length - 1;
   const row = atBottom ? positions.at(-1) : positions.filter(row => row.top <= anchor).at(-1) || positions[0];
-  return questions.findIndex(question => question.turn === row?.turn);
+  return questions.findIndex(question => question.turn === row?.turn && (!question.item || question.item===row?.item));
 }
 
 export function computerAddress(value) {

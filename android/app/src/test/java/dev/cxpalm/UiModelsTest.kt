@@ -5,6 +5,35 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UiModelsTest {
+    @Test fun staleComposerCannotTargetANewComputerOrChatAndGuidanceQuestionsStayDistinct() {
+        val computer=Computer("one","One","https://one.example.test","fixture")
+        val source=ViewState(current=computer,thread="chat")
+        assertTrue(composerSourceMatches(source,source.copy(connected=true)))
+        assertFalse(composerSourceMatches(source,source.copy(thread="other")))
+        assertFalse(composerSourceMatches(source,source.copy(current=computer.copy(id="other"))))
+        assertFalse(composerSourceMatches(source,source.copy(current=computer.copy(token="replacement"))))
+        assertEquals("live",activeTurnId(JSONObject("""{"turns":[{"turnId":"old","status":"completed"},{"turnId":"live","status":"inProgress"}]}""")))
+        val questions=listOf(JSONObject("""{"turn":"same","item":"original"}"""),JSONObject("""{"turn":"same","item":"steer:one"}"""),JSONObject("""{"turn":"same","item":"steer:two"}"""))
+        val messages=listOf(Message("same:original","You","original",turn="same"),Message("same:steer:one","You","one",turn="same"),Message("same:reply","Codex","reply",turn="same"),Message("same:steer:two","You","two",turn="same"))
+        assertEquals(3,questionMessageIndex(questions[2],messages))
+        assertEquals(1,activeQuestionIndex(questions,messages,2,false,false))
+        assertEquals(2,activeQuestionIndex(questions,messages,3,false,false))
+    }
+    @Test fun inputSuggestionsRespectCompletedRepliesDraftsCaretAndComposition() {
+        val snapshot=JSONObject("""{"threadRuntimeStatus":{"type":"idle"},"requests":[],"turns":[{"turnId":"reply","status":"completed","items":[{"type":"agentMessage","text":"Fixture reply"}]}]}""")
+        assertEquals("reply",suggestionTurn(snapshot))
+        for(change in listOf("""{"threadRuntimeStatus":{"type":"active"}}""","""{"requests":[{}]}""","""{"queuedMessages":[{}]}""","""{"threadGoal":{"status":"active"}}""","""{"turns":[{"status":"failed"}]}""")) {
+            val next=JSONObject(snapshot.toString());val fields=JSONObject(change)
+            fields.keys().forEach {next.put(it,fields.get(it))}
+            assertNull(suggestionTurn(next))
+        }
+        assertEquals("Review tests",suggestionSuffix("Review tests",""))
+        assertEquals(" tests",suggestionSuffix("Review tests","Review"))
+        assertEquals("",suggestionSuffix("Review tests","Unrelated draft"))
+        assertEquals("",suggestionSuffix("Review tests","Review",0,6))
+        assertEquals("",suggestionSuffix("Review tests","Review",6,6,true))
+        assertEquals("",suggestionSuffix("x".repeat(281),""))
+    }
     @Test fun newChatDefaultsDoNotCopyApprovalsOrExecutionState() {
         val snapshot=JSONObject("""{"latestModel":"fixture","latestReasoningEffort":"high","latestThreadSettings":{"permissions":":workspace","approvalsReviewer":"auto_review"},"notificationPreference":{"enabled":true},"requests":[{"decision":"acceptForSession"}],"turns":[{}],"controlsRevision":"old"}""")
         val defaults=newChatDefaults(snapshot)!!
@@ -31,10 +60,43 @@ class UiModelsTest {
         val work=Computer("work","Work","https://work.example.test","fixture")
         val home=Computer("home","Home","https://home.example.test","fixture")
         val state=ViewState(current=work,connected=true,desktopConnected=true,notificationStatus=mapOf("home" to null))
-        assertEquals(tr("官方桌面已连接"),computerConnectionLabel(state,work))
+        assertEquals(tr("网关已连接"),computerConnectionLabel(state,work))
         assertEquals(tr("提醒已连接"),computerConnectionLabel(state,home))
-        assertEquals(tr("已断开"),computerConnectionLabel(state.copy(connected=false),work))
+        assertEquals(tr("网关未连接"),computerConnectionLabel(state.copy(connected=false),work))
         assertEquals(tr("登录已失效，请重新登录"),computerConnectionLabel(state.copy(notificationStatus=mapOf("home" to "revoked")),home))
+    }
+    @Test fun connectionLabelsDistinguishGatewayThreadCacheAndUnknownWrites() {
+        val computer=Computer("host","Host","https://host.test","fixture")
+        val live=ViewState(current=computer,thread="chat",connected=true,desktopConnected=true,snapshot=JSONObject())
+        assertEquals(tr("未登录"),gatewayConnectionLabel(ViewState()))
+        assertEquals(tr("可发送"),conversationConnectionLabel(live))
+        assertEquals(tr("正在同步官方桌面"),conversationConnectionLabel(live.copy(desktopConnected=false)))
+        assertEquals(tr("正在同步官方桌面"),conversationConnectionLabel(live.copy(desktopConnected=false,snapshot=null,cached=true)))
+        assertEquals(tr("离线只读"),conversationConnectionLabel(live.copy(cached=true)))
+        assertEquals(tr("已归档·只读"),conversationConnectionLabel(live.copy(threadArchived=true)))
+        assertEquals(tr("正在重连网关"),gatewayConnectionLabel(live.copy(connected=false,reconnecting=true)))
+        val pending=JSONObject().put("id","unknown").put("thread","chat")
+        assertEquals(tr("操作待核对"),conversationConnectionLabel(live.copy(pendingOperations=mapOf("unknown" to pending))))
+        assertEquals("Storage unavailable",conciseNotice("  Storage\n unavailable  "))
+        assertEquals(160,conciseNotice("x".repeat(200)).length)
+    }
+    @Test fun nativeSyncTimeComesOnlyFromExplicitNativeFieldAndDoesNotFollowHeartbeats() {
+        val computer=Computer("host","Host","https://host.test","fixture")
+        val state=ViewState(current=computer,thread="chat",connected=true,sequence=1)
+        val data=JSONObject().put("id","chat").put("sequence",2).put("connected",true).put("snapshot",JSONObject().put("observedAtMs",999999L))
+        val oldGateway=synchronizedChatState(state,data)
+        assertEquals(0L,oldGateway.lastNativeSyncAt)
+        assertEquals(tr("原桌面同步时间未知"),nativeSyncLabel(0))
+        data.put("sequence",3).put("nativeSyncedAtMs",123456L)
+        val synced=synchronizedChatState(oldGateway,data)
+        assertEquals(123456L,synced.lastNativeSyncAt)
+        data.put("sequence",4).remove("nativeSyncedAtMs")
+        assertEquals(123456L,synchronizedChatState(synced,data).lastNativeSyncAt)
+        data.put("sequence",1).put("nativeSyncedAtMs",999999L)
+        assertSame(synced,synchronizedChatState(synced,data))
+        assertEquals(0L,computerConnectionState(synced,computer,"other",null,emptySet()).lastNativeSyncAt)
+        assertEquals(0L,computerConnectionState(synced,computer.copy(id="other"),"chat",null,emptySet()).lastNativeSyncAt)
+        assertEquals(123456L,computerConnectionState(synced,computer,"chat",null,emptySet()).lastNativeSyncAt)
     }
     @Test fun approvalChoicesFailClosedAndNeverGrantForSession() {
         fun request(method: String,params: String)=JSONObject().put("method",method).put("params",JSONObject(params))
@@ -156,7 +218,7 @@ class UiModelsTest {
         assertTrue(replyBottomReached(3, 5, null, 600))
     }
     @Test fun questionNavigatorFollowsLongRepliesAndDoesNotJumpOutOfHistory() {
-        val questions = (0..69).map { "t$it" }
+        val questions = (0..69).map { JSONObject().put("turn","t$it") }
         val messages = listOf(Message("q35","You","q",turn="t35"),Message("a35","Codex","long",turn="t35"),
             Message("q36","You","q",turn="t36"),Message("a36","Codex","long",turn="t36"))
         assertEquals(35, activeQuestionIndex(questions,messages,1,false,false))
@@ -167,7 +229,7 @@ class UiModelsTest {
     }
     @Test fun questionReleaseIgnoresStaleOrInvalidSliderPositions() {
         val rows=listOf(JSONObject("""{"turn":"a"}"""),JSONObject("""{"turn":"b"}"""))
-        assertEquals("b",questionAtPosition(rows,1.5f))
+        assertEquals("b",questionAtPosition(rows,1.5f)?.optString("turn"))
         for(position in listOf(-1f,2f,Float.NaN,Float.POSITIVE_INFINITY)) assertNull(questionAtPosition(rows,position))
         assertNull(questionAtPosition(rows.take(1),1f))
         assertNull(questionAtPosition(emptyList(),0f))

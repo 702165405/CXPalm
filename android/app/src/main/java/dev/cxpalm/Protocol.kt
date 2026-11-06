@@ -10,7 +10,7 @@ fun normalizeOrigin(value: String): String {
     return u.toString().removeSuffix("/")
 }
 @androidx.compose.runtime.Immutable
-data class Message(val id: String, val role: String, val text: String, val truncated: Boolean = false, val turn: String = "", val command: String = "", val status: String = "", val deferred: Boolean = false, val bodyRevision: String = "", val images: List<MessageImage> = emptyList()) {
+data class Message(val id: String, val role: String, val text: String, val truncated: Boolean = false, val turn: String = "", val command: String = "", val status: String = "", val deferred: Boolean = false, val bodyRevision: String = "", val images: List<MessageImage> = emptyList(), val files: List<MessageFile> = emptyList()) {
     val collapsible: Boolean get() = role != "You" && role != "Codex" && role != "sessionError"
 }
 fun objects(a: JSONArray?): List<JSONObject> = if (a == null) emptyList() else (0 until a.length()).mapNotNull { a.optJSONObject(it) }
@@ -65,8 +65,9 @@ private fun parseConversation(snapshot: JSONObject): List<Message> {
             val turnId = turn.optString("turnId").ifBlank { turn.optString("id").ifBlank { "turn-$turnIndex" } }
             val itemId = if (item.isNull("id")) "$type:$itemIndex" else item.optString("id").ifBlank { "$type:$itemIndex" }
             val images=objects(item.optJSONArray("images")).mapNotNull {image -> image.optString("id").takeIf {it.matches(Regex("[a-f0-9]{64}"))}?.let {MessageImage(it,image.optString("name"))}}
-            if (text.isBlank() && !item.optBoolean("deferred") && images.isEmpty()) null else Message("$turnId:$itemId", if (type == "userMessage") "You" else if (type in listOf("agentMessage","imageGenerationCall","imageGeneration")) "Codex" else type,
-                text, item.optBoolean("truncated"), turnId, item.optString("command"), item.optString("status"),item.optBoolean("deferred"),item.optString("bodyRevision"),images)
+            val files=objects(item.optJSONArray("files")).mapNotNull {file -> file.optString("id").takeIf {it.matches(Regex("[a-f0-9]{64}"))}?.let {MessageFile(it,file.optString("name"),file.optString("kind"))}}
+            if (text.isBlank() && !item.optBoolean("deferred") && images.isEmpty() && files.isEmpty()) null else Message("$turnId:$itemId", if (type == "userMessage") "You" else if (type in listOf("agentMessage","imageGenerationCall","imageGeneration")) "Codex" else type,
+                text, item.optBoolean("truncated"), turnId, item.optString("command"), item.optString("status"),item.optBoolean("deferred"),item.optString("bodyRevision"),images,files)
         }
     }
 }
@@ -79,6 +80,7 @@ fun synchronizedChatState(current: ViewState, data: JSONObject): ViewState {
     val snapshot = data.optJSONObject("snapshot")
     val live = data.optBoolean("connected") && snapshot != null
     return current.copy(readToken = if(snapshot!=null) data.optString("readToken") else current.readToken, snapshot = snapshot ?: current.snapshot, desktopConnected = live, threadArchived = data.optBoolean("archived", current.threadArchived),
+        lastNativeSyncAt = data.optLong("nativeSyncedAtMs").takeIf { it > 0 } ?: current.lastNativeSyncAt,
         sequence = maxOf(sequence, current.sequence), status = if (live) "Desktop connected" else data.optString("error", "Waiting for desktop"))
 }
 

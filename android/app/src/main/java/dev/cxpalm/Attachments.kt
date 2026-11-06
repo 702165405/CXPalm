@@ -14,12 +14,25 @@ const val MAX_ATTACHMENT_SIZE = 20L * 1024 * 1024
 
 fun validAttachmentSize(size: Long): Boolean = size in 1..MAX_ATTACHMENT_SIZE
 
+data class AttachmentTransfer(val id: String, val name: String, val phase: String = "uploading", val error: String? = null)
+
+internal class AttachmentUploadTicket(val id: String, private val scope: String, private val thread: String) {
+    @Volatile var cancelled = false
+        private set
+    private var call: Call? = null
+    @Synchronized fun bind(value: Call) { call = value; if (cancelled) value.cancel() }
+    @Synchronized fun cancel() { cancelled = true; call?.cancel() }
+    fun matches(computer: Computer?, selectedThread: String?): Boolean =
+        !cancelled && selectedThread == thread && computer?.let(::readingScope) == scope
+}
+
 class AttachmentUploadException(val status: Int): IOException("Upload rejected: $status")
 fun attachmentUploadFailure(status: Int): String = if(status==413)
     "服务器拒绝了上传请求（HTTP 413）。请求上限为 20M（含表单头），接近上限时请缩小文件后重试。"
 else "附件上传失败，请检查连接、文件权限及 20 MiB 大小限制。"
 
-fun uploadAttachment(http: OkHttpClient, resolver: ContentResolver, computer: Computer, thread: String, uri: Uri): JSONObject {
+fun uploadAttachment(http: OkHttpClient, resolver: ContentResolver, computer: Computer, thread: String, uri: Uri,
+    onName: (String) -> Unit = {}, onCall: (Call) -> Unit = {}): JSONObject {
     require(uri.scheme=="content") {"Select a local content file"}
     var name="clipboard.png"
     resolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME,OpenableColumns.SIZE),null,null,null)?.use {cursor ->
@@ -28,6 +41,7 @@ fun uploadAttachment(http: OkHttpClient, resolver: ContentResolver, computer: Co
             cursor.getColumnIndex(OpenableColumns.SIZE).takeIf {it>=0&&!cursor.isNull(it)}?.let {require(validAttachmentSize(cursor.getLong(it))) {"File size rejected"}}
         }
     }
+    onName(name.take(240))
     val body=object:RequestBody() {
         override fun contentType()="application/octet-stream".toMediaType()
         override fun writeTo(sink: BufferedSink) {
@@ -41,7 +55,9 @@ fun uploadAttachment(http: OkHttpClient, resolver: ContentResolver, computer: Co
     val url=computer.origin.toHttpUrlForUpload(thread)
     val request=Request.Builder().url(url).header("Origin",computer.origin).header("Authorization","Bearer ${computer.token}")
         .post(MultipartBody.Builder().setType(MultipartBody.FORM).addFormDataPart("file",name,body).build()).build()
-    http.newBuilder().callTimeout(65,TimeUnit.SECONDS).readTimeout(65,TimeUnit.SECONDS).build().newCall(request).execute().use {response ->
+    val call = http.newBuilder().callTimeout(65,TimeUnit.SECONDS).readTimeout(65,TimeUnit.SECONDS).build().newCall(request)
+    onCall(call)
+    call.execute().use {response ->
         if(response.code!=201)throw AttachmentUploadException(response.code)
         val bytes=response.body?.byteStream()?.use {input ->
             val out=java.io.ByteArrayOutputStream();val buffer=ByteArray(1024)

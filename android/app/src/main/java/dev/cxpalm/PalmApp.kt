@@ -59,7 +59,7 @@ import io.github.u702165405.cxpalm.R
                             Text(when (page) { "settings" -> tr("设置"); "computers" -> tr("连接与主机"); else -> (state.current?.name ?: "CXPalm") }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             if (page == "sessions") Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Box(Modifier.size(7.dp).background(if (state.connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, CircleShape))
-                                Text(if(state.current == null) tr("未登录 · 桌面的随身延伸") else tr("当前电脑")+" · "+computerConnectionLabel(state, state.current), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(currentConnectionLabel(state), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
                         }
                         if (page == "sessions" && state.thread == null) TextButton(onClick = { quickComputers = true }, contentPadding = PaddingValues(horizontal = 8.dp)) {
@@ -88,7 +88,7 @@ import io.github.u702165405.cxpalm.R
             AnimatedVisibility(state.error != null || (state.current != null && !state.connected), enter = fadeIn(), exit = fadeOut()) {
                 Surface(onClick = { notices = true }, color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(when { state.error != null -> tr("有一条连接或操作提示"); else -> tr("连接已断开，内容仍可查看") }, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        Text(state.error?.let {conciseNotice(tr(it))} ?: currentConnectionLabel(state), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,maxLines=2,overflow=TextOverflow.Ellipsis)
                         Text(tr("查看"), Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelLarge)
                     }
                 }

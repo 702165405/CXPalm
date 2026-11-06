@@ -12,6 +12,10 @@ import (
 // PhoneState is a bounded presentation, never the base for native IPC patches.
 func PhoneState(s State) State { return projectState(s, false) }
 func projectState(s State, lazy bool) State {
+	s.NativeSyncedAtMS = 0
+	if !s.lastNative.IsZero() {
+		s.NativeSyncedAtMS = s.lastNative.UnixMilli()
+	}
 	if !s.hasSnapshot() {
 		return s
 	}
@@ -88,6 +92,7 @@ func projectState(s State, lazy bool) State {
 				text = command
 			}
 			images := imageReferences(item)
+			files := fileReferences(item)
 			if kind == "error" || kind == "sessionError" {
 				kind = "sessionError"
 				if text == "" {
@@ -107,7 +112,7 @@ func projectState(s State, lazy bool) State {
 			if id == "" {
 				id = fmt.Sprintf("%s:%d", kind, itemIndex)
 			}
-			if text == "" && len(images) == 0 {
+			if text == "" && len(images) == 0 && len(files) == 0 {
 				if problem := displayError(item["error"]); problem != "" && !errorTexts[problem] {
 					messages = append(messages, map[string]any{"id": id + ":error", "type": "sessionError", "text": problem, "status": "failed"})
 					errorTexts[problem] = true
@@ -117,6 +122,10 @@ func projectState(s State, lazy bool) State {
 			message := map[string]any{"id": id, "type": kind, "text": text, "truncated": false, "status": item["status"], "command": command}
 			if len(images) > 0 {
 				message["images"] = images
+			}
+			if len(files) > 0 {
+				message["files"] = files
+				message["text"] = fileDisplayText(text)
 			}
 			if lazy && kind != "userMessage" && kind != "agentMessage" && kind != "imageGenerationCall" && kind != "sessionError" && (kind != "reasoning" || len(text) > 8192) {
 				message["text"] = ""

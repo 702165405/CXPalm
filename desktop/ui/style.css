@@ -208,3 +208,5 @@ dialog h2{font-size:20px;font-weight:650}
 @media(max-width:920px){.shell{grid-template-columns:188px 1fr}.nav-item{font-size:13px}.sidebar-note{display:none}.stat-number{font-size:24px}}
 html[lang=en] .nav-item{font-size:13px}
 html[lang=en] .sidebar-bottom .local-badge{font-size:12px}
+.diagnostic-check{align-items:flex-start}.check-evidence{min-width:0}.check-evidence>span{display:block;font-weight:600}.check-evidence p{font-size:11px;line-height:1.7;color:var(--muted);margin:7px 0 0;overflow-wrap:anywhere}.check-result{display:grid;gap:9px;justify-items:end;text-align:right;flex-shrink:0}.check-result strong{max-width:170px;line-height:1.6}.check-result button{font-size:11px;white-space:normal}
+@media(max-width:920px){.diagnostic-check{gap:12px}.check-result strong{max-width:140px}}

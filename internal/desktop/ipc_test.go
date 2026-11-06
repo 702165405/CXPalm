@@ -4,12 +4,60 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"strings"
 	"testing"
 	"time"
 )
+
+type failingIPCStream struct {
+	writes int
+	failAt int
+	closed bool
+}
+
+func (stream *failingIPCStream) Read([]byte) (int, error) { return 0, io.EOF }
+func (stream *failingIPCStream) Write(data []byte) (int, error) {
+	stream.writes++
+	if stream.writes == stream.failAt {
+		return 1, io.ErrUnexpectedEOF
+	}
+	return len(data), nil
+}
+func (stream *failingIPCStream) Close() error { stream.closed = true; return nil }
+
+func TestIPCPartialWriteClosesTransportWithoutReplay(t *testing.T) {
+	for _, failure := range []struct {
+		name string
+		at   int
+	}{{"header", 1}, {"payload", 2}} {
+		t.Run(failure.name, func(t *testing.T) {
+			stream := &failingIPCStream{failAt: failure.at}
+			client := &IPC{conn: stream, pending: map[string]chan Frame{}, closed: make(chan struct{}), events: make(chan Frame, 1)}
+			defer client.Close()
+			_, err := client.Request(context.Background(), "thread-follower-interrupt-turn", map[string]any{"conversationId": "fixture"}, "owner")
+			if !errors.Is(err, io.ErrUnexpectedEOF) {
+				t.Fatalf("write failure not returned: %v", err)
+			}
+			select {
+			case <-client.Done():
+			default:
+				t.Fatal("partial frame left the transport reusable")
+			}
+			if !stream.closed || len(client.pending) != 0 {
+				t.Fatal("failed transport or request was not released")
+			}
+			if err = client.Follow(context.Background(), "fixture", "owner"); err == nil {
+				t.Fatal("a later request reused the damaged stream")
+			}
+			if stream.writes != failure.at {
+				t.Fatal("failed request replayed or another frame appended")
+			}
+		})
+	}
+}
 
 func readTestFrame(c net.Conn) (Frame, error) {
 	var h [4]byte

@@ -42,24 +42,44 @@ async function main() {
   let projects=[{id:'project-fixture',name:'项目 / Research'}];
   const sessionPage=q=>({items:q.archived&&!restored?[{id:'archive-fixture',title:'归档示例',archived:true,projectId:'project-fixture',projectName:'项目 / Research',status:'unknown',updated:1791648000}]:!q.archived?[{id:'main-fixture',title:'网页控制端 · 安全检查',cwd:'/isolated/chat-directory',projectId:'project-fixture',projectName:'项目 / Research',status:active?'running':'completed',live:!listHistorical,statusSource:listHistorical?'history':'desktop',unread:desktopReadToken!==replyToken,readToken:replyToken,lastReplyAt:1791648000,updated:1791648000}]:[],projects,hasMore:false,sync:{total:502,checked:502,live:1,scanning:false,error:listError}});
   let queuedMessages=[];
-  let notificationPreference={enabled:false};let uploadNumber=0;let rejectUpload=false;
+  let notificationPreference={enabled:false};let uploadNumber=0;let rejectUpload=false;let holdUpload=false;let finishUpload;
+  let nativeSyncedAtMs=Date.now()-5000;
   let imageFixture=false;
   let nativeGoal=null;
+  let guidanceFixture=false;
+  let fileFixture=false;let rejectFile=false;let holdFile=false;let finishFile;let fileReads=0;
+  const fileBytes=Buffer.from('synthetic returned spreadsheet bytes\n');
+  let holdSuggestion=false;
+  let finishSuggestion;
   let settings={model:"fixture",effort:"high",mode:"default",permission:":workspace"};
   const commandApproval={id:'approval-fixture',method:'item/commandExecution/requestApproval',params:{command:'fixture only - not executed',availableDecisions:['accept','decline']}};
   let approvalRequests=[commandApproval];
-  const snapshot = () => ({type: 'chat.state', data: {id: 'main-fixture', sequence:++sequence,readToken:replyToken, connected: true, snapshot: {
+  const snapshot = () => ({type: 'chat.state', data: {id: 'main-fixture', sequence:++sequence,readToken:replyToken, connected: true,nativeSyncedAtMs, snapshot: {
     readSyncAvailable,officialReadSyncAvailable:readSyncAvailable,notificationPreference,queuedMessages,queueAvailable:true,threadGoal:nativeGoal,goalRevision:'fixture-goal-revision',goalAvailable:true,hasUnreadTurn:desktopReadToken!==replyToken,latestModel:settings.model,latestReasoningEffort:settings.effort,latestCollaborationMode:{mode:settings.mode},latestThreadSettings:{activePermissionProfile:{id:settings.permission==='auto-review'?':workspace':settings.permission},approvalsReviewer:settings.permission==='auto-review'?'auto_review':'user'},controlsRevision:'fixture-revision',latestTokenUsageInfo:{last:{inputTokens:2000},modelContextWindow:10000},threadRuntimeStatus: {type: active ? 'active' : 'idle'}, observedAtMs:Date.now(),turns: [{turnId:'t69',status:active?'inProgress':'completed',turnStartedAtMs,...(active?{}:{durationMs:764351}),items: [
-      {type: 'userMessage', text: '检查这个功能的安全边界。'},
+      {id:'user-69',type: 'userMessage', text: '检查这个功能的安全边界。'},
       {type: 'agentMessage', text: '这是隔离的 UI 测试会话，不是真实模型输出。\n\n```js\nconst safe = true;\n```\n\n<img src=x onerror="window.xss=true">'},
       {id:'tool-fixture',type:'commandExecution',command:'fixture command --not-executed',status:processRunning?'inProgress':processRevision?'completed':'inProgress',text:'',deferred:true,bodyRevision:'fixture-body-'+processRevision},
       {id:'reason-fixture',type:'reasoning',summary:[`Visible **reasoning summary** ${processRevision}`, '<img src=x onerror="window.xss=true">']},
       ...(imageFixture?[{id:'returned-image',type:'imageGeneration',text:'',images:[{id:'f'.repeat(64),name:'fixture-returned.png'}]}]:[]),
+      ...(fileFixture?[{id:'returned-files',type:'agentMessage',text:'可下载核对表和完整网页清单。',files:[{id:'e'.repeat(64),name:'核对表.xlsx',kind:'xlsx'},{id:'d'.repeat(64),name:'完整清单.html',kind:'html'}]}]:[]),
+      ...(guidanceFixture?[
+        {id:'steer:first',type:'userMessage',text:'第一条同轮引导'},
+        {id:'between-guidance',type:'agentMessage',text:'第一条引导后的输出。\n\n'.repeat(40)},
+        {id:'steer:second',type:'userMessage',text:'第二条同轮引导'},
+        {id:'after-guidance',type:'agentMessage',text:'第二条引导后的输出。\n\n'.repeat(60)},
+      ]:[]),
     ]}].concat(sentTurn?[sentTurn]:[]), requests: approvalRequests,
   }}});
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (url.origin !== origin) return route.abort();
+    if(url.pathname==='/api/v1/chat/file') {
+      const q=route.request().postDataJSON();assert.equal(q.thread,'main-fixture');assert.equal(q.turn,'t69');assert.equal(q.item,'returned-files');assert(['e'.repeat(64),'d'.repeat(64)].includes(q.file));
+      fileReads++;
+      commands.emit('file.read',q);
+      if(holdFile)await new Promise(resolve=>{finishFile=resolve;});
+      return route.fulfill({status:rejectFile?404:200,contentType:'application/octet-stream',body:fileBytes}).catch(()=>{});
+    }
     if(url.pathname==='/api/v1/chat/image') {
       const q=route.request().postDataJSON();assert.equal(q.thread,'main-fixture');assert.equal(q.item,'returned-image');assert.equal(q.image,'f'.repeat(64));
       return route.fulfill({status:200,contentType:'image/png',body:await fs.readFile(path.join(__dirname,'../assets/icon.png'))});
@@ -69,7 +89,8 @@ async function main() {
       assert.match(route.request().headers()['content-type'],/^multipart\/form-data/);
       if(rejectUpload)return route.fulfill({status:413,body:'Request Entity Too Large'});
       const id=(++uploadNumber).toString(16).padStart(64,'0');
-      return route.fulfill({status:201,contentType:'application/json',body:JSON.stringify({id,name:'fixture-image.png',size:100,image:true})});
+      if(holdUpload)await new Promise(resolve=>{finishUpload=resolve;});
+      return route.fulfill({status:201,contentType:'application/json',body:JSON.stringify({id,name:'fixture-image.png',size:100,image:true})}).catch(()=>{});
     }
     if (url.pathname.startsWith('/api/v1/browser/')) {
       const name = url.pathname.split('/').at(-1);
@@ -83,14 +104,20 @@ async function main() {
     const file = url.pathname === '/cxpalm/' ? 'index.html' : url.pathname.startsWith('/cxpalm/assets/') ? url.pathname.split('/').at(-1) : null;
     if (!file || !['index.html','app-v1.mjs','protocol-v1.mjs','control-v1.css','icon.svg','markdown-v1.mjs','marked-vendor.mjs','purify-vendor.mjs'].includes(file)) return route.fulfill({status:404, body:'not found'});
     return route.fulfill({body: await fs.readFile(path.join(__dirname, file)),
+      headers:file==='index.html'?{'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' wss://cxpalm.test; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"}:{},
       contentType: file.endsWith('.mjs') ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.svg') ? 'image/svg+xml' : 'text/html'});
   });
   await page.routeWebSocket(`${origin.replace('https:', 'wss:')}/api/v1/ws`, socket => {
     currentSocket=socket;
-    setTimeout(() => socket.send(JSON.stringify({type:'hello',data:{device:device.id,capabilities:['notifications.subscribe','chat.history','chat.read','sessions.create.settings']}})), 10);
+    setTimeout(() => socket.send(JSON.stringify({type:'hello',data:{device:device.id,capabilities:['chat.steer.turn','chat.suggest','notifications.subscribe','chat.history','chat.read','sessions.create.settings']}})), 10);
     socket.onMessage(raw => {
       const q = JSON.parse(raw); sent.push(q); commands.emit(q.method,q);
       const reply = data => {const send=()=>socket.send(JSON.stringify({id:q.id,type:'result',data}));if(holdHistory&&q.method==='chat.history')heldHistory.push(send);else if(holdStartup&&['notifications.subscribe','sessions.browse'].includes(q.method))heldStartup.push(send);else send();};
+      if(q.method==='chat.suggest') {
+        const deliver=()=>reply({thread:q.thread,turn:q.turn,readToken:q.readToken,text:'Review the remaining tests.'});
+        if(holdSuggestion)finishSuggestion=deliver;else deliver();
+        return;
+      }
       if(q.method==='notifications.subscribe')return reply({events:[],gap:false,resynced:true,cursor:'baseline:fixture',scope:'all_non_archived'});
       if(q.method==='sessions.browse')return reply(sessionPage(q));
       if(q.method==='sessions.subscribe'){listSubscription=q.id;return reply({subscribed:true});}
@@ -99,7 +126,7 @@ async function main() {
         if(q.thread==='archive-fixture')return reply({offset:0,total:1,hasMore:false,source:'rollout',questions:[],turns:[{turnId:'a',items:[{id:'archived-text',type:'agentMessage',text:'归档正文可以在桌面离线时只读查看。'}]}]});
         const offset=q.cursor==='latest'?69:q.cursor?Number(q.cursor.slice(1)):q.offset||0;
         const turns=offset===69?snapshot().data.snapshot.turns:Array.from({length:Math.min(20,70-offset)},(_,i)=>({turnId:'t'+(offset+i),items:[{id:'user-'+(offset+i),type:'userMessage',text:'历史问题 '+(offset+i)},{id:'reply-'+(offset+i),type:'agentMessage',text:'历史回答 '+(offset+i)+(offset+i===0?'\n'+('完整长文本'.repeat(2200)): '')}]}));
-        return reply({offset,total:70,hasMore:offset+turns.length<70,source:'desktop',turns:q.indexOnly?[]:turns,questions:Array.from({length:70},(_,i)=>({turn:'t'+i,offset:i,text:'历史问题 '+i}))});
+        return reply({offset,total:70,hasMore:offset+turns.length<70,source:'desktop',turns:q.indexOnly?[]:turns,questions:Array.from({length:70},(_,i)=>({turn:'t'+i,item:'user-'+i,offset:i,text:'历史问题 '+i})).concat(guidanceFixture?[{turn:'t69',item:'steer:first',offset:69,text:'第一条同轮引导'},{turn:'t69',item:'steer:second',offset:69,text:'第二条同轮引导'}]:[])});
       }
       if(q.method==='chat.read'){
         const accepted=readSyncAvailable&&q.readToken===replyToken;
@@ -127,6 +154,7 @@ async function main() {
       }
       if(q.method==='chat.queue')queuedMessages.push({id:q.id,text:q.text,status:'queued'});
       if(q.method==='chat.queue.cancel')queuedMessages=queuedMessages.filter(item=>item.id!==q.requestId);
+      if(q.method==='chat.steer')assert.equal(q.options?.expectedTurn,sentTurn?.turnId||'t69','guidance lost its displayed active turn');
       if (q.method === 'chat.send' || q.method === 'chat.steer') {active = true;if(q.text==='scroll send fixture')sentTurn={turnId:'sent-fixture',status:'inProgress',turnStartedAtMs:Date.now(),items:[{id:'sent-user',type:'userMessage',text:q.text}]};}
       if(q.method==='chat.goal'){const action=q.options?.goalAction;nativeGoal=action==='clear'?null:action==='pause'?{...nativeGoal,status:'paused'}:action==='resume'?{...nativeGoal,status:'active'}:{objective:q.text,status:'active'};}
       if (q.method === 'chat.stop') active = false;
@@ -152,6 +180,7 @@ async function main() {
     await page.locator('#login-password').fill('fixture-password-only');await page.locator('#login-remember').check();
     await page.locator('#login-submit').click();
     await page.locator('#session-list .session-item').waitFor();
+    assert.match(await page.locator('#connection-health-label').innerText(),/网关已连接.*请选择会话/);
     assert.equal(await page.locator('#login-password').inputValue(),'');
     assert.equal(await page.evaluate(()=>[localStorage,sessionStorage].some(storage=>Object.values(storage).some(value=>value.includes('fixture-password-only')))),false);
     assert.ok(!(await page.locator('#session-list').textContent()).includes('undefined'));
@@ -164,9 +193,122 @@ async function main() {
     assert.equal(await page.locator('.session-item.is-unread').count(),1);
     await page.locator('#session-list .session-item').click();
     await page.getByText('这是隔离的 UI 测试会话', {exact:false}).waitFor();
+    await page.locator('#connection-health-label').filter({hasText:'可发送'}).waitFor();
+    const nativeSyncLabel=await page.locator('#connection-sync').innerText();assert.match(nativeSyncLabel,/最近原生同步/);
+    currentSocket.send(JSON.stringify({type:'heartbeat',data:{observedAtMs:Date.now()+99999}}));
+    currentSocket.send(JSON.stringify(snapshot()));
+    assert.equal(await page.locator('#connection-sync').innerText(),nativeSyncLabel,'projection or heartbeat fabricated native sync time');
+    nativeSyncedAtMs+=10000;currentSocket.send(JSON.stringify(snapshot()));
+    await page.waitForFunction(previous=>document.querySelector('#connection-sync').textContent!==previous,nativeSyncLabel);
     await page.waitForFunction(()=>!document.querySelector('.session-item.is-unread')).catch(async e=>{console.error('initial state',errors,sent.map(q=>q.method),await page.evaluate(()=>({notice:document.querySelector('#notice-text').textContent,top:document.querySelector('#messages').scrollTop,height:document.querySelector('#messages').scrollHeight,client:document.querySelector('#messages').clientHeight})));throw e;});
     assert.equal(desktopReadToken,'a'.repeat(64));
     assert.equal(await page.locator('#session-list .session-status').count(),0,'read completed chat still has a dot');
+    assert.equal(sent.filter(command=>command.method==='chat.suggest').length,0,'suggestions must be opt-in');
+    const sendCount=()=>sent.filter(command=>['chat.send','chat.steer','chat.queue','chat.goal'].includes(command.method)).length;
+    const beforeSuggestions=sendCount();
+    approvalRequests=[];currentSocket.send(JSON.stringify(snapshot()));
+    await page.locator('#suggestions-toggle').click();
+    await page.locator('#accept-suggestion').waitFor({state:'visible'});
+    assert.equal(await page.locator('#message').inputValue(),'');
+    assert.equal(await page.locator('#suggestion-suffix').textContent(),'Review the remaining tests.');
+    await page.locator('#message').focus();
+    await page.locator('#message').dispatchEvent('compositionstart');
+    await page.locator('#message').dispatchEvent('keydown',{key:'Tab',isComposing:true});
+    assert.equal(await page.locator('#message').inputValue(),'','IME Tab inserted a suggestion');
+    await page.locator('#message').dispatchEvent('compositionend');
+    await page.locator('#accept-suggestion').waitFor({state:'visible'});
+    await page.locator('#message').press('Shift+Tab');
+    assert.equal(await page.locator('#message').inputValue(),'','Shift+Tab lost normal focus navigation');
+    await page.locator('#message').fill('Review');
+    await page.locator('#message').evaluate(input=>{input.setSelectionRange(0,6);input.dispatchEvent(new Event('select'));});
+    await page.locator('#accept-suggestion').waitFor({state:'hidden'});
+    await page.locator('#message').press('End');
+    await page.locator('#accept-suggestion').waitFor({state:'visible'});
+    await capture('input-suggestion-desktop.png');
+    await page.locator('#message').press('Tab');
+    assert.equal(await page.locator('#message').inputValue(),'Review the remaining tests.');
+    assert.equal(await page.evaluate(()=>localStorage.getItem('cxpalm:draft:ui-fixture-device:main:main-fixture')),'Review the remaining tests.');
+    assert.equal(sendCount(),beforeSuggestions,'accepting a suggestion sent a message');
+    await page.locator('#message').fill('');
+    holdSuggestion=true;
+    const nextSuggestion=snapshot();nextSuggestion.data.snapshot.turns[0].turnId='suggestion-next';
+    const predictionRequested=once(commands,'chat.suggest');currentSocket.send(JSON.stringify(nextSuggestion));await predictionRequested;
+    await page.locator('#message').fill('My existing draft');
+    finishSuggestion();holdSuggestion=false;
+    await page.waitForTimeout(50);
+    assert.equal(await page.locator('#message').inputValue(),'My existing draft','late prediction overwrote a draft');
+    await page.locator('#accept-suggestion').waitFor({state:'hidden'});
+    await page.locator('#message').fill('');
+    await page.locator('#accept-suggestion').waitFor({state:'visible'});
+    await page.locator('#message').press('Escape');
+    await page.locator('#accept-suggestion').waitFor({state:'hidden'});
+    const mobileSuggestion=snapshot();mobileSuggestion.data.snapshot.turns[0].turnId='suggestion-mobile';
+    currentSocket.send(JSON.stringify(mobileSuggestion));
+    await page.setViewportSize({width:390,height:844});
+    await page.locator('#accept-suggestion').waitFor({state:'visible'});
+    await capture('input-suggestion-mobile.png');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    await page.locator('#accept-suggestion').click();
+    assert.equal(await page.locator('#message').inputValue(),'Review the remaining tests.');
+    assert.equal(sendCount(),beforeSuggestions,'tapping a suggestion sent a message');
+    await page.locator('#message').fill('');
+    await page.setViewportSize({width:1440,height:960});
+    await page.locator('#suggestions-toggle').click();
+    approvalRequests=[commandApproval];currentSocket.send(JSON.stringify(snapshot()));
+    guidanceFixture=true;currentSocket.send(JSON.stringify(snapshot()));
+    await page.locator('#question-list button[data-item="steer:second"]').waitFor();
+    await page.locator('#question-toggle').click();
+    await page.locator('#question-list button[data-item="steer:second"]').click();
+    await page.waitForFunction(()=>document.querySelector('.message.user.question-highlight')?.dataset.item==='steer:second');
+    const guidanceTop=await page.locator('.message.user[data-item="steer:second"]').evaluate(node=>node.getBoundingClientRect().top-document.querySelector('#messages').getBoundingClientRect().top);
+    assert(Math.abs(guidanceTop-16)<3,'question navigation targeted the first user message in the same turn');
+    await page.waitForFunction(()=>document.querySelector('#question-list button[aria-current="step"]')?.dataset.item==='steer:second');
+    await capture('steer-question-navigation-desktop.png');
+    await page.locator('#question-toggle').click();
+    await page.locator('#question-list button[data-item="steer:first"]').click();
+    await page.waitForFunction(()=>document.querySelector('.message.user.question-highlight[data-item="steer:first"]'));
+    assert.equal(sent.filter(command=>['chat.send','chat.steer'].includes(command.method)).length,beforeSuggestions,'question navigation sent guidance');
+    await page.setViewportSize({width:390,height:844});
+    await page.locator('#question-toggle').click();
+    await page.locator('#question-list button[data-item="steer:second"]').click();
+    await page.waitForFunction(()=>Math.abs(document.querySelector('.message.user[data-item="steer:second"]').getBoundingClientRect().top-document.querySelector('#messages').getBoundingClientRect().top-16)<3);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    await capture('steer-question-navigation-mobile.png');
+    await page.setViewportSize({width:1440,height:960});
+    await page.locator('#jump-latest').click();
+    guidanceFixture=false;currentSocket.send(JSON.stringify(snapshot()));
+    await page.locator('.message.user[data-item="steer:second"]').waitFor({state:'detached'});
+    fileFixture=true;currentSocket.send(JSON.stringify(snapshot()));
+    const historyBeforeFiles=sent.filter(command=>command.method==='chat.history').length;
+    const saveSheet=page.getByRole('button',{name:'下载 核对表.xlsx',exact:true});
+    await saveSheet.waitFor();
+    const [sheetDownload]=await Promise.all([page.waitForEvent('download'),saveSheet.click()]);
+    assert.equal(sheetDownload.suggestedFilename(),'核对表.xlsx');
+    assert((await fs.readFile(await sheetDownload.path())).equals(fileBytes),'downloaded document bytes changed');
+    await page.getByText('已交给浏览器保存，请在下载列表中查看。',{exact:true}).waitFor();
+    await capture('output-files-desktop.png');
+    await page.setViewportSize({width:390,height:844});
+    await page.getByRole('button',{name:'下载 完整清单.html',exact:true}).scrollIntoViewIfNeeded();
+    const [htmlDownload]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'下载 完整清单.html',exact:true}).click()]);
+    assert.equal(htmlDownload.suggestedFilename(),'完整清单.html');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    await capture('output-files-mobile.png');
+    rejectFile=true;await saveSheet.click();
+    await page.getByText(/文件暂不可用（HTTP 404）/).waitFor();
+    rejectFile=false;holdFile=true;
+    const heldFileRead=once(commands,'file.read');
+    await saveSheet.click();
+    await heldFileRead;
+    await page.waitForFunction(()=>!!document.querySelector('.file-download:disabled'));
+    let lateDownloads=0;const countLate=()=>{lateDownloads++;};page.on('download',countLate);
+    fileFixture=false;currentSocket.send(JSON.stringify(snapshot()));
+    await saveSheet.waitFor({state:'detached'});
+    finishFile();holdFile=false;
+    await page.waitForTimeout(150);page.off('download',countLate);
+    assert.equal(lateDownloads,0,'late response saved a file after its message was removed');
+    assert.equal(fileReads,4);assert.equal(sent.filter(command=>['chat.send','chat.steer'].includes(command.method)).length,beforeSuggestions);
+    assert.equal(sent.filter(command=>command.method==='chat.history').length,historyBeforeFiles,'file controls armed unrelated automatic history reads');
+    await page.setViewportSize({width:1440,height:960});
     const failedSnapshot=snapshot();
     failedSnapshot.data.snapshot.turns.push({turnId:'failed-turn',status:'failed',items:[{id:'cxpalm:turn-error',type:'sessionError',text:'Fixture request failed: HTTP 429\n<img src=x onerror="window.errorXss=true"> **plain**',status:'failed'}]});
     currentSocket.send(JSON.stringify(failedSnapshot));
@@ -456,6 +598,11 @@ async function main() {
       window.dispatchEvent(new Event('storage'));
     });
     await page.locator('#pending').waitFor({state:'visible'});
+    assert.match(await page.locator('#pending-summary').innerText(),/归档会话/);
+    assert.equal(await page.locator('#pending-technical').isVisible(),false);
+    await page.locator('#pending .operation-technical summary').click();assert.match(await page.locator('#pending-technical').innerText(),/scoped-archive/);
+    await page.locator('#pending .operation-technical summary').click();
+    await capture('pending-friendly-desktop.png');await page.setViewportSize({width:320,height:740});await capture('pending-friendly-320.png');await page.setViewportSize({width:1440,height:960});
     assert.equal(await page.locator('#send').isDisabled(),true);
     await page.locator('#nav-settings').click();await page.locator('#pending').waitFor({state:'hidden'});
     await page.locator('#nav-chat').click();await page.locator('#pending').waitFor({state:'visible'});
@@ -484,6 +631,9 @@ async function main() {
     await page.locator('#messages .message').first().waitFor();
     await capture('chat-mobile.png');
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth > innerWidth),false);
+    assert.equal(await page.locator('#permission-button').isVisible(),true);assert.equal(await page.locator('#skill-button').isVisible(),false);
+    await page.locator('#more-tools').click();assert.equal(await page.locator('#more-tools').getAttribute('aria-expanded'),'true');
+    await capture('more-actions-390.png');
     await page.locator('#plan-button').click();await capture('controls-mobile.png');
     assert.equal(await page.locator('#control-panel').evaluate(el=>el.scrollWidth>el.clientWidth),false);
     await page.keyboard.press('Escape');
@@ -491,6 +641,8 @@ async function main() {
     await page.setViewportSize({width:320,height:740});await capture('chat-320.png');
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     await page.locator('#model-button').click();assert.equal(await page.locator('#control-panel').evaluate(el=>el.scrollWidth>el.clientWidth),false);await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');assert.equal(await page.locator('#more-tools').getAttribute('aria-expanded'),'false');assert.equal(await page.locator('#permission-button').isVisible(),true);
+    assert.equal(await page.locator('#skill-button').isVisible(),false);await capture('compact-composer-320.png');
     await page.setViewportSize({width:390,height:844});
     await page.locator('#nav-settings').click();
     await page.locator('.settings-card').filter({has:page.locator('#theme')}).locator('summary').click();
@@ -603,7 +755,7 @@ async function main() {
     await page.waitForFunction(()=>!!document.querySelector('.session-item.is-unread'));
     await capture('sessions-unread-colors-mobile.png');
     assert.equal(desktopReadToken,'d'.repeat(64));
-    await page.locator('#close-list').click();await page.waitForFunction(()=>!document.querySelector('.session-item.is-unread'));
+    await page.locator('#close-list').click();await page.locator('#messages').evaluate(node=>{node.scrollTop=node.scrollHeight;});await page.waitForFunction(()=>!document.querySelector('.session-item.is-unread'));
     await page.setViewportSize({width:1440,height:960});
     await page.locator('#nav-settings').click();await page.locator('.settings-card').filter({has:page.locator('#theme')}).locator('summary').click();await page.locator('#theme').selectOption('light');await page.locator('#nav-chat').click();
     await capture('sessions-read-colors-light.png');
@@ -903,6 +1055,22 @@ async function main() {
     await page.locator('#messages').evaluate(n=>{n.scrollTop=n.scrollHeight;n.dispatchEvent(new Event('scroll'));});
     await page.waitForTimeout(150);assert.equal(desktopReadToken,replyToken,'read sync did not recover');
     await page.locator('#message').fill('');
+    const uploadWrites=sent.filter(request=>['chat.send','chat.steer','chat.queue'].includes(request.method)).length;
+    holdUpload=true;await page.locator('#message').fill('cancel upload draft');
+    await page.locator('#attachment-input').setInputFiles({name:'cancel-fixture.txt',mimeType:'text/plain',buffer:Buffer.from('isolated upload bytes')});
+    await page.locator('.upload-row progress').waitFor();assert.equal(await page.locator('.upload-row progress').getAttribute('value'),null);
+    await page.getByRole('button',{name:'取消上传 cancel-fixture.txt',exact:true}).evaluate(node=>{window.fixtureUploadCancel=node;});
+    await page.locator('#message').fill('changed upload draft');currentSocket.send(JSON.stringify(snapshot()));
+    assert.equal(await page.getByRole('button',{name:'取消上传 cancel-fixture.txt',exact:true}).evaluate(node=>node===window.fixtureUploadCancel),true,'state refresh replaced the focused upload cancel action');
+    assert.equal(await page.locator('#send').isDisabled(),true);
+    await page.setViewportSize({width:390,height:844});await capture('upload-status-390.png');
+    await page.getByRole('button',{name:'取消上传 cancel-fixture.txt',exact:true}).click();
+    await page.locator('.upload-row').filter({hasText:'上传已取消'}).waitFor();assert.match(await page.locator('.upload-row').innerText(),/电脑可能已收到文件/);
+    holdUpload=false;finishUpload();await page.locator('.upload-row progress').waitFor({state:'hidden'});
+    assert.equal(sent.filter(request=>['chat.send','chat.steer','chat.queue'].includes(request.method)).length,uploadWrites);
+    assert.equal(await page.locator('.attachment-chip').count(),0);
+    await page.getByRole('button',{name:'关闭提示 cancel-fixture.txt',exact:true}).click();
+    await page.setViewportSize({width:1440,height:960});await page.locator('#message').fill('');
     rejectUpload=true;
     await page.locator('#message').evaluate(node=>{const data=new DataTransfer();data.items.add(new File(['small clipboard fixture'],'small.png',{type:'image/png'}));node.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));});
     await page.locator('#notice').filter({hasText:'HTTP 413'}).waitFor();

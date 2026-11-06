@@ -48,6 +48,16 @@ bounded text-occurrence fallback. Rejected or ambiguous guidance is not displaye
 as successfully sent. Records are bounded to the latest 256 accepted steers per
 chat. This is not a second executor and does not resend anything.
 
+New accepted guidance also stores the pre-dispatch item boundary and the count
+of earlier identical native prompts. Later output cannot push the fallback to
+the end of the turn. Explicit operation identities are reserved before text
+fallback, and matched native echoes keep the fallback's presentation ID. This
+preserves message anchors and question targets without editing native snapshots.
+Existing JSON receipts lacking a boundary remain readable; their unknown
+historical positions are not guessed or migrated. Each question index entry now
+includes its message identity, so multiple questions/guidance in one turn do not
+all resolve to the first user message.
+
 ## Whole-list synchronization
 
 The first list request starts one gateway-wide passive sweep of all authorized

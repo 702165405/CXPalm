@@ -15,12 +15,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.u702165405.cxpalm.R
 
-internal fun computerConnectionLabel(state: ViewState, computer: Computer): String = if (computer.id == state.current?.id) when {
-    state.desktopConnected && state.connected -> tr("官方桌面已连接")
-    state.connected -> tr("Agent 已连接")
-    state.status.contains("Connecting") -> tr("连接中")
-    else -> tr("已断开")
-} else when {
+internal fun computerConnectionLabel(state: ViewState, computer: Computer): String = if (computer.id == state.current?.id) currentConnectionLabel(state) else when {
     !state.notificationStatus.containsKey(computer.id) -> tr("监听未启动")
     state.notificationStatus[computer.id] == null -> tr("提醒已连接")
     state.notificationStatus[computer.id] == "revoked" -> tr("登录已失效，请重新登录")

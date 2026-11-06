@@ -1,6 +1,95 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {SnapshotStream,Bridge, conversation, approvalDecisions, contextUsage, StateSequence, NotificationInbox, sessionSettings, changedSettings, newChatDefaults, turnElapsed, activeQuestionIndex, computerAddress, extendHistory, mergeHistoryTurns, sessionIndicator, effortLabel, ReadingCache, offlineReading} from './protocol-v1.mjs';
+import {SnapshotStream,Bridge, conversation, approvalDecisions, contextUsage, StateSequence, NotificationInbox, sessionSettings, changedSettings, newChatDefaults, turnElapsed, activeQuestionIndex, computerAddress, extendHistory, mergeHistoryTurns, sessionIndicator, effortLabel, ReadingCache, offlineReading, connectionPresentation, operationLabel, AttachmentUploads, suggestionTurn, suggestionSuffix, activeTurnId} from './protocol-v1.mjs';
+
+test('output-only messages retain bounded file identities without manufacturing local URLs',()=>{
+  const file={id:'a'.repeat(64),name:'review.xlsx',kind:'xlsx'};
+  const messages=conversation([{turnId:'turn',items:[{id:'output',type:'agentMessage',text:'',files:[file]}]}]);
+  assert.equal(messages.length,1);assert.deepEqual(messages[0].files,[file]);
+  assert.equal(messages[0].turn,'turn');assert.equal(messages[0].id,'output');
+});
+test('guidance and question navigation retain the exact active turn and same-turn message identity',()=>{
+  assert.equal(activeTurnId({turns:[{turnId:'finished',status:'completed'},{turnId:'live',status:'inProgress'}]}),'live');
+  assert.equal(activeTurnId({turns:[{id:'flat',status:'inProgress'}]}),'flat');
+  assert.equal(activeTurnId({turns:[]}),'');
+  const questions=[{turn:'same',item:'original'},{turn:'same',item:'steer:one'},{turn:'same',item:'steer:two'}];
+  const positions=[{turn:'same',item:'original',top:-500},{turn:'same',item:'steer:one',top:-100},{turn:'same',item:'steer:two',top:400}];
+  assert.equal(activeQuestionIndex(questions,positions,20,false,false),1);
+  assert.equal(activeQuestionIndex(questions,positions,500,false,false),2);
+});
+
+test('input suggestions use completed idle replies and preserve drafts, caret and composition',()=>{
+  const snapshot={threadRuntimeStatus:{type:'idle'},requests:[],turns:[{turnId:'completed',status:'completed',items:[{type:'agentMessage',text:'Fixture reply'}]}]};
+  assert.equal(suggestionTurn(snapshot),'completed');
+  for(const change of [{threadRuntimeStatus:{type:'active'}},{requests:[{}]},{queuedMessages:[{}]},{threadGoal:{status:'active'}},{turns:[{turnId:'failed',status:'failed'}]}])assert.equal(suggestionTurn({...snapshot,...change}),null);
+  assert.equal(suggestionSuffix('Review tests',''),'Review tests');
+  assert.equal(suggestionSuffix('Review tests','Review'),' tests');
+  assert.equal(suggestionSuffix('Review tests','Unrelated draft'),'');
+  assert.equal(suggestionSuffix('Review tests','Review',0,6),'');
+  assert.equal(suggestionSuffix('Review tests','Review',6,6,true),'');
+  assert.equal(suggestionSuffix('x'.repeat(281),''),'');
+  assert.equal(suggestionSuffix('Review tests','Review tests'),'');
+});
+
+test('connection presentation distinguishes gateway, native state and write authority without using heartbeat time',()=>{
+  const selected={id:'thread'},base={device:{id:'device'},selected,connected:true,desktop:true,writable:true,nativeSyncedAtMs:1234};
+  assert.equal(connectionPresentation({}).label,'未登录');
+  assert.equal(connectionPresentation({...base,connected:false,connecting:'connecting'}).label,'正在连接网关');
+  assert.equal(connectionPresentation({...base,connected:false,cached:true,connecting:'reconnecting'}).label,'正在重连网关');
+  assert.equal(connectionPresentation({...base,selected:null,writable:false}).label,'网关已连接 · 请选择会话');
+  assert.equal(connectionPresentation({...base,desktop:false,writable:false}).label,'正在同步官方桌面');
+  assert.equal(connectionPresentation({...base,connected:false,cached:true,writable:false}).label,'离线只读');
+  assert.equal(connectionPresentation({...base,selected:{...selected,archived:true},writable:false}).label,'已归档 · 只读');
+  assert.equal(connectionPresentation({...base,pending:{id:'old'},writable:false}).label,'已连接 · 操作待核对');
+  assert.equal(connectionPresentation(base).label,'可发送');
+  assert.equal(connectionPresentation({...base,nativeSyncedAtMs:undefined,observedAtMs:9999,lastHeartbeatAt:9999}).nativeSyncedAtMs,null);
+  assert.equal(connectionPresentation({...base,connected:false,cached:true,observedAtMs:9999}).nativeSyncedAtMs,1234);
+  for(const method of ['chat.send','chat.steer','chat.queue','sessions.rename','chat.approve'])assert.notEqual(operationLabel(method),method);
+  assert.equal(operationLabel('future.method'),'会话操作');
+});
+
+function uploadFixture(options={}){
+  const data=new Map(),storage={getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,value)};
+  const saved=[],requests=[];let authorized=true;
+  const manager=new AttachmentUploads({storage,request:async(url,request)=>{requests.push({url,...request});return new Response(JSON.stringify({id:'a'.repeat(64),name:'fixture.txt',size:3}),{status:201});},...options});
+  return {manager,data,saved,requests,options:{thread:'thread',valid:()=>authorized,saved:value=>saved.push(value)},revoke(){authorized=false;manager.cancelAll();}};
+}
+test('attachment uploads retain scoped file status and cancellation never attaches a late response',async()=>{
+  let complete;
+  const fixture=uploadFixture({request:()=>new Promise(resolve=>{complete=resolve;})});
+  const upload=fixture.manager.upload('device:thread',[new File(['abc'],'fixture.txt')],fixture.options);
+  assert.equal(fixture.manager.list('device:thread')[0].status,'uploading');
+  assert.equal(fixture.manager.busy('other-device:thread'),false);
+  fixture.manager.cancel(fixture.manager.list('device:thread')[0].id);
+  complete(new Response(JSON.stringify({id:'a'.repeat(64),name:'fixture.txt',size:3}),{status:201}));
+  await upload;
+  assert.equal(fixture.saved.length,0);assert.equal(fixture.manager.busy('device:thread'),false);
+  assert.equal(fixture.manager.list('device:thread')[0].status,'cancelled');
+  assert.match(fixture.manager.list('device:thread')[0].error,/电脑可能已收到文件/);
+  fixture.manager.dismiss(fixture.manager.list('device:thread')[0].id);assert.equal(fixture.manager.list('device:thread').length,0);
+});
+test('authorization changes cancel queued uploads before any next request and never retry',async()=>{
+  let complete,requests=0;
+  const fixture=uploadFixture({request:()=>{requests++;return new Promise(resolve=>{complete=resolve;});}});
+  const upload=fixture.manager.upload('device:thread',[new File(['abc'],'one.txt'),new File(['def'],'two.txt')],fixture.options);
+  fixture.revoke();complete(new Response(JSON.stringify({id:'a'.repeat(64),name:'one.txt',size:3}),{status:201}));await upload;
+  assert.equal(requests,1);assert.equal(fixture.saved.length,0);assert(fixture.manager.list('device:thread').every(job=>job.status==='cancelled'));
+});
+test('upload timeout and restored unfinished uploads remain visible without automatic resend',async()=>{
+  let requests=0;
+  const fixture=uploadFixture({timeout:5,request:(_url,request)=>{requests++;return new Promise((_resolve,reject)=>request.signal.addEventListener('abort',()=>reject(request.signal.reason)));}});
+  await assert.rejects(fixture.manager.upload('device:thread',[new File(['abc'],'timeout.txt')],fixture.options),/上传超时/);
+  assert.equal(requests,1);assert.equal(fixture.manager.list('device:thread')[0].status,'failed');
+  fixture.data.set('cxpalm:upload-status:device:other',JSON.stringify([{id:'interrupted',name:'old.txt',size:3,status:'uploading'}]));
+  assert.equal(fixture.manager.list('device:other')[0].status,'interrupted');
+  assert.equal(fixture.manager.busy('device:other'),false);assert.equal(requests,1);
+});
+test('uploaded files are saved exactly once in their original scope',async()=>{
+  const fixture=uploadFixture();
+  await fixture.manager.upload('device:thread',[new File(['abc'],'fixture.txt')],fixture.options);
+  assert.equal(fixture.saved.length,1);assert.equal(fixture.requests.length,1);assert.equal(fixture.manager.list('device:thread').length,0);
+  assert.equal(fixture.requests[0].credentials,'same-origin');assert.equal(fixture.requests[0].redirect,'error');
+});
 
 test('new chat defaults contain only settings and explicit notification preference, never approvals',()=>{
   const snapshot={latestModel:'fixture',latestReasoningEffort:'high',latestThreadSettings:{permissions:':workspace',approvalsReviewer:'auto_review'},notificationPreference:{enabled:true},requests:[{id:'private',decision:'acceptForSession'}],turns:[{}],controlsRevision:'old'};
@@ -59,6 +148,66 @@ function fixture(existingStorage) {
   return {bridge,data,sockets,reply,hello};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+test('connection changes during digest or a queued write lock never dispatch old commands',async()=>{
+  for(const stage of ['digest','lock']) for(const replacement of ['device','replacement']) {
+    const {bridge,sockets}=fixture();
+    let release;
+    if(stage==='digest')bridge.digest=()=>new Promise(resolve=>{release=resolve;});
+    else bridge.lock=(_key,action)=>new Promise(resolve=>{release=()=>resolve(action(true));});
+    const operation=bridge.mutate('chat.send',{thread:'old-thread',text:'old draft'},{key:bridge.draftKey('old-thread'),text:'old draft'});
+    const rejection=assert.rejects(operation,/连接已改变/);
+    await tick();
+    bridge.connect({id:replacement});
+    sockets.at(-1).onmessage({data:JSON.stringify({type:'hello',data:{device:replacement}})});
+    release('digest');await rejection;
+    assert.equal(sockets.flatMap(socket=>socket.sent).length,0);
+    assert.equal(bridge.storage.getItem('cxpalm:pending:device'),null);
+    assert.equal(bridge.pending,null);
+    bridge.disconnect();
+  }
+});
+test('a connection change after reservation settles only the original unsent operation',async()=>{
+  const {bridge,sockets}=fixture();let switchAfterReservation=true;
+  bridge.lock=async(_key,action)=>{
+    const result=await action(true);
+    if(switchAfterReservation){switchAfterReservation=false;bridge.connect({id:'replacement'});sockets.at(-1).onmessage({data:JSON.stringify({type:'hello',data:{device:'replacement'}})});}
+    return result;
+  };
+  await assert.rejects(bridge.mutate('chat.send',{thread:'old-thread',text:'old draft'}),/连接已改变/);
+  assert.equal(sockets.flatMap(socket=>socket.sent).length,0);
+  assert.equal(bridge.storage.getItem('cxpalm:pending:device'),null);
+  assert.equal(bridge.pending,null);assert.equal(bridge.noticeFor('old-thread'),null);
+  bridge.disconnect();
+});
+test('late receipt processing keeps its original device journal across an awaited digest',async()=>{
+  const {bridge,sockets}=fixture();const original=bridge.device;
+  const draftKey=bridge.draftKey('old-thread');bridge.storage.setItem(draftKey,'original');
+  bridge.savePending({id:'original-operation',thread:'old-thread',draftKey,draftDigest:'hash:original'});
+  let release;bridge.digest=()=>new Promise(resolve=>{release=resolve;});
+  const applied=bridge.applyReceipt({id:'original-operation',status:'confirmed'});await tick();
+  bridge.connect({id:'replacement'});sockets.at(-1).onmessage({data:JSON.stringify({type:'hello',data:{device:'replacement'}})});
+  bridge.savePending({id:'replacement-operation',thread:'new-thread'});
+  release('hash:original');await applied;
+  assert.equal(bridge.storage.getItem(`cxpalm:pending:${original.id}`),null);
+  assert.equal(bridge.pending.id,'replacement-operation');assert.equal(bridge.receipt,null);
+  assert.equal(bridge.receiptThread,null);
+  assert.equal(bridge.storage.getItem(draftKey),null);bridge.disconnect();
+});
+test('acknowledgement never crosses a connection change while checking the original receipt',async()=>{
+  const {bridge,sockets,reply}=fixture();
+  bridge.savePending({id:'unknown-operation',thread:'old-thread'});
+  bridge.lock=async(_key,action)=>{
+    const result=await action(true);
+    bridge.connect({id:'replacement'});sockets.at(-1).onmessage({data:JSON.stringify({type:'hello',data:{device:'replacement'}})});
+    return result;
+  };
+  const acknowledgement=bridge.acknowledge('unknown-operation');
+  const rejection=assert.rejects(acknowledgement,/连接已改变/);await tick();
+  reply('result',{id:'unknown-operation',status:'unknown'});await rejection;
+  assert.deepEqual(sockets.flatMap(socket=>socket.sent).map(command=>command.method),['operation.get']);
+  assert.equal(JSON.parse(bridge.storage.getItem('cxpalm:pending:device'))[0].receipt.status,'unknown');
+  assert.equal(bridge.pending,null);bridge.disconnect();
+});
 test('explicit rejection releases only the matching scope and keeps a local failure notice and drafts',async()=>{
   const {bridge,sockets,reply}=fixture();
   const key=bridge.draftKey('a');bridge.storage.setItem(key,'retained');
@@ -177,6 +326,7 @@ test('newer draft and late receipts cannot erase new work',async()=>{
   await tick();const id=bridge.pending.id;bridge.storage.setItem(key,'newer draft');
   reply('result',{id,status:'confirmed'});await operation;
   assert.equal(bridge.storage.getItem(key),'newer draft');
+  assert.equal(bridge.receiptThread,'t');
   bridge.storage.setItem(bridge.pendingKey,JSON.stringify({id:'new-operation'}));
   await assert.rejects(bridge.applyReceipt({id,status:'confirmed'}),/不匹配/);
   assert.equal(bridge.pending.id,'new-operation');

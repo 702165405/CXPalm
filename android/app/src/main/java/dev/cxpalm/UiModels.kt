@@ -4,6 +4,46 @@ import org.json.JSONObject
 import org.json.JSONArray
 import java.util.Locale
 
+internal fun suggestionTurn(snapshot: JSONObject?): String? {
+    val latest=objects(snapshot?.optJSONArray("turns")).lastOrNull() ?: return null
+    if(snapshot?.optJSONObject("threadRuntimeStatus")?.optString("type")!="idle" ||
+        snapshot.optJSONArray("requests")==null || objects(snapshot.optJSONArray("requests")).isNotEmpty() ||
+        objects(snapshot.optJSONArray("queuedMessages")).isNotEmpty() || snapshot.optJSONObject("threadGoal")?.optString("status")=="active" ||
+        latest.optString("status")!="completed" || objects(latest.optJSONArray("items")).none {it.optString("type")=="agentMessage" && it.optString("text").isNotBlank()}) return null
+    return latest.optString("turnId").takeIf {it.isNotBlank()}
+}
+internal fun suggestionSuffix(text: String, draft: String, start: Int = draft.length, end: Int = start, composing: Boolean = false): String =
+    if(!composing && text.codePointCount(0,text.length)<=280 && text.startsWith(draft) && start==draft.length && end==start) text.drop(draft.length) else ""
+internal fun activeTurnId(snapshot: JSONObject?): String =
+    objects(snapshot?.optJSONArray("turns")).lastOrNull {it.optString("status")=="inProgress"}?.let {it.optString("turnId").ifBlank {it.optString("id")}}.orEmpty()
+internal fun composerSourceMatches(source: ViewState, current: ViewState): Boolean =
+    source.current!=null && source.current==current.current && source.thread!=null && source.thread==current.thread
+internal fun questionMessageIndex(question: JSONObject, messages: List<Message>): Int {
+    val turn=question.optString("turn");val item=question.optString("item")
+    return messages.indexOfFirst {it.role=="You" && it.turn==turn && (item.isBlank() || it.id=="$turn:$item")}
+}
+
+internal fun gatewayConnectionLabel(state: ViewState): String = tr(when {
+    state.current == null -> "未登录"
+    state.connected -> "网关已连接"
+    state.reconnecting -> "正在重连网关"
+    state.status.contains("Connecting") -> "正在连接网关"
+    else -> "网关未连接"
+})
+internal fun conversationConnectionLabel(state: ViewState): String = tr(when {
+    state.threadArchived -> "已归档·只读"
+    !state.connected || state.cached && (state.snapshot != null || state.historyPage != null) -> "离线只读"
+    state.pendingFor(state.thread) != null -> "操作待核对"
+    state.desktopConnected && state.snapshot != null -> "可发送"
+    else -> "正在同步官方桌面"
+})
+internal fun currentConnectionLabel(state: ViewState): String = gatewayConnectionLabel(state) +
+    if(state.thread != null) " · " + conversationConnectionLabel(state) else ""
+internal fun nativeSyncLabel(timestamp: Long): String = if(timestamp > 0)
+    tr("最近原桌面同步：{0}",java.text.SimpleDateFormat("MM-dd HH:mm:ss",Locale.getDefault()).format(java.util.Date(timestamp)))
+    else tr("原桌面同步时间未知")
+internal fun conciseNotice(value: String): String = value.trim().replace(Regex("\\s+")," ").let {if(it.length>160) it.take(159)+"…" else it}
+
 data class ContentPreview(val text: String, val truncated: Boolean)
 fun contentPreview(text: String, maxChars: Int = 64000, maxLines: Int = 400, maxColumns: Int = 1000): ContentPreview {
     val out = StringBuilder()
@@ -99,21 +139,21 @@ fun showLatestContent(hasMessages: Boolean, showingHistory: Boolean, canScrollFo
 
 fun appBackDestination(page: String): String = if (page == "computers") "settings" else "sessions"
 
-fun activeQuestionIndex(questionTurns: List<String>, messages: List<Message>, firstMessage: Int, atBottom: Boolean, latest: Boolean): Int {
-    if (questionTurns.isEmpty()) return -1
-    if (atBottom && latest) return questionTurns.lastIndex
+fun activeQuestionIndex(questions: List<JSONObject>, messages: List<Message>, firstMessage: Int, atBottom: Boolean, latest: Boolean): Int {
+    if (questions.isEmpty()) return -1
+    if (atBottom && latest) return questions.lastIndex
     val users = messages.withIndex().filter { it.value.role == "You" }
     val row = if (atBottom) users.lastOrNull() else users.lastOrNull { it.index <= firstMessage } ?: users.firstOrNull()
-    return questionTurns.indexOf(row?.value?.turn)
+    return questions.indexOfFirst {question -> row!=null && questionMessageIndex(question,listOf(row.value))==0}
 }
 
-internal fun questionAtPosition(questions: List<JSONObject>, position: Float): String? =
+internal fun questionAtPosition(questions: List<JSONObject>, position: Float): JSONObject? =
     if (!position.isFinite() || position < 0) null
-    else questions.getOrNull(position.toInt())?.optString("turn")?.takeIf { it.isNotBlank() }
+    else questions.getOrNull(position.toInt())?.takeIf {it.optString("turn").isNotBlank()}
 
 fun computerConnectionState(state: ViewState, computer: Computer, thread: String?, pending: String?, skills: Set<String>): ViewState {
     val same = state.current?.id == computer.id
-    return state.copy(operationFailures=if(same) state.operationFailures else emptyMap(), current = computer, sessions = if (same) state.sessions else emptyList(), projects = if (same) state.projects else emptyList(),
+    return state.copy(lastNativeSyncAt=if(same && state.thread==thread) state.lastNativeSyncAt else 0,reconnecting=false,upload=null,uploadBusy=false,operationFailures=if(same) state.operationFailures else emptyMap(), current = computer, sessions = if (same) state.sessions else emptyList(), projects = if (same) state.projects else emptyList(),
         archived = same && state.archived, project = if (same) state.project else "", sessionSearch = if (same) state.sessionSearch else "", sessionLimit = if (same) state.sessionLimit else 100,
         threadArchived = same && state.threadArchived, thread = thread, snapshot = if (same) state.snapshot else null, pending = pending, connected = false, desktopConnected = false,
         historyPage = if (same) state.historyPage else null, historyIndex = if (same) state.historyIndex else null, historyLoading = false, historyTarget = if (same) state.historyTarget else null,

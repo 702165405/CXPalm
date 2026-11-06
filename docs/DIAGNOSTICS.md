@@ -20,6 +20,10 @@ These files are runtime data and must not be committed or served as downloads.
 - `quit-request`, `quit-cancelled`, `quit-confirmed`: the desktop quit flow, including
   whether it came from the tray. Update installation confirmation is logged separately.
 - `will-quit`, `process-exit`: the app reached its normal exit path and exit code.
+- `system-session-query`: Windows asked whether the session may end; an update
+  can request this without a completed logout or shutdown. `system-session-end`
+  records the actual end notification separately. Only the fixed reasons
+  `shutdown`, `close-app`, `critical` and `logoff` are retained when supplied.
 - `main-exception`: exception type and allowlisted application filename/line/column,
   without the exception message or full stack path.
 - `renderer-gone`, `child-gone`: Electron reported a subprocess exit and reason/code.
@@ -35,5 +39,27 @@ actions record only the allowlisted operation name and success/failure. Disk err
 must not interrupt CXPalm. Log retention is bounded, so preserve relevant files soon
 after a problem; do not publish raw diagnostic bundles without reviewing them.
 
+If writing the log or session marker fails, the desktop status shows a fixed
+warning rather than silently reporting healthy diagnostics. Later events retry
+the writes and failed initial marker creation. Neither paths nor raw OS error
+messages are exposed, and the app does not change directory permissions or move
+logs to another location. A recovered log cannot reconstruct missing events.
+
 This diagnostics addition does not enable antivirus, alter startup settings, add a
 background service, automatically restart a crashed process or change authorizations.
+
+## Connection Checks
+
+The desktop separates local gateway/listener ownership, the official desktop IPC
+probe, SSH configuration and the public HTTPS entry. Only an explicit IPC probe
+records `diagnosedAt`; ordinary status refreshes do not renew that evidence. Results
+older than five minutes are shown as stale, and gateway lifecycle changes clear
+the previous probe. Configured SSH or HTTPS entries remain unverified: this panel
+does not actively probe the public network, and loading a Web page alone does not
+prove that its gateway connection works.
+
+Stopping the gateway from the window or tray requires confirmation, with Cancel
+selected by default. Ownership is checked again before dispatch. Cancellation
+does not send a stop request or record a successful stop. The confirmed action
+stops only this window's gateway/tunnel and disconnects clients; it does not stop
+tasks running in the official Codex desktop or change authorizations.

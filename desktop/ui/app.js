@@ -54,14 +54,17 @@ function render(){
  $('save-policy').disabled=busy||!configured;$('policy-enabled').disabled=busy||!configured;$('policy-entries').disabled=busy||!configured;
  $('choose-config').disabled=busy||running;$('hero-config').disabled=busy;
  renderSettings();
- const checks=[
-  [tr('Agent 进程'),running?tr('本窗口管理中'):occupied?tr('外部占用，未接管'):configured?tr('未启动'):tr('未配置'),running?'good':occupied?'warn':''],
-  [tr('监听范围'),configured?state.listen:tr('尚未读取'),configured?'good':''],
-  [tr('官方桌面 IPC'),state.desktopConnected===true?tr('已连接'):state.desktopConnected===false?tr('未连接，请打开 Codex'):tr('尚未检测'),state.desktopConnected===true?'good':state.desktopConnected===false?'warn':''],
-  [tr('会话元数据'),state.sessions?.error?tr('暂时无法读取'):configured?tr('已读取（不含对话正文）'):tr('尚未读取'),configured&&!state.sessions?.error?'good':'warn'],
-  [tr('认证与主会话'),configured?tr('设备授权 · 官方桌面执行'):tr('未载入配置'),configured?'good':''],
- ];
- $('checks').replaceChildren(...checks.map(([name,value,color])=>{const row=text('div','','check');row.append(text('span',name),text('strong',value,color));return row;}));
+ const diagnostic=CXPalmDiagnostics.view(state);
+ const actionLabels={overview:tr('查看总览'),settings:tr('连接设置'),diagnose:tr('重新检测'), 'open-web':tr('打开网页检查')};
+ $('checks').replaceChildren(...diagnostic.rows.map(check=>{
+  const row=text('div','','check diagnostic-check');row.dataset.check=check.id;
+  const evidence=text('div','','check-evidence');evidence.append(text('span',tr(check.label)),text('p',tr(check.detail)));
+  const result=text('div','','check-result'),action=text('button',actionLabels[check.action],'text-button');action.type='button';action.disabled=busy;
+  action.addEventListener('click',()=>{if(check.action==='settings'||check.action==='overview')navigate(check.action);else $(check.action==='diagnose'?'diagnose':'open-web').click();});
+  result.append(text('strong',tr(check.value),check.tone),action);row.append(evidence,result);return row;
+ }));
+ $('diagnostic-time').textContent=diagnostic.checkedAt?tr('最近检测：{0} · 未发送消息或修改会话',new Date(diagnostic.checkedAt).toLocaleString(languageUI.locale()))+(diagnostic.stale?tr(' · 已超过 5 分钟，请重新检测'):''):tr('尚未主动检测官方桌面连接');
+ $('diagnostic-guidance').textContent=tr(diagnostic.guidance);
 }
 // Polling leaves forms editable; manual actions wait for an outstanding read.
 async function run(fn){if(busy)return;busy=true;render();try{await backgroundRefresh;await fn();}catch(error){notify(errors[error.message]||error.message||tr('操作未完成，请刷新状态。'));}finally{busy=false;render();}}
@@ -93,7 +96,7 @@ async function loadDevices(){
 
 async function chooseConfig(){const result=await api.chooseConfig();if(result){policyDirty=false;connectionDirty=false;savedSettings=null;loginSettings=null;loginDirty=false;$('account-password').value='';$('account-confirm').value='';setState(result);if(currentPage==='settings')await loadSettings();activity(tr('已选择本机配置'));toast(tr('配置已载入；Agent 不会自动启动'));}}
 $('start').addEventListener('click',()=>run(async()=>{setState(await api.invoke('start'));activity(tr('Agent 已启动，由本窗口管理'));}));
-$('stop').addEventListener('click',()=>run(async()=>{setState(await api.invoke('stop'));activity(tr('本窗口的 Agent 已停止'));}));
+$('stop').addEventListener('click',()=>run(async()=>{const result=await api.invoke('stop');setState(result);if(!result.stopCancelled)activity(tr('本窗口的 Agent 已停止'));}));
 for(const id of ['choose-config','import-config'])$(id).addEventListener('click',()=>run(chooseConfig));
 $('hero-config').addEventListener('click',()=>navigate('settings'));
 $('go-login-settings').addEventListener('click',()=>navigate('settings'));
@@ -102,7 +105,7 @@ $('go-devices').addEventListener('click',()=>navigate('devices'));
 
 document.querySelector('.brand').addEventListener('click',event=>{event.preventDefault();navigate('overview');});
 for(const button of document.querySelectorAll('[data-page]'))button.addEventListener('click',()=>navigate(button.dataset.page));
-async function diagnose(){setState(await api.invoke('diagnose'));$('diagnostic-time').textContent=tr('最近检测：{0} · 未发送消息或修改会话',new Date().toLocaleTimeString(languageUI.locale()));activity(tr('只读连接诊断已完成'));}
+async function diagnose(){setState(await api.invoke('diagnose'));activity(tr('只读连接诊断已完成'));}
 $('refresh').addEventListener('click',()=>run(async()=>{if(currentPage==='diagnostics')await diagnose();else if(currentPage==='settings'){await refresh();await loadSettings();}else await refresh();toast(tr('状态已更新'));}));
 $('reload-devices').addEventListener('click',()=>run(loadDevices));
 $('open-web').addEventListener('click',()=>run(()=>api.openWeb()));
