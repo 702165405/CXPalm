@@ -29,8 +29,23 @@ explicitly described as deployment connectivity or public-byte checks.
   contains 76 files; packaged application sources and the gateway match the
   reviewed source and tested binary. All three standalone gateway archives
   match the tested cross-builds and contain only a binary and two metadata files.
+- The initial Web entry and three immutable build9 resources are deployed;
+  fresh public bytes match the staged SHA-256 values. An isolated Chromium
+  browser loads the public login page, immutable modules and icon with no page
+  errors and without logging in. Public browser/file APIs still reject
+  unauthenticated requests with HTTP 401.
+- The full local desktop/gateway runtime is deployed and reports 0.0.9 with
+  an official desktop connection. All 76 runtime files match the package.
+  Configuration, authorizations, preferences, shortcut and startup settings
+  match the pre-update snapshot.
+- Public release `v0.0.9-build9` contains ten assets, all fetched anonymously
+  and verified by size and SHA-256. The fixed Android and desktop update feeds
+  on main match the staged build9 manifests. Android's real update transport
+  passes the separately enabled public-feed/download/hash test that was
+  initially skipped. Electron's real updater discovers build9, downloads the
+  installer and passes installation preflight; it does not execute the installer.
 - Android physical-device installation and macOS runtime acceptance have not
-  been performed. Deployment/public-updater results are recorded after checks.
+  been performed.
 
 ## 0.0.8 / build8
 
