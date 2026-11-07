@@ -4,6 +4,45 @@ Public verification records exclude real conversation content, device identifier
 private deployment paths, credentials and raw logs. Tests use synthetic data unless
 explicitly described as deployment connectivity or public-byte checks.
 
+## 0.0.10 / build11
+
+- Corrects the input-suggestion implementation: independent model generation,
+  ephemeral prediction threads, client generation timers and the opt-in UI are
+  removed. The old `chat.suggest` endpoint is retired and not advertised; a
+  regression test uses a server without any bridge or executor to ensure stale
+  clients cannot revive generation. Existing drafts and ordinary Tab navigation
+  remain intact, including a stored opt-in from the old version.
+- Native Composer Predictions are **not synchronized in this release**. A
+  passive snapshot inspection of the installed official desktop identified no
+  prediction field, and no read-existing-prediction method was found in the
+  current desktop IPC. The installed CLI's generated experimental schema
+  exposes a prediction request and result notification, which are not treated
+  as a cached-result read. No prediction request or real model call was made.
+  Only field names and protocol identifiers were inspected; private chat values
+  and official application assets are not published.
+- Web and Android keep model, permission and context utilization directly on
+  the composer row. Model and context are removed from More; context percentage
+  is identified as context utilization rather than account credits. Plan/goal
+  status cannot displace the Android primary controls.
+- Full Go tests and vet pass; Windows amd64 and macOS amd64/arm64 cross-builds
+  succeed. All 99 Node tests and the isolated Chromium suite pass. Browser
+  checks cover 320/390-pixel primary-control alignment and viewport bounds,
+  ordinary draft/Tab behavior, old suggestion preferences, settings persistence,
+  and the retained send/steer/approval/history/file/list-runtime behaviors.
+- Android unit tests: 91 total, 90 pass and one opt-in publication check skipped.
+  Lint reports zero errors and ten warnings. The normal version 0.0.10/code11
+  APK builds using the existing development signer. A separate fixture-only APK
+  is installed solely in a new blank Android 35 x86_64 emulator. Native
+  instrumentation at 320dp and 390dp verifies model, approval and context
+  controls are visible on the same row; both screenshots are visually reviewed.
+  The staged public APK is separately checked to exclude the rendering fixture.
+- The complete 76-file Windows package matches the reviewed application sources
+  and tested gateway. All three standalone gateway archives match the tested
+  cross-builds and contain only a binary plus two metadata files. The README
+  gallery is refreshed from the current Web client using synthetic data.
+- Android physical-phone installation and macOS runtime acceptance are not
+  performed. Deployment and public-updater checks are recorded after completion.
+
 ## 0.0.9 / build9
 
 - Web list rows display independent live runtime and approval-waiting elapsed

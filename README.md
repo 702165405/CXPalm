@@ -5,7 +5,7 @@
 离开电脑，也能查看任务进度、继续对话、发送文件和处理审批。CXPalm 为官方 Codex
 桌面提供一个由你自己管理的远程入口：电脑继续执行，手机和网页随时连接。
 
-Web / Android / 桌面网关 **0.0.9 / build9** · 独立项目，非 OpenAI 官方产品。
+Web / Android / 桌面网关 **0.0.10 / build11** · 独立项目，非 OpenAI 官方产品。
 
 [下载安装包](https://github.com/702165405/CXPalm/releases) · [部署指南](deploy/README.md) · [功能一览](#主要功能)
 
@@ -13,7 +13,7 @@ Web / Android / 桌面网关 **0.0.9 / build9** · 独立项目，非 OpenAI 官
 
 **电脑继续执行，网页看全局，手机随手续聊。**
 
-![CXPalm 0.0.9 网页工作台：左侧按项目查看会话和运行时间，右侧阅读回复与代码，底部继续对话](docs/images/web-workbench.png)
+![CXPalm 0.0.10 网页工作台：左侧按项目查看会话和运行时间，右侧阅读回复与代码，底部继续对话](docs/images/web-workbench.png)
 
 网页工作台：按项目整理会话，阅读回复与代码，在同一个会话里继续工作。
 
@@ -22,10 +22,10 @@ Web / Android / 桌面网关 **0.0.9 / build9** · 独立项目，非 OpenAI 官
 
 | 列表计时 · 随时看进度 | 手机续聊 · 深色外观 | 远程审批 · 浅色外观 |
 | :---: | :---: | :---: |
-| <img src="docs/images/mobile-list-runtime.png" width="260" alt="CXPalm 0.0.9 移动网页会话列表：直接查看运行中、待确认和已结束任务的用时"> | <img src="docs/images/mobile-conversation.png" width="260" alt="CXPalm 0.0.9 移动网页版：阅读电脑上的会话，在底部输入消息继续对话"> | <img src="docs/images/mobile-approval.png" width="260" alt="CXPalm 0.0.9 移动网页版：查看待执行命令，选择仅批准这一次或拒绝"> |
+| <img src="docs/images/mobile-list-runtime.png" width="260" alt="CXPalm 0.0.10 移动网页会话列表：直接查看运行中、待确认和已结束任务的用时"> | <img src="docs/images/mobile-conversation.png" width="260" alt="CXPalm 0.0.10 移动网页版：阅读电脑上的会话，在底部输入消息继续对话"> | <img src="docs/images/mobile-approval.png" width="260" alt="CXPalm 0.0.10 移动网页版：查看待执行命令，选择仅批准这一次或拒绝"> |
 | 不用逐个进入会话，就能看到耗时。 | 离开电脑也能查看回复、补充要求。 | 核对请求后批准或拒绝，操作仍在电脑执行。 |
 
-以上截图已更新至 0.0.9 / build9，使用当前 Web 客户端及虚构项目、对话和计时数据，不含私人聊天或真实授权信息。
+以上截图已更新至 0.0.10 / build11，使用当前 Web 客户端及虚构项目、对话和计时数据，不含私人聊天或真实授权信息。
 手机图为移动网页版，不是 Android 真机验证；演示审批不会执行命令。
 
 Android 支持「跟随系统 / 明亮工作台 / 雾蓝夜间」，在「设置 → 外观」中选择并保留。
@@ -34,11 +34,11 @@ Android 支持「跟随系统 / 明亮工作台 / 雾蓝夜间」，在「设置
 
 归档边界：Web / Android 暂不显示归档与取消归档按钮，请在官方桌面操作。已归档会话仍可只读查看；历史失败回执不会自动重试或锁住其他会话。
 
-输入建议：在会话「更多」中开启，Web 也可在全局设置中开启。默认关闭，会使用当前 Codex
-模型额度；空闲回复完成后，根据最近对话独立生成下一句建议，可能与官方桌面不同。
-Web 按 Tab 或点击、Android 点击或使用外接键盘 Tab，只填入草稿，仍需手动发送。
-Esc /「忽略」可关闭本轮建议；中文输入中、光标不在草稿末尾或草稿不匹配时不会补全。
-建议使用独立临时身份，不恢复主会话，不继承执行工具、插件或 MCP；不保存到离线阅读缓存。
+输入建议更正（build11）：已移除通过独立临时会话重新生成建议的旧实现。
+官方 Codex 的 [Composer Predictions](https://learn.chatgpt.com/codex/features/composer-predictions)
+是输入框内的灰字建议，Tab 只填入可编辑草稿，不自动发送；官方说明生成预测不占使用限额或 credits。
+目前 CXPalm 使用的桌面 IPC 没有提供读取已有预测的接口，因此当前 Web / Android **尚未同步原生灰字建议**，
+也不会为此另开模型请求。模型、权限与上下文用量直接显示在输入框上方同一行；百分比表示上下文占用，不是账户剩余额度。
 
 引导消息绑定点击时的会话和任务轮次；任务已切换时明确拒绝，保留草稿供核对后手动重试。
 请同时更新客户端与网关到 build7 或以上。新引导记录固定显示位置，原生回显沿用同一显示身份；

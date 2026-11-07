@@ -1,18 +1,7 @@
-export function suggestionTurn(snapshot) {
-  const latest=snapshot?.turns?.at(-1);
-  return snapshot?.threadRuntimeStatus?.type==='idle' && Array.isArray(snapshot.requests) && !snapshot.requests.length &&
-    !snapshot.queuedMessages?.length && snapshot.threadGoal?.status!=='active' && latest?.status==='completed' &&
-    typeof latest.turnId==='string' && latest.items?.some(item=>item.type==='agentMessage'&&item.text?.trim()) ? latest.turnId : null;
-}
 export function activeTurnId(snapshot) {
   const turn=snapshot?.turns?.findLast(turn=>turn.status==='inProgress');
   return turn?.turnId||turn?.id||'';
 }
-export function suggestionSuffix(text,draft,start=draft.length,end=start,composing=false) {
-  return !composing && typeof text==='string' && [...text].length<=280 && text.startsWith(draft) &&
-    start===draft.length && end===start ? text.slice(draft.length) : '';
-}
-
 export class SnapshotStream {
   reset(thread=null,id=null){this.thread=thread;this.id=id;this.current=null;this.revision=0;this.broken=false;}
   constructor(){this.reset();}

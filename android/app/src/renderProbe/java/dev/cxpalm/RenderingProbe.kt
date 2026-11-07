@@ -74,7 +74,8 @@ class RenderingProbeActivity : ComponentActivity() {
             setContent { CxpalmTheme { SessionsPage(state,client) } }
             return
         }
-        if(case=="composer-preview" || case=="composer-preview-long" || case=="composer-preview-approval" || case=="composer-preview-mcp") {
+        if(case=="composer-preview" || case=="composer-preview-long" || case=="composer-preview-approval" || case=="composer-preview-mcp" || case=="composer-preview-controls") {
+            if(case=="composer-preview-controls") AppLanguage.select(this,"zh-CN")
             val client=fixtureClient()
             client.draft(if(case.endsWith("-long")) "先检查移动端的阅读空间。\n输入多行时再展开。\n保留附件、引导和排队功能。" else "")
             val computer=Computer("preview","本地工作台","https://fixture.invalid","synthetic-only")
@@ -95,6 +96,7 @@ class RenderingProbeActivity : ComponentActivity() {
                 .put("latestTokenUsageInfo",JSONObject().put("last",JSONObject().put("inputTokens",8400)).put("modelContextWindow",200000))
             val state=ViewState(computers=listOf(computer),current=computer,thread="preview-chat",connected=true,desktopConnected=true,
                 sessions=listOf(JSONObject().put("id","preview-chat").put("title","界面预览 · 示例会话")),snapshot=snapshot)
+            if(case=="composer-preview-controls") snapshot.getJSONObject("latestThreadSettings").put("approvalsReviewer","auto_review")
             if(case=="composer-preview-approval") snapshot.put("requests",JSONArray("""[{"id":42,"method":"item/permissions/requestApproval","params":{"threadId":"preview-chat","reason":"Fixture network access","permissions":{"network":{"enabled":true}}}}]"""))
             if(case=="composer-preview-mcp") snapshot.put("requests",JSONArray("""[{"id":"mcp-fixture","method":"mcpServer/elicitation/request","params":{"threadId":"preview-chat","mode":"form","message":"Fixture only: confirm this tool call","_meta":{"codex_approval_kind":"mcp_tool_call"},"requestedSchema":{"type":"object","properties":{}}}}]"""))
             val updates=UpdateManager(this)
@@ -176,12 +178,29 @@ class RenderingProbeRunner : Instrumentation() {
         start()
     }
     override fun onStart() {
-        val automation=if(case.startsWith("appearance-") || case=="sessions-active" || case=="sessions-archived" || case.startsWith("approval-") || case=="composer-preview-approval" || case=="composer-preview-mcp") uiAutomation else null
+        val automation=if(case.startsWith("appearance-") || case=="sessions-active" || case=="sessions-archived" || case.startsWith("approval-") || case.startsWith("composer-preview")) uiAutomation else null
         val activity = startActivitySync(Intent(targetContext, RenderingProbeActivity::class.java)
             .putExtra("case", case).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         // Markdown parsing and the following Compose measure happen asynchronously.
         Thread.sleep(holdMs)
         waitForIdleSync()
+        if(case=="composer-preview-controls") {
+            fun nodes(node: android.view.accessibility.AccessibilityNodeInfo): List<android.view.accessibility.AccessibilityNodeInfo> =
+                listOf(node)+(0 until node.childCount).flatMap {node.getChild(it)?.let(::nodes).orEmpty()}
+            val visible=nodes(checkNotNull(automation?.rootInActiveWindow))
+            val model=checkNotNull(visible.firstOrNull {it.text?.toString()=="gpt-5.3-codex"}) {"Model is hidden"}
+            val permission=checkNotNull(visible.firstOrNull {it.text?.toString()==tr("帮我批准")}) {"Permission is hidden"}
+            val usage=checkNotNull(visible.firstOrNull {it.contentDescription?.toString()?.startsWith(tr("上下文用量"))==true}) {"Context usage is hidden"}
+            val bounds=listOf(model,permission,usage).map {node ->
+                check(node.isVisibleToUser)
+                android.graphics.Rect().also(node::getBoundsInScreen).also {check(it.width()>20)}
+            }
+            check(bounds.all {kotlin.math.abs(it.centerY()-bounds[0].centerY())<24}) {"Primary controls are not on one row"}
+            val screenshot=checkNotNull(automation?.takeScreenshot())
+            val folder=activity.getExternalFilesDir("previews")!!;folder.mkdirs()
+            java.io.File(folder,"$case.png").outputStream().use {screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}
+            screenshot.recycle()
+        }
         if(case.startsWith("appearance-")) {
             fun nodes(node: android.view.accessibility.AccessibilityNodeInfo): List<android.view.accessibility.AccessibilityNodeInfo> = listOf(node)+(0 until node.childCount).flatMap { node.getChild(it)?.let(::nodes).orEmpty() }
             fun visible()=nodes(checkNotNull(automation?.rootInActiveWindow))

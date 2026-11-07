@@ -19,21 +19,6 @@ class UiModelsTest {
         assertEquals(1,activeQuestionIndex(questions,messages,2,false,false))
         assertEquals(2,activeQuestionIndex(questions,messages,3,false,false))
     }
-    @Test fun inputSuggestionsRespectCompletedRepliesDraftsCaretAndComposition() {
-        val snapshot=JSONObject("""{"threadRuntimeStatus":{"type":"idle"},"requests":[],"turns":[{"turnId":"reply","status":"completed","items":[{"type":"agentMessage","text":"Fixture reply"}]}]}""")
-        assertEquals("reply",suggestionTurn(snapshot))
-        for(change in listOf("""{"threadRuntimeStatus":{"type":"active"}}""","""{"requests":[{}]}""","""{"queuedMessages":[{}]}""","""{"threadGoal":{"status":"active"}}""","""{"turns":[{"status":"failed"}]}""")) {
-            val next=JSONObject(snapshot.toString());val fields=JSONObject(change)
-            fields.keys().forEach {next.put(it,fields.get(it))}
-            assertNull(suggestionTurn(next))
-        }
-        assertEquals("Review tests",suggestionSuffix("Review tests",""))
-        assertEquals(" tests",suggestionSuffix("Review tests","Review"))
-        assertEquals("",suggestionSuffix("Review tests","Unrelated draft"))
-        assertEquals("",suggestionSuffix("Review tests","Review",0,6))
-        assertEquals("",suggestionSuffix("Review tests","Review",6,6,true))
-        assertEquals("",suggestionSuffix("x".repeat(281),""))
-    }
     @Test fun newChatDefaultsDoNotCopyApprovalsOrExecutionState() {
         val snapshot=JSONObject("""{"latestModel":"fixture","latestReasoningEffort":"high","latestThreadSettings":{"permissions":":workspace","approvalsReviewer":"auto_review"},"notificationPreference":{"enabled":true},"requests":[{"decision":"acceptForSession"}],"turns":[{}],"controlsRevision":"old"}""")
         val defaults=newChatDefaults(snapshot)!!

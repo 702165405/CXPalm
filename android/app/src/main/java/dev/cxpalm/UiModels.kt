@@ -4,16 +4,6 @@ import org.json.JSONObject
 import org.json.JSONArray
 import java.util.Locale
 
-internal fun suggestionTurn(snapshot: JSONObject?): String? {
-    val latest=objects(snapshot?.optJSONArray("turns")).lastOrNull() ?: return null
-    if(snapshot?.optJSONObject("threadRuntimeStatus")?.optString("type")!="idle" ||
-        snapshot.optJSONArray("requests")==null || objects(snapshot.optJSONArray("requests")).isNotEmpty() ||
-        objects(snapshot.optJSONArray("queuedMessages")).isNotEmpty() || snapshot.optJSONObject("threadGoal")?.optString("status")=="active" ||
-        latest.optString("status")!="completed" || objects(latest.optJSONArray("items")).none {it.optString("type")=="agentMessage" && it.optString("text").isNotBlank()}) return null
-    return latest.optString("turnId").takeIf {it.isNotBlank()}
-}
-internal fun suggestionSuffix(text: String, draft: String, start: Int = draft.length, end: Int = start, composing: Boolean = false): String =
-    if(!composing && text.codePointCount(0,text.length)<=280 && text.startsWith(draft) && start==draft.length && end==start) text.drop(draft.length) else ""
 internal fun activeTurnId(snapshot: JSONObject?): String =
     objects(snapshot?.optJSONArray("turns")).lastOrNull {it.optString("status")=="inProgress"}?.let {it.optString("turnId").ifBlank {it.optString("id")}}.orEmpty()
 internal fun composerSourceMatches(source: ViewState, current: ViewState): Boolean =

@@ -1,13 +1,13 @@
 {
   "schema": 1,
   "releaseLine": "fresh-001",
-  "build": 9,
+  "build": 11,
   "appId": "dev.cxpalm.desktop",
   "platform": "win32",
   "arch": "x64",
-  "version": "0.0.9",
-  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.9-build9/CXPalm-Setup-0.0.9-build9-x64.exe",
-  "size": 120803268,
-  "sha256": "363560136594a3c2ed56fc522289c8f782c2f4917a7d1cc48cf5a6b3953a09e1",
-  "notes": "CXPalm 0.0.9 / build9: Web session lists show live elapsed time for running and approval-waiting turns without opening a chat, and actual duration for completed, interrupted or failed turns when official timing is available. Timers use the gateway clock, update in place and stop showing live elapsed time when disconnected. Missing timing is labelled as pending synchronization. Reuses passive official desktop subscriptions; no additional model request or main-chat executor. Retains document downloads, input suggestions and earlier fixes. Existing configuration and authorizations are preserved."
+  "version": "0.0.10",
+  "url": "https://github.com/702165405/CXPalm/releases/download/v0.0.10-build11/CXPalm-Setup-0.0.10-build11-x64.exe",
+  "size": 120772521,
+  "sha256": "40daae60195e688c2019b175444d73f038818df728bf11ec901f9d8466817102",
+  "notes": "CXPalm 0.0.10 / build11: Remove independently generated input suggestions and the extra model-request path, including calls from older clients. Keep model, permission and context usage directly visible on the same composer row in Web and Android. The current desktop IPC does not expose cached native Composer Predictions, so this release does not claim native gray-text synchronization and does not regenerate a substitute. Context percentage is context utilization, not remaining account credits. Retains list runtime, document downloads and guidance positioning fixes. Existing configuration and authorizations are preserved."
 }

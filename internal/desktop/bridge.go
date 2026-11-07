@@ -32,10 +32,6 @@ type State struct {
 }
 type Bridge struct {
 	Uploads           *attachments.Manager
-	suggestionMu      sync.Mutex
-	suggestions       map[string]*suggestionAttempt
-	suggestionBusy    bool
-	suggestionNext    time.Time
 	historyMu         sync.Mutex
 	historyCache      []historyRecord
 	queueMu           sync.Mutex

@@ -9,7 +9,7 @@ async function main() {
   const browser = await chromium.launch({headless: true, ...(process.env.CXPALM_TEST_BROWSER ? {executablePath:process.env.CXPALM_TEST_BROWSER} : {})});
   const context = await browser.newContext({viewport: {width: 1440, height: 960}});
   const page = await context.newPage();
-  await page.addInitScript(()=>{window.__notices=[];window.__notificationObjects=[];window.Notification=class{static permission='granted';constructor(title,options){this.options=options;window.__notices.push(title);window.__notificationObjects.push(this);}close(){this.closed=true;}static requestPermission(){return Promise.resolve(this.permission);}};});
+  await page.addInitScript(()=>{if(!localStorage.getItem('cxpalm:preferences'))localStorage.setItem('cxpalm:preferences',JSON.stringify({suggestions:true}));window.__notices=[];window.__notificationObjects=[];window.Notification=class{static permission='granted';constructor(title,options){this.options=options;window.__notices.push(title);window.__notificationObjects.push(this);}close(){this.closed=true;}static requestPermission(){return Promise.resolve(this.permission);}};});
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('dialog', dialog => dialog.accept());
@@ -49,8 +49,6 @@ async function main() {
   let guidanceFixture=false;
   let fileFixture=false;let rejectFile=false;let holdFile=false;let finishFile;let fileReads=0;
   const fileBytes=Buffer.from('synthetic returned spreadsheet bytes\n');
-  let holdSuggestion=false;
-  let finishSuggestion;
   let settings={model:"fixture",effort:"high",mode:"default",permission:":workspace"};
   const commandApproval={id:'approval-fixture',method:'item/commandExecution/requestApproval',params:{command:'fixture only - not executed',availableDecisions:['accept','decline']}};
   let approvalRequests=[commandApproval];
@@ -113,11 +111,7 @@ async function main() {
     socket.onMessage(raw => {
       const q = JSON.parse(raw); sent.push(q); commands.emit(q.method,q);
       const reply = data => {const send=()=>socket.send(JSON.stringify({id:q.id,type:'result',data}));if(holdHistory&&q.method==='chat.history')heldHistory.push(send);else if(holdStartup&&['notifications.subscribe','sessions.browse'].includes(q.method))heldStartup.push(send);else send();};
-      if(q.method==='chat.suggest') {
-        const deliver=()=>reply({thread:q.thread,turn:q.turn,readToken:q.readToken,text:'Review the remaining tests.'});
-        if(holdSuggestion)finishSuggestion=deliver;else deliver();
-        return;
-      }
+      if(q.method==='chat.suggest')throw new Error('Removed input suggestion requested model work');
       if(q.method==='notifications.subscribe')return reply({events:[],gap:false,resynced:true,cursor:'baseline:fixture',scope:'all_non_archived'});
       if(q.method==='sessions.browse')return reply(sessionPage(q));
       if(q.method==='sessions.subscribe'){listSubscription=q.id;return reply({subscribed:true});}
@@ -233,57 +227,31 @@ async function main() {
     await page.waitForFunction(()=>!document.querySelector('.session-item.is-unread')).catch(async e=>{console.error('initial state',errors,sent.map(q=>q.method),await page.evaluate(()=>({notice:document.querySelector('#notice-text').textContent,top:document.querySelector('#messages').scrollTop,height:document.querySelector('#messages').scrollHeight,client:document.querySelector('#messages').clientHeight})));throw e;});
     assert.equal(desktopReadToken,'a'.repeat(64));
     assert.equal(await page.locator('#session-list .session-status').count(),0,'read completed chat still has a dot');
-    assert.equal(sent.filter(command=>command.method==='chat.suggest').length,0,'suggestions must be opt-in');
     const sendCount=()=>sent.filter(command=>['chat.send','chat.steer','chat.queue','chat.goal'].includes(command.method)).length;
-    const beforeSuggestions=sendCount();
+    const beforeComposerChecks=sendCount();
     approvalRequests=[];currentSocket.send(JSON.stringify(snapshot()));
-    await page.locator('#suggestions-toggle').click();
-    await page.locator('#accept-suggestion').waitFor({state:'visible'});
-    assert.equal(await page.locator('#message').inputValue(),'');
-    assert.equal(await page.locator('#suggestion-suffix').textContent(),'Review the remaining tests.');
-    await page.locator('#message').focus();
-    await page.locator('#message').dispatchEvent('compositionstart');
-    await page.locator('#message').dispatchEvent('keydown',{key:'Tab',isComposing:true});
-    assert.equal(await page.locator('#message').inputValue(),'','IME Tab inserted a suggestion');
-    await page.locator('#message').dispatchEvent('compositionend');
-    await page.locator('#accept-suggestion').waitFor({state:'visible'});
-    await page.locator('#message').press('Shift+Tab');
-    assert.equal(await page.locator('#message').inputValue(),'','Shift+Tab lost normal focus navigation');
-    await page.locator('#message').fill('Review');
-    await page.locator('#message').evaluate(input=>{input.setSelectionRange(0,6);input.dispatchEvent(new Event('select'));});
-    await page.locator('#accept-suggestion').waitFor({state:'hidden'});
-    await page.locator('#message').press('End');
-    await page.locator('#accept-suggestion').waitFor({state:'visible'});
-    await capture('input-suggestion-desktop.png');
+    assert.equal(await page.locator('#suggestions-toggle,#suggestion-ghost').count(),0);
+    await page.locator('#message').fill('My own draft');
     await page.locator('#message').press('Tab');
-    assert.equal(await page.locator('#message').inputValue(),'Review the remaining tests.');
-    assert.equal(await page.evaluate(()=>localStorage.getItem('cxpalm:draft:ui-fixture-device:main:main-fixture')),'Review the remaining tests.');
-    assert.equal(sendCount(),beforeSuggestions,'accepting a suggestion sent a message');
-    await page.locator('#message').fill('');
-    holdSuggestion=true;
-    const nextSuggestion=snapshot();nextSuggestion.data.snapshot.turns[0].turnId='suggestion-next';
-    const predictionRequested=once(commands,'chat.suggest');currentSocket.send(JSON.stringify(nextSuggestion));await predictionRequested;
-    await page.locator('#message').fill('My existing draft');
-    finishSuggestion();holdSuggestion=false;
-    await page.waitForTimeout(50);
-    assert.equal(await page.locator('#message').inputValue(),'My existing draft','late prediction overwrote a draft');
-    await page.locator('#accept-suggestion').waitFor({state:'hidden'});
-    await page.locator('#message').fill('');
-    await page.locator('#accept-suggestion').waitFor({state:'visible'});
-    await page.locator('#message').press('Escape');
-    await page.locator('#accept-suggestion').waitFor({state:'hidden'});
-    const mobileSuggestion=snapshot();mobileSuggestion.data.snapshot.turns[0].turnId='suggestion-mobile';
-    currentSocket.send(JSON.stringify(mobileSuggestion));
-    await page.setViewportSize({width:390,height:844});
-    await page.locator('#accept-suggestion').waitFor({state:'visible'});
-    await capture('input-suggestion-mobile.png');
-    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
-    await page.locator('#accept-suggestion').click();
-    assert.equal(await page.locator('#message').inputValue(),'Review the remaining tests.');
-    assert.equal(sendCount(),beforeSuggestions,'tapping a suggestion sent a message');
-    await page.locator('#message').fill('');
+    assert.equal(await page.locator('#message').inputValue(),'My own draft','Tab changed a normal draft');
+    for(const width of [390,320]){
+      await page.setViewportSize({width,height:844});
+      for(const id of ['model-button','permission-button','context-button']){
+        const control=page.locator('#'+id);
+        assert(await control.isVisible(),id+' is hidden behind More');
+      }
+      const bounds=await page.evaluate(()=>['model-button','permission-button','context-button','more-tools'].map(id=>{
+        const box=document.getElementById(id).getBoundingClientRect();return {id,top:box.top,left:box.left,right:box.right};
+      }));
+      assert(bounds.every(box=>Math.abs(box.top-bounds[0].top)<4),'primary controls wrapped to separate rows');
+      assert(bounds.every(box=>box.left>=0&&box.right<=width),'primary control outside the viewport');
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+      await capture('primary-controls-'+width+'.png');
+    }
     await page.setViewportSize({width:1440,height:960});
-    await page.locator('#suggestions-toggle').click();
+    await page.locator('#message').fill('');
+    assert.equal(sendCount(),beforeComposerChecks,'composer inspection sent model work');
+    assert.equal(sent.filter(command=>command.method==='chat.suggest').length,0,'client requested independent suggestions');
     approvalRequests=[commandApproval];currentSocket.send(JSON.stringify(snapshot()));
     guidanceFixture=true;currentSocket.send(JSON.stringify(snapshot()));
     await page.locator('#question-list button[data-item="steer:second"]').waitFor();
@@ -297,7 +265,7 @@ async function main() {
     await page.locator('#question-toggle').click();
     await page.locator('#question-list button[data-item="steer:first"]').click();
     await page.waitForFunction(()=>document.querySelector('.message.user.question-highlight[data-item="steer:first"]'));
-    assert.equal(sent.filter(command=>['chat.send','chat.steer'].includes(command.method)).length,beforeSuggestions,'question navigation sent guidance');
+    assert.equal(sent.filter(command=>['chat.send','chat.steer'].includes(command.method)).length,beforeComposerChecks,'question navigation sent guidance');
     await page.setViewportSize({width:390,height:844});
     await page.locator('#question-toggle').click();
     await page.locator('#question-list button[data-item="steer:second"]').click();
@@ -336,7 +304,7 @@ async function main() {
     finishFile();holdFile=false;
     await page.waitForTimeout(150);page.off('download',countLate);
     assert.equal(lateDownloads,0,'late response saved a file after its message was removed');
-    assert.equal(fileReads,4);assert.equal(sent.filter(command=>['chat.send','chat.steer'].includes(command.method)).length,beforeSuggestions);
+    assert.equal(fileReads,4);assert.equal(sent.filter(command=>['chat.send','chat.steer'].includes(command.method)).length,beforeComposerChecks);
     assert.equal(sent.filter(command=>command.method==='chat.history').length,historyBeforeFiles,'file controls armed unrelated automatic history reads');
     await page.setViewportSize({width:1440,height:960});
     const failedSnapshot=snapshot();

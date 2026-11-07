@@ -45,7 +45,6 @@ import androidx.compose.foundation.content.contentReceiver
 import androidx.compose.foundation.content.consume
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 
@@ -223,24 +222,6 @@ fun sessionDate(session: JSONObject): String {
     val scope = rememberCoroutineScope()
     val active = state.connected && state.desktopConnected && state.snapshot?.optJSONObject("threadRuntimeStatus")?.optString("type") == "active"
     val allowed = state.connected && state.desktopConnected && !state.threadArchived && state.snapshot != null && !state.cached && state.pending == null
-    val suggestionTurn=suggestionTurn(state.snapshot)
-    val suggestionKey="${state.current?.id}:${state.thread}:$suggestionTurn:${state.readToken}"
-    var dismissedSuggestion by remember(suggestionKey) {mutableStateOf(false)}
-    val suggestionAllowed=allowed&&resumed&&state.suggestionsEnabled&&state.suggestionsSupported&&!state.uploadBusy&&attachments.isEmpty()&&state.skills.isEmpty()&&!state.goalDraft&&atLatest&&suggestionTurn!=null
-    LaunchedEffect(suggestionKey,suggestionAllowed,draft.isEmpty()) {
-        if(suggestionAllowed&&draft.isEmpty()) {
-            kotlinx.coroutines.delay(700)
-            client.suggest(suggestionTurn!!,state.readToken)
-        }
-    }
-    val suggestion=state.inputSuggestion?.takeIf {suggestionAllowed&&!dismissedSuggestion&&it.optString("thread")==state.thread&&it.optString("turn")==suggestionTurn&&it.optString("readToken")==state.readToken}?.optString("text").orEmpty()
-    val suggestionSuffix=suggestionSuffix(suggestion,draft,draftInput.selection.start,draftInput.selection.end,draftInput.composition!=null)
-    val acceptSuggestion: () -> Unit = {
-        if(suggestionSuffix.isNotEmpty()) {
-            draftInput=TextFieldValue(suggestion,TextRange(suggestion.length));client.draft(suggestion)
-            dismissedSuggestion=true;inputFocus.requestFocus()
-        }
-    }
     val title = state.sessions.firstOrNull { it.optString("id") == state.thread }?.optString("title").orEmpty().ifBlank { tr("桌面会话") }
     var renaming by remember(state.current?.id,state.thread) { mutableStateOf(false) }
     var renameDraft by remember(state.current?.id,state.thread) { mutableStateOf("") }
@@ -324,19 +305,10 @@ fun sessionDate(session: JSONObject): String {
                         Text("${if(file.optBoolean("image")) "▧" else "↥"} ${file.optString("name")} · ${fileSize(file.optLong("size"))} · ${tr("已上传")}",modifier=Modifier.weight(1f),maxLines=2,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.bodySmall)
                         TextButton(onClick={client.removeAttachment(file.optString("id"))},enabled=state.pending==null) {Text(tr("移除附件"))}
                     }}
-                    TextField(draftInput, { draftInput = it; client.draft(it.text) }, placeholder = { Text(if(suggestionSuffix.isNotEmpty()) suggestion else tr("继续这个桌面会话"),maxLines=4,overflow=TextOverflow.Ellipsis) }, modifier = Modifier.fillMaxWidth().contentReceiver(receiveContent).focusRequester(inputFocus).onPreviewKeyEvent { event ->
-                        if(event.type==KeyEventType.KeyDown&&!event.isShiftPressed&&!event.isCtrlPressed&&!event.isAltPressed&&!event.isMetaPressed&&draftInput.composition==null&&suggestionSuffix.isNotEmpty()) {
-                            when(event.key) {Key.Tab -> {acceptSuggestion();true};Key.Escape -> {dismissedSuggestion=true;true};else -> false}
-                        } else false
-                    }, minLines = 1, maxLines = 4,
+                    TextField(draftInput, { draftInput = it; client.draft(it.text) }, placeholder = { Text(tr("继续这个桌面会话"),maxLines=4,overflow=TextOverflow.Ellipsis) }, modifier = Modifier.fillMaxWidth().contentReceiver(receiveContent).focusRequester(inputFocus), minLines = 1, maxLines = 4,
                         textStyle=MaterialTheme.typography.bodyMedium,
                         colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent,
                             focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent))
-                    if(suggestionSuffix.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(horizontal=8.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
-                        Text(tr("AI 建议 · Tab 或点击填入"),Modifier.weight(1f),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick=acceptSuggestion) {Text(tr("填入建议"))}
-                        TextButton(onClick={dismissedSuggestion=true}) {Text(tr("忽略"))}
-                    } else if(suggestionAllowed&&state.suggestionBusy) Text(tr("正在生成输入建议…"),Modifier.padding(horizontal=8.dp),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
                         val attachAllowed=allowed&&!state.uploadBusy&&!state.goalDraft&&attachments.size<8
                         Box {
@@ -495,28 +467,32 @@ fun sessionDate(session: JSONObject): String {
     var confirmCompact by remember(state.current?.id,state.thread,panel) { mutableStateOf(false) }
     var more by remember(state.current?.id,state.thread) { mutableStateOf(false) }
     val usageColor=if((usage?.percent ?: 0)>=85) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-    Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
-      FilterChip(selected = panel == "permission", onClick = { panel = if (panel == "permission") null else "permission" }, enabled = snapshot != null,modifier=Modifier.weight(1f,fill=false),
+    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
+      FilterChip(selected=panel=="model",onClick={panel=if(panel=="model") null else "model"},enabled=snapshot!=null,modifier=Modifier.weight(1f),
+          label={Text(modelLabel,maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall)})
+      FilterChip(selected = panel == "permission", onClick = { panel = if (panel == "permission") null else "permission" }, enabled = snapshot != null,modifier=Modifier.widthIn(max=112.dp),
           leadingIcon = { Icon(painterResource(R.drawable.ic_shield), null, Modifier.size(16.dp),tint=if(current["permission"]=="full") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) },
           label = {Text(permissionLabel,maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall)})
-      if(plan||goal) Text(tr(if(goal) "目标模式" else "计划模式"),Modifier.padding(start=8.dp).widthIn(max=80.dp),maxLines=1,overflow=TextOverflow.Ellipsis,style=MaterialTheme.typography.labelSmall)
+      TextButton(onClick={panel=if(panel=="context") null else "context"},enabled=snapshot!=null,contentPadding=PaddingValues(horizontal=4.dp),
+          modifier=Modifier.width(48.dp).semantics {contentDescription=tr("上下文用量")+(usage?.let {" ${it.percent}%"}?:"")}) {
+          Text(usage?.let {"${it.percent}%"}?:"—",color=usageColor,style=MaterialTheme.typography.labelSmall)
+      }
       val notify=snapshot?.optJSONObject("notificationPreference")?.optBoolean("enabled")==true
       val notifyAvailable=snapshot?.optJSONObject("notificationPreference")?.optBoolean("available",true)!=false
       Box {
-        TextButton(onClick={more=true},enabled=snapshot!=null) {Text(tr("更多"))}
+        TextButton(onClick={more=true},enabled=snapshot!=null,modifier=Modifier.width(48.dp),contentPadding=PaddingValues(horizontal=4.dp)) {Text(tr("更多"))}
         DropdownMenu(expanded=more,onDismissRequest={more=false}) {
-            listOf("model" to tr("模型与思考深度"),"context" to tr("上下文用量"),"plan" to tr("协作模式"),"skill" to "Skill").forEach { (id,label) ->
+            listOf("plan" to tr("协作模式"),"skill" to "Skill").forEach { (id,label) ->
                 DropdownMenuItem(text={Text(label)},onClick={more=false;panel=id},
-                    trailingIcon={when(id) {"model" -> Text(modelLabel,maxLines=1,modifier=Modifier.widthIn(max=100.dp),overflow=TextOverflow.Ellipsis);"context" -> Text(usage?.let {"${it.percent}%"}?:"—");"skill" -> Text(state.skills.size.toString());else -> Unit}})
+                    trailingIcon={if(id=="skill") Text(state.skills.size.toString())})
             }
             HorizontalDivider()
-            DropdownMenuItem(text={Column {Text(tr(if(state.suggestionsEnabled) "输入建议：开" else "输入建议：关"));Text(tr("使用 Codex 额度，只填入草稿"),style=MaterialTheme.typography.labelSmall)}},
-                enabled=state.suggestionsSupported,onClick={more=false;client.suggestionsEnabled(!state.suggestionsEnabled)})
             DropdownMenuItem(text={Text(tr(if(!notifyAvailable) "会话通知：暂不可用，正常聊天不受影响" else if(notify) "会话通知：开" else "会话通知：关"))},
                 enabled=state.connected&&!state.cached&&state.pending==null&&notifyAvailable,onClick={more=false;client.notifications(!notify)})
         }
       }
     }
+    if(plan||goal) Text(tr(if(goal) "目标模式" else "计划模式"),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
     if (panel != null) Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column(Modifier.fillMaxWidth().heightIn(max = 200.dp).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

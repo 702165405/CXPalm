@@ -1,9 +1,9 @@
 {
-  "version": "0.0.9",
-  "versionCode": 9,
+  "version": "0.0.10",
+  "versionCode": 11,
   "package": "io.github.u702165405.cxpalm.debug",
-  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.9-build9/CXPalm-0.0.9-build9-debug.apk",
-  "size": 9939278,
-  "sha256": "4e66aacb0ff4e9bc04cabd0d201573c35558cf50293a4fde19e5bc6d02f9e39b",
+  "apk": "https://github.com/702165405/CXPalm/releases/download/v0.0.10-build11/CXPalm-0.0.10-build11-debug.apk",
+  "size": 9939270,
+  "sha256": "9c6e3d320176aacaebfec9536175e6607a4c558e6fac970065a8b77336b26657",
   "notes": "CXPalm 0.0.9 / build9: Web session lists show live elapsed time for running and approval-waiting turns without opening a chat, and actual duration for completed, interrupted or failed turns when official timing is available. Timers use the gateway clock, update in place and stop showing live elapsed time when disconnected. Missing timing is labelled as pending synchronization. Reuses passive official desktop subscriptions; no additional model request or main-chat executor. Retains document downloads, input suggestions and earlier fixes. Existing configuration and authorizations are preserved."
 }

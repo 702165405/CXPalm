@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {SnapshotStream,Bridge, conversation, approvalDecisions, contextUsage, StateSequence, NotificationInbox, sessionSettings, changedSettings, newChatDefaults, turnElapsed, sessionElapsed, activeQuestionIndex, computerAddress, extendHistory, mergeHistoryTurns, sessionIndicator, effortLabel, ReadingCache, offlineReading, connectionPresentation, operationLabel, AttachmentUploads, suggestionTurn, suggestionSuffix, activeTurnId} from './protocol-v1.mjs';
+import {SnapshotStream,Bridge, conversation, approvalDecisions, contextUsage, StateSequence, NotificationInbox, sessionSettings, changedSettings, newChatDefaults, turnElapsed, sessionElapsed, activeQuestionIndex, computerAddress, extendHistory, mergeHistoryTurns, sessionIndicator, effortLabel, ReadingCache, offlineReading, connectionPresentation, operationLabel, AttachmentUploads, activeTurnId} from './protocol-v1.mjs';
 
 test('output-only messages retain bounded file identities without manufacturing local URLs',()=>{
   const file={id:'a'.repeat(64),name:'review.xlsx',kind:'xlsx'};
@@ -16,19 +16,6 @@ test('guidance and question navigation retain the exact active turn and same-tur
   const positions=[{turn:'same',item:'original',top:-500},{turn:'same',item:'steer:one',top:-100},{turn:'same',item:'steer:two',top:400}];
   assert.equal(activeQuestionIndex(questions,positions,20,false,false),1);
   assert.equal(activeQuestionIndex(questions,positions,500,false,false),2);
-});
-
-test('input suggestions use completed idle replies and preserve drafts, caret and composition',()=>{
-  const snapshot={threadRuntimeStatus:{type:'idle'},requests:[],turns:[{turnId:'completed',status:'completed',items:[{type:'agentMessage',text:'Fixture reply'}]}]};
-  assert.equal(suggestionTurn(snapshot),'completed');
-  for(const change of [{threadRuntimeStatus:{type:'active'}},{requests:[{}]},{queuedMessages:[{}]},{threadGoal:{status:'active'}},{turns:[{turnId:'failed',status:'failed'}]}])assert.equal(suggestionTurn({...snapshot,...change}),null);
-  assert.equal(suggestionSuffix('Review tests',''),'Review tests');
-  assert.equal(suggestionSuffix('Review tests','Review'),' tests');
-  assert.equal(suggestionSuffix('Review tests','Unrelated draft'),'');
-  assert.equal(suggestionSuffix('Review tests','Review',0,6),'');
-  assert.equal(suggestionSuffix('Review tests','Review',6,6,true),'');
-  assert.equal(suggestionSuffix('x'.repeat(281),''),'');
-  assert.equal(suggestionSuffix('Review tests','Review tests'),'');
 });
 
 test('connection presentation distinguishes gateway, native state and write authority without using heartbeat time',()=>{

@@ -19,8 +19,7 @@ import java.util.concurrent.TimeUnit
 data class Computer(val id: String, val name: String, val origin: String, val token: String, val remember: Boolean = true, val expires: Long = Long.MAX_VALUE) {
     override fun toString() = "Computer(id=$id, origin=$origin, token=<redacted>)"
 }
-data class ViewState(val steerTurnSupported: Boolean = false, val suggestionsSupported: Boolean = false, val suggestionsEnabled: Boolean = false,
-    val inputSuggestion: JSONObject? = null, val suggestionBusy: Boolean = false,
+data class ViewState(val steerTurnSupported: Boolean = false,
     val lastNativeSyncAt: Long = 0, val reconnecting: Boolean = false, val upload: AttachmentTransfer? = null, val operationFailures: Map<String, JSONObject> = emptyMap(), val pendingOperations: Map<String, JSONObject> = emptyMap(), val sessionSync: JSONObject? = null, val uploadBusy: Boolean = false, val goalDraft: Boolean = false, val cached: Boolean = false, val readToken: String = "", val sharedReadSync: Boolean = false, val computers: List<Computer> = emptyList(), val current: Computer? = null, val status: String = "Disconnected", val sessions: List<JSONObject> = emptyList(), val projects: List<JSONObject> = emptyList(), val archived: Boolean = false, val project: String = "", val sessionSearch: String = "", val sessionLimit: Int = 100, val hasMore: Boolean = false, val threadArchived: Boolean = false, val thread: String? = null, val snapshot: JSONObject? = null, val historyPage: JSONObject? = null, val historyIndex: JSONObject? = null, val historyLoading: Boolean = false, val historyTarget: String? = null, val connected: Boolean = false, val error: String? = null, val pending: String? = null, val desktopConnected: Boolean = false, val catalog: JSONObject? = null, val skills: Set<String> = emptySet(), val draftRevision: Long = 0, val sendScrollRevision: Long = 0, val sendUserBefore: String? = null, val sequence: Long = -1, val notificationStatus: Map<String, String?> = emptyMap(), val notificationNavigation: Long = 0)
 
 class BridgeClient(context: Context) {
@@ -46,8 +45,6 @@ class BridgeClient(context: Context) {
     private var historyCall: String? = null
     private var historyAttempt = ""
     private var readAttempt = ""
-    private val suggestionAttempts = linkedSetOf<String>()
-    private val suggestionResults = linkedMapOf<String,JSONObject>()
     private val calls = mutableMapOf<String, (JSONObject) -> Unit>()
     private val receiptQueries = mutableMapOf<String, String>()
     var loginBusy by androidx.compose.runtime.mutableStateOf(false)
@@ -95,34 +92,6 @@ class BridgeClient(context: Context) {
             val current=mutable.value
             if(restoreTicket==cacheRestoreTicket && current.current?.let(::readingScope)==scope && current.thread==ticket.thread && (current.snapshot==null || current.cached)) update { reading.memory.get(it) }
         } }
-    }
-    fun suggestionsEnabled(enabled: Boolean) {
-        store.put("composerSuggestions",enabled.toString())
-        update { it.copy(suggestionsEnabled=enabled,inputSuggestion=null,suggestionBusy=false) }
-    }
-    fun suggest(turn: String, token: String) {
-        val current=mutable.value
-        val key="${current.current?.id}:${current.thread}:$turn:$token"
-        if(!current.suggestionsEnabled || !current.suggestionsSupported || !current.connected || !current.desktopConnected ||
-            current.cached || current.threadArchived || current.pending!=null || suggestionTurn(current.snapshot)!=turn ||
-            current.readToken!=token || token.isBlank()) return
-        suggestionResults[key]?.let { cached -> update { it.copy(inputSuggestion=cached,suggestionBusy=false) };return }
-        if(!suggestionAttempts.add(key))return
-        if(suggestionAttempts.size>128) { val oldest=suggestionAttempts.first();suggestionAttempts.remove(oldest);suggestionResults.remove(oldest) }
-        val connection=generation
-        update { it.copy(inputSuggestion=null,suggestionBusy=true) }
-        command("chat.suggest",JSONObject().put("thread",current.thread).put("turn",turn).put("readToken",token)) { event ->
-            val fresh=mutable.value
-            val data=event.optJSONObject("data")
-            if(data==null) { if(connection==generation) update { it.copy(suggestionBusy=false) };return@command }
-            if(connection==generation && fresh.suggestionsEnabled && fresh.current?.id==current.current?.id &&
-                fresh.thread==current.thread && fresh.connected && fresh.desktopConnected && !fresh.cached &&
-                fresh.readToken==token && suggestionTurn(fresh.snapshot)==turn && data.optString("thread")==current.thread &&
-                data.optString("turn")==turn && data.optString("readToken")==token) {
-                suggestionResults[key]=data
-                update { it.copy(inputSuggestion=data,suggestionBusy=false) }
-            } else if(connection==generation) update { it.copy(suggestionBusy=false) }
-        }
     }
     fun clearError() = update { it.copy(error = null) }
     fun reportError(message: String) = update { it.copy(error = message) }
@@ -250,13 +219,12 @@ class BridgeClient(context: Context) {
         try {
             when (event.optString("type")) {
                 "hello" -> {
-                    val supported=event.getJSONObject("data").optJSONArray("capabilities")?.let { values -> (0 until values.length()).any {values.optString(it)=="chat.suggest"} }==true
                     createSettingsSupported=event.getJSONObject("data").optJSONArray("capabilities")?.let { values -> (0 until values.length()).any {values.optString(it)=="sessions.create.settings"} }==true
                     check(event.getJSONObject("data").optString("device").isNotBlank())
                     val stableGeneration=generation
                     main.postDelayed({if(stableGeneration==generation && mutable.value.connected)retry=0},30000)
-                    update { it.copy(connected=true,status="Connected",steerTurnSupported=event.getJSONObject("data").optJSONArray("capabilities")?.let {values -> (0 until values.length()).any {values.optString(it)=="chat.steer.turn"}}==true,suggestionsSupported=supported,suggestionsEnabled=store.get("composerSuggestions")=="true",
-                        inputSuggestion=null,suggestionBusy=false,sharedReadSync=event.getJSONObject("data").optJSONArray("capabilities")?.let { values -> (0 until values.length()).any { values.optString(it)=="chat.read" } }==true) }
+                    update { it.copy(connected=true,status="Connected",steerTurnSupported=event.getJSONObject("data").optJSONArray("capabilities")?.let {values -> (0 until values.length()).any {values.optString(it)=="chat.steer.turn"}}==true,
+                        sharedReadSync=event.getJSONObject("data").optJSONArray("capabilities")?.let { values -> (0 until values.length()).any { values.optString(it)=="chat.read" } }==true) }
                     refresh();mutable.value.thread?.let { subscribe(it,reconnecting=true) };mutable.value.pendingOperations.keys.toList().forEach { checkPending(it) }
                 }
                 "result" -> calls.remove(event.optString("id"))?.invoke(event)
@@ -389,7 +357,7 @@ class BridgeClient(context: Context) {
         val ticket = ++subscription
         historyAttempt="";historyCall=null
         mutable.value.current?.let { store.put("thread:${it.id}", thread) }
-        update { it.copy(inputSuggestion=null,suggestionBusy=false,lastNativeSyncAt=if(changed) 0 else it.lastNativeSyncAt,historyPage=if(reconnecting) it.historyPage else null, historyIndex=if(reconnecting) it.historyIndex else null, historyLoading=false, historyTarget=null, sendUserBefore=null, thread = thread, threadArchived = it.sessions.firstOrNull { row -> row.optString("id")==thread }?.optBoolean("archived") ?: false, sequence = if (changed) -1 else it.sequence, readToken = if (changed) "" else it.readToken, snapshot = if (changed) null else it.snapshot,cached=changed || it.cached,
+        update { it.copy(lastNativeSyncAt=if(changed) 0 else it.lastNativeSyncAt,historyPage=if(reconnecting) it.historyPage else null, historyIndex=if(reconnecting) it.historyIndex else null, historyLoading=false, historyTarget=null, sendUserBefore=null, thread = thread, threadArchived = it.sessions.firstOrNull { row -> row.optString("id")==thread }?.optBoolean("archived") ?: false, sequence = if (changed) -1 else it.sequence, readToken = if (changed) "" else it.readToken, snapshot = if (changed) null else it.snapshot,cached=changed || it.cached,
             desktopConnected = if (changed) false else it.desktopConnected,
             catalog = if (changed) null else it.catalog, skills = savedSkills(it.current?.id, thread)) }
         if(changed) restoreCached()

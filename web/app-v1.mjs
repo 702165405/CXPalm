@@ -1,5 +1,5 @@
 import {markdown} from './markdown-v1.mjs';
-import {seedHistoryIndex, Bridge, conversation, approvalDecisions, contextUsage, NotificationInbox, StateSequence, sessionSettings, changedSettings, newChatDefaults, turnElapsed, sessionElapsed, activeQuestionIndex, computerAddress, mergeHistoryTurns, extendHistory, sessionIndicator, effortLabel, ReadingCache, connectionPresentation, operationLabel, AttachmentUploads, suggestionTurn, suggestionSuffix, activeTurnId} from './protocol-v1.mjs';
+import {seedHistoryIndex, Bridge, conversation, approvalDecisions, contextUsage, NotificationInbox, StateSequence, sessionSettings, changedSettings, newChatDefaults, turnElapsed, sessionElapsed, activeQuestionIndex, computerAddress, mergeHistoryTurns, extendHistory, sessionIndicator, effortLabel, ReadingCache, connectionPresentation, operationLabel, AttachmentUploads, activeTurnId} from './protocol-v1.mjs';
 
 const $ = id => document.getElementById(id);
 const state = {page:'chat',device:null,version:'',sessions:[],projects:[],archived:false,project:'',listLimit:100,listSubscription:null,hasMore:false,settingsBase:null,editGroup:null,selected:null,snapshot:null,desktop:false,reconnect:null,openTools:new Set(),catalog:{models:[],skills:[]},skills:new Set()};
@@ -27,12 +27,7 @@ let sentUserBefore = null;
 let questionTarget = null;
 let questionScrubbing = false;
 let goalDraft = false;
-let suggestion = null;
-let suggestionTimer = null;
-let suggestionScheduled = '';
-let suggestionLoading = '';
 let composing = false;
-const suggestionAttempts = new Set();
 const uploads = new AttachmentUploads({storage:sessionStorage,changed:()=>renderControls()});
 function attachmentKey() { return state.selected && bridge.device ? `cxpalm:attachments:${bridge.device.id}:${state.selected.id}` : null; }
 function attachedFiles() { try { return JSON.parse(localStorage.getItem(attachmentKey()) || '[]'); } catch { return []; } }
@@ -189,7 +184,6 @@ const bridge = new Bridge({
   changed: () => { syncClearedDraft(); renderControls(); renderPending(); renderLists(); },
   event: event => run(async () => {
     if (event.type === 'hello') {
-      state.suggestionsSupported=event.data.capabilities?.includes('chat.suggest')===true;
       state.steerTurnSupported=event.data.capabilities?.includes('chat.steer.turn')===true;
       state.connecting=null;
       state.createSettingsSupported=event.data.capabilities?.includes('sessions.create.settings')===true;
@@ -375,59 +369,7 @@ function renderControls() {
     const mode=current.latestCollaborationMode?.mode==='plan'?'计划模式':'默认模式';
     $('settings-current').textContent=`当前配置：${current.latestModel||'模型未读取'} · ${current.latestReasoningEffort||'模型默认'}\n${mode} · ${permission}${current.currentPermissions?'\n当前执行权限：'+permissionName(current.currentPermissions):''}`;
   }else $('settings-current').textContent='选择会话后读取当前配置。';
-  renderSuggestion(writable&&!uploading&&!files.length&&!state.skills.size&&!goalDraft);
-}
-function suggestionScope() {
-  const turn=suggestionTurn(state.snapshot);
-  return turn&&readToken ? `${state.device?.id}:${state.selected?.id}:${turn}:${readToken}` : '';
-}
-function renderSuggestion(allowed) {
-  const enabled=$('suggestions-enabled').checked;
-  $('suggestions-toggle').disabled=!state.suggestionsSupported;
-  $('suggestions-toggle').textContent=enabled?'输入建议：开':'输入建议：关';
-  $('suggestions-toggle').setAttribute('aria-pressed',String(enabled));
-  $('suggestions-toggle').title=state.suggestionsSupported?'根据当前会话生成建议，会使用 Codex 额度；只填入草稿。':'请更新电脑网关以使用输入建议。';
-  const key=allowed&&enabled&&state.suggestionsSupported&&state.page==='chat'&&document.visibilityState==='visible'&&(!state.historyPage||!state.historyPage.hasMore)?suggestionScope():'';
-  const input=$('message');
-  if(suggestionScheduled!==key){clearTimeout(suggestionTimer);suggestionTimer=null;suggestionScheduled=key;}
-  if(key&&!input.value&&!suggestionAttempts.has(key)&&!suggestionTimer) {
-    const ticket=selection,device=state.device,thread=state.selected.id,turn=suggestionTurn(state.snapshot),token=readToken;
-    suggestionTimer=setTimeout(async()=>{
-      suggestionTimer=null;
-      if(suggestionScheduled!==key||input.value||composing)return;
-      suggestionAttempts.add(key);
-      if(suggestionAttempts.size>128)suggestionAttempts.delete(suggestionAttempts.values().next().value);
-      suggestionLoading=key;renderControls();
-      try {
-        const result=await bridge.command('chat.suggest',{thread,turn,readToken:token});
-        if(selection===ticket&&state.device===device&&suggestionScope()===key&&result.thread===thread&&result.turn===turn&&result.readToken===token)
-          suggestion={key,text:result.text};
-      }catch { if(selection===ticket&&state.device===device)suggestion={key,text:''}; }
-      finally {if(suggestionLoading===key)suggestionLoading='';renderControls();}
-    },700);
-  }
-  const suffix=key&&suggestion?.key===key?suggestionSuffix(suggestion.text,input.value,input.selectionStart,input.selectionEnd,composing):'';
-  state.suggestionKey=key;state.suggestionText=suffix?suggestion.text:'';
-  $('suggestion-ghost').hidden=!suffix;
-  $('suggestion-prefix').textContent=input.value;
-  $('suggestion-suffix').textContent=suffix;
-  $('suggestion-ghost').style.transform=`translateY(${-input.scrollTop}px)`;
-  $('suggestion-actions').hidden=!suffix&&(!key||suggestionLoading!==key);
-  $('accept-suggestion').hidden=!suffix;
-  $('dismiss-suggestion').hidden=!suffix;
-  $('suggestion-status').textContent=suffix?'AI 建议 · Tab 填入，Esc 忽略':suggestionLoading===key&&key?'正在生成输入建议…':'';
-  $('accept-suggestion').setAttribute('aria-label',suffix?`填入建议：${suggestion.text}`:'填入建议');
-  input.placeholder=suffix?'':state.selected?'继续这个官方桌面会话…':'选择会话后继续对话…';
-}
-function acceptSuggestion() {
-  const input=$('message'),value=state.suggestionText;
-  if(!value||state.suggestionKey!==suggestionScope()||!suggestionSuffix(value,input.value,input.selectionStart,input.selectionEnd,composing))return;
-  input.value=value;input.setSelectionRange(value.length,value.length);
-  if(draftKey())bridge.storage.setItem(draftKey(),value);
-  suggestion=null;renderControls();input.focus();
-}
-function dismissSuggestion() {
-  suggestion=null;state.suggestionText='';renderControls();
+  $('message').placeholder=state.selected?'继续这个官方桌面会话…':'选择会话后继续对话…';
 }
 function currentPending() { return bridge.device && state.selected && bridge.pendingFor(state.selected.id); }
 function displayedPending() { return bridge.device && (state.page==='chat' && state.selected ? bridge.noticeFor(state.selected.id) : null); }
@@ -1011,12 +953,11 @@ function renderSkills(){
   renderSkillCount();
 }
 function renderSkillCount(){$('skill-summary').textContent=state.skills.size?`Skill · ${state.skills.size}`:'Skill';$('skill-button').classList.toggle('active',state.skills.size>0);}
-function savePreferences(){localStorage.setItem('cxpalm:preferences',JSON.stringify({suggestions:$('suggestions-enabled').checked,complete:$('notify-complete').checked,approval:$('notify-approval').checked,sound:$('notify-sound').checked,sendKey:$('send-key').value,sendMode:$('send-mode').value}));}
+function savePreferences(){localStorage.setItem('cxpalm:preferences',JSON.stringify({complete:$('notify-complete').checked,approval:$('notify-approval').checked,sound:$('notify-sound').checked,sendKey:$('send-key').value,sendMode:$('send-mode').value}));}
 function notificationStatus(){ $('notification-status').textContent='Notification' in window?`浏览器通知权限：${Notification.permission}。前台和后台标签页均使用浏览器通知，不显示站内任务提醒；仅在页面保持运行时有效。`:'此浏览器不支持浏览器通知。请使用支持通知的浏览器；不会改用站内弹窗。'; }
 function restorePreferences(){
   let prefs={};try{prefs=JSON.parse(localStorage.getItem('cxpalm:preferences')||'{}');}catch{}
   $('notify-complete').checked=prefs.complete===true;$('notify-approval').checked=prefs.approval===true;$('notify-sound').checked=prefs.sound===true;
-  $('suggestions-enabled').checked=prefs.suggestions===true;
   if(['modifier','enter'].includes(prefs.sendKey))$('send-key').value=prefs.sendKey;
   if(['auto','queue','steer'].includes(prefs.sendMode))$('send-mode').value=prefs.sendMode;
   notificationStatus();
@@ -1058,7 +999,7 @@ listen('session-settings','submit',async()=>{
 });
 for(const action of ['pause','resume','clear'])listen(`goal-${action}`,'click',async()=>{if(!state.selected)return;const thread=state.selected.id,ticket=selection;if(action==='clear'&&!confirm('关闭当前原生目标？不会停止当前回复。'))return;await write('chat.goal',{thread,options:{goalAction:action,expectedGoal:state.snapshot.goalRevision}});if(ticket===selection)await bridge.command('chat.subscribe',{thread});});
 listen('compact','click',async()=>{if(state.selected&&!$('compact').disabled&&confirm('让官方桌面压缩当前会话上下文？这会生成上下文摘要，不是删除聊天历史。'))await write('chat.compact',{thread:state.selected.id});});
-for(const id of ['suggestions-enabled','notify-complete','notify-approval','notify-sound','send-key','send-mode'])listen(id,'change',()=>{savePreferences();renderControls();});
+for(const id of ['notify-complete','notify-approval','notify-sound','send-key','send-mode'])listen(id,'change',()=>{savePreferences();renderControls();});
 listen('enable-notifications','click',async()=>{
   if('Notification' in window&&Notification.permission==='default')await Notification.requestPermission();
   if($('notify-sound').checked){const Audio=window.AudioContext||window.webkitAudioContext;if(Audio){soundContext ||=new Audio();await soundContext.resume();playSound();}}
@@ -1149,9 +1090,6 @@ async function submitMessage(forceQueue=false) {
 }
 listen('composer','submit',()=>submitMessage());
 listen('more-tools','click',()=>{const expanded=document.querySelector('.composer-tools').classList.toggle('tools-expanded');$('more-tools').setAttribute('aria-expanded',String(expanded));});
-listen('suggestions-toggle','click',()=>{$('suggestions-enabled').checked=!$('suggestions-enabled').checked;savePreferences();renderControls();});
-listen('accept-suggestion','click',acceptSuggestion);
-listen('dismiss-suggestion','click',dismissSuggestion);
 for(const event of ['click','keyup','select','scroll'])$('message').addEventListener(event,()=>renderControls());
 $('message').addEventListener('compositionstart',()=>{composing=true;renderControls();});
 $('message').addEventListener('compositionend',()=>{composing=false;renderControls();});
@@ -1170,9 +1108,6 @@ listen('notify-chat','click',async()=>{
 listen('queue-send','click',()=>submitMessage(true));
 $('message').addEventListener('keydown',event=>{
   if(event.isComposing||composing)return;
-  if(state.suggestionText&&!event.shiftKey&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&['Tab','Escape'].includes(event.key)){
-    event.preventDefault();event.stopPropagation();if(event.key==='Tab')acceptSuggestion();else dismissSuggestion();return;
-  }
   if(event.key!=='Enter')return;const enter=$('send-key').value==='enter';if((enter&&!event.shiftKey)||(event.ctrlKey||event.metaKey)){event.preventDefault();$('composer').requestSubmit();}
 });
 listen('stop', 'click', async () => { if (state.selected && !$('stop').disabled && confirm('停止当前会话正在运行的任务？')) await write('chat.stop', {thread: state.selected.id}); });
