@@ -99,6 +99,31 @@ func TestIPCHandshakeAndAllowlist(t *testing.T) {
 		t.Fatal("arbitrary executor RPC was accepted")
 	}
 }
+
+func TestPredictionGenerationCannotBeUsedAsANativeRead(t *testing.T) {
+	for _, method := range []string{
+		"thread/sample",
+		"thread/prediction/request",
+		"requestUserMessagePrediction",
+		"chat.suggest",
+	} {
+		t.Run(method, func(t *testing.T) {
+			stream := &failingIPCStream{}
+			client := &IPC{conn: stream, pending: map[string]chan Frame{}, closed: make(chan struct{}), events: make(chan Frame, 1)}
+			defer client.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			_, err := client.Request(ctx, method, map[string]any{"threadId": "fixture", "sourceTurnId": "fixture-turn"}, "fixture-owner")
+			if err == nil || err.Error() != "desktop method is not allowlisted" {
+				t.Fatalf("generation method must be rejected before transport: %v", err)
+			}
+			if stream.writes != 0 || len(client.pending) != 0 {
+				t.Fatal("prediction read attempted native generation or left a pending request")
+			}
+		})
+	}
+}
+
 func TestOversizeIPCFrameCloses(t *testing.T) {
 	a, b := net.Pipe()
 	defer b.Close()
