@@ -40,8 +40,25 @@ explicitly described as deployment connectivity or public-byte checks.
   and tested gateway. All three standalone gateway archives match the tested
   cross-builds and contain only a binary plus two metadata files. The README
   gallery is refreshed from the current Web client using synthetic data.
-- Android physical-phone installation and macOS runtime acceptance are not
-  performed. Deployment and public-updater checks are recorded after completion.
+- The new immutable Web entry and three resources are deployed; fresh public
+  bytes match staged SHA-256 values. An isolated Chromium browser loads the
+  public login page and modules without page errors or private login. Public
+  browser/file endpoints continue returning HTTP 401 to unauthenticated callers.
+- The complete local desktop/gateway runtime reports 0.0.10 and connects to the
+  official desktop. All 76 files match the package; configuration, device
+  authorizations, preferences, shortcut and startup settings match the original
+  snapshot.
+- Public release `v0.0.10-build11` contains ten assets, all anonymously fetched
+  and verified by size and SHA-256 before main is advanced. The fixed Android
+  and desktop feeds match staged build11 manifests. The previously skipped
+  Android publication test passes when separately enabled, using its real
+  manifest/download/hash code. Electron's real updater discovers 0.0.10,
+  downloads the installer and passes installation preflight without executing
+  it. The public README and four gallery images also match committed bytes.
+- The inspected running official desktop is package 26.1103.3517.0. Native
+  prediction mirroring remains unavailable in CXPalm, rather than being replaced
+  by another generation request. Android physical-phone installation and macOS
+  runtime acceptance are not performed; Android emulator UI checks are separate.
 
 ## 0.0.9 / build9
 
